@@ -1,0 +1,30 @@
+# ResumeGPT Architecture Decision Records
+
+This directory records significant ResumeGPT architecture decisions. Once accepted, an ADR's historical decision is not rewritten. If the decision changes, create a new ADR and mark the old one as `Superseded`.
+
+## Statuses
+
+- `Proposed`: Recommended but not yet approved for implementation.
+- `Accepted`: Approved; implementation should follow it.
+- `Deprecated`: Discouraged for new code but not formally replaced.
+- `Superseded`: Replaced by a newer ADR.
+
+## Current Decisions
+
+| ADR | Summary | Status |
+|---|---|---|
+| [ADR-001](./ADR-001-modular-monolith-and-workers.md) | Modular monolith plus independent workers; extract services only on objective signals | Proposed |
+| [ADR-002](./ADR-002-profile-facts-and-evidence.md) | Relational fact core, typed JSONB, and immutable evidence | Proposed |
+| [ADR-003](./ADR-003-document-intermediate-representation.md) | Versioned JSON IR separating content from rendering | Proposed |
+| [ADR-004](./ADR-004-vector-store.md) | Use pgvector for the MVP; evaluate Qdrant at measured thresholds | Proposed |
+| [ADR-005](./ADR-005-durable-jobs-and-workflows.md) | PostgreSQL jobs and transactional outbox for the MVP | Proposed |
+| [ADR-006](./ADR-006-template-and-rendering-boundary.md) | Managed template subset, sandboxed rendering, and PDF acceptance | Proposed |
+| [ADR-007](./ADR-007-llm-data-and-routing-policy.md) | Data-classification-driven provider routing and governance | Proposed |
+| [ADR-008](./ADR-008-unsupported-claim-gate.md) | Block verified export for unsupported high-risk claims | Proposed |
+| [ADR-009](./ADR-009-job-crawling-policy.md) | Compliant, constrained, auditable crawling with manual fallback | Proposed |
+| [ADR-010](./ADR-010-workspace-tenancy-and-authorization.md) | Workspace tenant boundary and defense-in-depth authorization from day one | Proposed |
+
+## Maintenance Rules
+
+Every implementation PR should reference its ADR and include the corresponding contract or security tests. Reconsideration must be supported by production metrics, cost, incident evidence, or new compliance requirements—not preference alone.
+
