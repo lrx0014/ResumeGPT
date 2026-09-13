@@ -1,52 +1,72 @@
 package httpapi
 
 import (
-	"context"
 	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/lrx0014/ResumeGPT/internal/identity"
 	"github.com/lrx0014/ResumeGPT/internal/job"
+	"github.com/lrx0014/ResumeGPT/internal/platform/blobstore"
+	"github.com/lrx0014/ResumeGPT/internal/platform/requestcontext"
 	"github.com/lrx0014/ResumeGPT/internal/profile"
 	"github.com/lrx0014/ResumeGPT/internal/shared/id"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type Dependencies struct {
-	Profiles  *profile.Service
-	Jobs      *job.Service
-	Logger    *slog.Logger
-	WebOrigin string
+	Profiles           *profile.Service
+	Jobs               *job.Service
+	Logger             *slog.Logger
+	WebOrigin          string
+	Authenticator      identity.Authenticator
+	Access             identity.AccessRepository
+	DefaultWorkspaceID string
+	Blobs              blobstore.Signer
 }
 
 type API struct {
-	profiles  *profile.Service
-	jobs      *job.Service
-	logger    *slog.Logger
-	webOrigin string
+	profiles           *profile.Service
+	jobs               *job.Service
+	logger             *slog.Logger
+	webOrigin          string
+	authenticator      identity.Authenticator
+	access             identity.AccessRepository
+	defaultWorkspaceID string
+	blobs              blobstore.Signer
 }
 
 func New(deps Dependencies) http.Handler {
 	api := &API{
-		profiles:  deps.Profiles,
-		jobs:      deps.Jobs,
-		logger:    deps.Logger,
-		webOrigin: deps.WebOrigin,
+		profiles:           deps.Profiles,
+		jobs:               deps.Jobs,
+		logger:             deps.Logger,
+		webOrigin:          deps.WebOrigin,
+		authenticator:      deps.Authenticator,
+		access:             deps.Access,
+		defaultWorkspaceID: deps.DefaultWorkspaceID,
+		blobs:              deps.Blobs,
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", api.health)
-	mux.HandleFunc("GET /readyz", api.health)
-	mux.HandleFunc("GET /v1/system/capabilities", api.capabilities)
-	mux.HandleFunc("GET /v1/profiles", api.listProfiles)
-	mux.HandleFunc("POST /v1/profiles", api.createProfile)
-	mux.HandleFunc("GET /v1/profiles/{profileID}", api.getProfile)
-	mux.HandleFunc("GET /v1/jobs", api.listJobs)
-	mux.HandleFunc("POST /v1/jobs", api.createJob)
-	mux.HandleFunc("GET /v1/jobs/{jobID}", api.getJob)
+	protected := http.NewServeMux()
+	protected.Handle("GET /v1/system/capabilities", api.requireRole(identity.RoleViewer, api.capabilities))
+	protected.Handle("GET /v1/profiles", api.requireRole(identity.RoleViewer, api.listProfiles))
+	protected.Handle("POST /v1/profiles", api.requireRole(identity.RoleEditor, api.createProfile))
+	protected.Handle("GET /v1/profiles/{profileID}", api.requireRole(identity.RoleViewer, api.getProfile))
+	protected.Handle("GET /v1/jobs", api.requireRole(identity.RoleViewer, api.listJobs))
+	protected.Handle("POST /v1/jobs", api.requireRole(identity.RoleEditor, api.createJob))
+	protected.Handle("GET /v1/jobs/{jobID}", api.requireRole(identity.RoleViewer, api.getJob))
+	protected.Handle("POST /v1/storage/uploads", api.requireRole(identity.RoleEditor, api.createUpload))
+	protected.Handle("GET /v1/storage/objects/{objectID}/download", api.requireRole(identity.RoleViewer, api.createDownload))
 
-	return api.requestID(api.recoverPanic(api.accessLog(api.cors(mux))))
+	root := http.NewServeMux()
+	root.HandleFunc("GET /healthz", api.health)
+	root.HandleFunc("GET /readyz", api.health)
+	root.Handle("/v1/", api.authenticate(protected))
+	return otelhttp.NewHandler(api.requestID(api.recoverPanic(api.accessLog(api.cors(root)))), "resumegpt.http")
 }
 
 func (a *API) health(w http.ResponseWriter, _ *http.Request) {
@@ -146,15 +166,8 @@ func (a *API) createJob(w http.ResponseWriter, r *http.Request) {
 }
 
 func workspaceID(r *http.Request) string {
-	if value := strings.TrimSpace(r.Header.Get("X-Workspace-ID")); value != "" {
-		return value
-	}
-	return "ws_personal_dev"
+	return requestcontext.WorkspaceID(r.Context())
 }
-
-type contextKey string
-
-const requestIDKey contextKey = "request-id"
 
 func (a *API) requestID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -163,7 +176,7 @@ func (a *API) requestID(next http.Handler) http.Handler {
 			requestID = id.New("req")
 		}
 		w.Header().Set("X-Request-ID", requestID)
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), requestIDKey, requestID)))
+		next.ServeHTTP(w, r.WithContext(requestcontext.WithRequestID(r.Context(), requestID)))
 	})
 }
 
@@ -172,7 +185,7 @@ func (a *API) cors(next http.Handler) http.Handler {
 		if a.webOrigin != "" {
 			w.Header().Set("Access-Control-Allow-Origin", a.webOrigin)
 			w.Header().Set("Vary", "Origin")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Idempotency-Key, X-Request-ID, X-Workspace-ID")
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key, X-Request-ID, X-Workspace-ID")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS")
 		}
 		if r.Method == http.MethodOptions {
@@ -191,7 +204,8 @@ func (a *API) accessLog(next http.Handler) http.Handler {
 			"method", r.Method,
 			"path", r.URL.Path,
 			"duration", time.Since(started),
-			"request_id", r.Context().Value(requestIDKey),
+			"request_id", requestcontext.RequestID(r.Context()),
+			"trace_id", trace.SpanContextFromContext(r.Context()).TraceID().String(),
 		)
 	})
 }

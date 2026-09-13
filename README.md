@@ -8,11 +8,15 @@ ResumeGPT is an evidence-backed CV and cover-letter optimization platform. This 
 - Go API built as a modular monolith.
 - Independent Go worker entry point.
 - Profile and job domain modules with repository ports.
-- In-memory adapters for zero-dependency local development.
-- PostgreSQL/pgvector and MinIO local infrastructure definitions.
+- PostgreSQL adapters with embedded migrations, workspace RLS, audit events, and transactional outbox writes.
+- Development and OIDC authentication modes with workspace RBAC.
+- S3-compatible signed upload and download URLs, with MinIO for local development.
+- PostgreSQL-backed durable jobs and a leased outbox dispatcher.
+- Optional in-memory adapters for zero-dependency local development.
+- OpenTelemetry HTTP tracing and W3C trace-context propagation.
 - English-first internationalization setup.
 
-The in-memory repositories are intentionally temporary. PostgreSQL remains the planned system of record and will be introduced through adapters without changing the domain services.
+Infrastructure integrations remain behind application ports and adapters so that storage, identity, and messaging choices can change without rewriting domain services.
 
 ## Delivery Roadmap and Feature Checklist
 
@@ -23,8 +27,8 @@ This checklist is the project-level source of truth for planned delivery. An ite
 | Milestone | Outcome | Status |
 |---|---|---|
 | M0 — Foundation Skeleton | Runnable web application, API, worker, domain boundaries, and local development setup | Complete |
-| M1 — Durable Core | PostgreSQL persistence, workspace security, object storage, and recoverable background jobs | Next |
-| M2 — Profile Knowledge Base | Multi-format ingestion, OCR, evidence-linked facts, review, and retrieval | Planned |
+| M1 — Durable Core | PostgreSQL persistence, workspace security, object storage, and recoverable background jobs | Complete |
+| M2 — Profile Knowledge Base | Multi-format ingestion, OCR, evidence-linked facts, review, and retrieval | Next |
 | M3 — Job and Application Tracking | URL acquisition, normalized requirements, application workflow, and reporting | Planned |
 | M4 — Tailored Content Generation | Provider-independent LLM orchestration, CVs, cover letters, and iterative revision | Planned |
 | M5 — Rendering, Validation, and Trust | Managed templates, DOCX/PDF output, visual QA, and unsupported-claim controls | Planned |
@@ -44,21 +48,23 @@ This checklist is the project-level source of truth for planned delivery. An ite
 - [x] Connect Profile and Job forms to the development API.
 - [x] Add PostgreSQL/pgvector and MinIO local Compose definitions.
 - [x] Add Go tests, static analysis, frontend type checking, production builds, and dependency auditing.
-- [ ] Add continuous integration for tests, builds, audits, and formatting.
+- [x] Add continuous integration for tests, builds, audits, formatting, and PostgreSQL integration.
 
 ### M1 — Durable Core
 
-- [ ] Define versioned database migrations.
-- [ ] Implement PostgreSQL Profile and Job repository adapters.
-- [ ] Add workspace records and remove the implicit production workspace fallback.
-- [ ] Integrate an OIDC identity provider.
-- [ ] Implement workspace membership and Owner/Admin/Editor/Viewer RBAC.
-- [ ] Add application-level workspace scoping and PostgreSQL Row-Level Security.
-- [ ] Implement S3-compatible object storage and signed upload/download URLs.
-- [ ] Implement durable PostgreSQL jobs, leases, heartbeats, retries, cancellation, and dead-letter handling.
-- [ ] Implement a transactional outbox and idempotent consumers.
-- [ ] Add audit events and baseline OpenTelemetry instrumentation.
-- [ ] Add automated backup and restore checks for local/test environments.
+- [x] Define versioned, embedded database migrations.
+- [x] Implement PostgreSQL Profile and Job repository adapters.
+- [x] Add workspace and membership records and remove the implicit production workspace fallback.
+- [x] Integrate OIDC Bearer-token verification for production API authentication.
+- [x] Implement workspace membership and Owner/Admin/Editor/Viewer RBAC.
+- [x] Add application-level workspace scoping and PostgreSQL Row-Level Security.
+- [x] Implement S3-compatible object storage and signed upload/download URLs.
+- [x] Implement durable PostgreSQL jobs, leases, heartbeats, retries, cancellation, and terminal failure handling.
+- [x] Write transactional outbox events with Profile and Job mutations.
+- [x] Implement leased outbox publication with stable event IDs and retry backoff.
+- [x] Persist audit events with Profile and Job mutations.
+- [x] Add baseline OpenTelemetry HTTP tracing and W3C context propagation.
+- [x] Add automated backup and restore checks for local/test environments.
 
 ### M2 — Profile Knowledge Base
 
@@ -66,6 +72,7 @@ This checklist is the project-level source of truth for planned delivery. An ite
 - [ ] Accept PDF, DOC/DOCX, TeX, TXT, PNG, JPG/JPEG, and direct text sources.
 - [ ] Validate real MIME type, size, content hash, and malware status.
 - [ ] Build the isolated Python document-processing worker.
+- [ ] Add transactional inbox deduplication with the first asynchronous document consumer.
 - [ ] Extract text, page/paragraph location, and image bounding boxes.
 - [ ] Add OCR with confidence and actionable failure states.
 - [ ] Define versioned fact-type JSON Schemas.
@@ -169,6 +176,14 @@ Install web dependencies:
 npm --prefix apps/web install
 ```
 
+Start local infrastructure and apply migrations:
+
+```bash
+cp .env.example .env
+make compose-up
+make migrate
+```
+
 Run the API:
 
 ```bash
@@ -183,7 +198,7 @@ make dev-web
 
 Open `http://localhost:5173`. Vite proxies `/api` requests to the API at `http://localhost:8080`.
 
-The development API uses `ws_personal_dev` as a temporary workspace when no authentication context is present. This fallback must not be used in production.
+Development authentication maps requests to the seeded `ws_personal_dev` workspace. Production deployments must use `AUTH_MODE=oidc`, configure the issuer and client ID, and send an explicit `X-Workspace-ID` header.
 
 ## Local Infrastructure
 
@@ -194,7 +209,16 @@ cp .env.example .env
 make compose-up
 ```
 
-The current API does not require these containers because it uses in-memory adapters. They are provided for the next persistence implementation phase.
+The example environment selects PostgreSQL and MinIO. Set `PERSISTENCE_MODE=memory` and `OBJECT_STORAGE_MODE=memory` for a zero-dependency development session.
+
+Create a local database backup or verify a complete backup-and-restore cycle:
+
+```bash
+make backup
+make restore-check
+```
+
+Set `OTEL_EXPORTER_OTLP_ENDPOINT` to send API and worker traces to an OpenTelemetry-compatible collector. When it is empty, trace propagation remains enabled without exporting spans.
 
 ## Validation
 
@@ -212,7 +236,10 @@ cmd/worker/                 Go worker entry point
 internal/profile/           Profile domain and application service
 internal/job/               Job domain and application service
 internal/adapters/          Infrastructure adapters
+internal/platform/          Database, queue, storage, and telemetry abstractions
 internal/transport/httpapi/ HTTP transport
+migrations/                 Versioned embedded PostgreSQL migrations
+scripts/                    Local backup and restore verification
 docs/                       Architecture and ADRs
 ```
 
