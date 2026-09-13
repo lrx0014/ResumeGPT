@@ -67,7 +67,7 @@ onMounted(load)
       <article v-for="profile in profiles" :key="profile.id" class="entity-card">
         <span class="entity-icon">◎</span>
         <div><p class="eyebrow">{{ profile.domain || 'General profile' }}</p><h2>{{ profile.name }}</h2><p>{{ profile.description || 'Ready for background sources and verified facts.' }}</p></div>
-        <footer><span>{{ profile.defaultLanguage }}</span><button class="text-button" type="button">Open →</button></footer>
+        <footer><span>{{ profile.defaultLanguage }}</span><RouterLink class="text-button" :to="`/profiles/${profile.id}`">Open →</RouterLink></footer>
       </article>
     </div>
     <div v-else class="empty-state">

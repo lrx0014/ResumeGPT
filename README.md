@@ -14,6 +14,8 @@ ResumeGPT is an evidence-backed CV and cover-letter optimization platform. This 
 - PostgreSQL-backed durable jobs and a leased outbox dispatcher.
 - Optional in-memory adapters for zero-dependency local development.
 - OpenTelemetry HTTP tracing and W3C trace-context propagation.
+- Profile knowledge with immutable text evidence, versioned review, safe retrieval, export, and deletion.
+- An isolated Python extraction engine for TXT, TeX, DOC/DOCX, PDF, PNG, and JPEG, including OCR metadata.
 - English-first internationalization setup.
 
 Infrastructure integrations remain behind application ports and adapters so that storage, identity, and messaging choices can change without rewriting domain services.
@@ -28,7 +30,7 @@ This checklist is the project-level source of truth for planned delivery. An ite
 |---|---|---|
 | M0 — Foundation Skeleton | Runnable web application, API, worker, domain boundaries, and local development setup | Complete |
 | M1 — Durable Core | PostgreSQL persistence, workspace security, object storage, and recoverable background jobs | Complete |
-| M2 — Profile Knowledge Base | Multi-format ingestion, OCR, evidence-linked facts, review, and retrieval | Next |
+| M2 — Profile Knowledge Base | Evidence registry and extraction engine are complete; staged processing and semantic retrieval remain | In progress |
 | M3 — Job and Application Tracking | URL acquisition, normalized requirements, application workflow, and reporting | Planned |
 | M4 — Tailored Content Generation | Provider-independent LLM orchestration, CVs, cover letters, and iterative revision | Planned |
 | M5 — Rendering, Validation, and Trust | Managed templates, DOCX/PDF output, visual QA, and unsupported-claim controls | Planned |
@@ -46,7 +48,7 @@ This checklist is the project-level source of truth for planned delivery. An ite
 - [x] Create the Vue 3, TypeScript, Router, Pinia, and i18n application shell.
 - [x] Create Overview, Profiles, Jobs, and Generate views.
 - [x] Connect Profile and Job forms to the development API.
-- [x] Add PostgreSQL/pgvector and MinIO local Compose definitions.
+- [x] Add a complete local Compose stack with web, API, worker, automatic migrations, PostgreSQL/pgvector, and MinIO.
 - [x] Add Go tests, static analysis, frontend type checking, production builds, and dependency auditing.
 - [x] Add continuous integration for tests, builds, audits, formatting, and PostgreSQL integration.
 
@@ -66,23 +68,42 @@ This checklist is the project-level source of truth for planned delivery. An ite
 - [x] Add baseline OpenTelemetry HTTP tracing and W3C context propagation.
 - [x] Add automated backup and restore checks for local/test environments.
 
-### M2 — Profile Knowledge Base
+### M2a — Evidence Registry
 
-- [ ] Support multiple profiles within a workspace.
-- [ ] Accept PDF, DOC/DOCX, TeX, TXT, PNG, JPG/JPEG, and direct text sources.
-- [ ] Validate real MIME type, size, content hash, and malware status.
-- [ ] Build the isolated Python document-processing worker.
+- [x] Support multiple profiles within a workspace.
+- [x] Accept direct text and UTF-8 TXT sources.
+- [x] Validate UTF-8 text, real MIME type, size, line limits, control characters, and SHA-256 content hash.
+- [x] Deduplicate identical source content within a profile.
+- [x] Extract immutable paragraph-level text evidence with source and content hashes.
+- [x] Define the versioned statement fact JSON Schema.
+- [x] Create verbatim candidate statements without granting confirmed status.
+- [x] Link immutable fact versions to source evidence.
+- [x] Require explicit user review and treat all imported statements as sensitive by default.
+- [x] Add fact editing, assertion, confirmation, dispute, rejection, optimistic concurrency, and history.
+- [x] Add safe lexical retrieval restricted to confirmed, non-sensitive current versions.
+- [x] Implement profile knowledge export and complete active-database source deletion.
+- [x] Provide a Profile knowledge UI for import, provenance, review, history, retrieval, export, and deletion.
+
+### M2b — Isolated Document Extraction
+
+- [ ] Accept PDF, DOC/DOCX, TeX, PNG, and JPG/JPEG sources through staged object storage.
+- [x] Build a signature-driven Python extraction engine for TXT, TeX, DOC/DOCX, PDF, PNG, and JPG/JPEG.
+- [x] Validate binary signatures, extension agreement, expanded DOCX size, total size, and SHA-256 content hash.
+- [x] Fail closed with actionable states when malware scanning, conversion, PDF rendering, or OCR is unavailable.
+- [x] Build and verify the non-root extraction container locally.
+- [ ] Provision current malware definitions and scan before releasing quarantined content.
+- [ ] Connect staged object uploads to the durable document-processing job consumer.
 - [ ] Add transactional inbox deduplication with the first asynchronous document consumer.
-- [ ] Extract text, page/paragraph location, and image bounding boxes.
-- [ ] Add OCR with confidence and actionable failure states.
-- [ ] Define versioned fact-type JSON Schemas.
-- [ ] Extract candidate facts without granting confirmed status.
-- [ ] Link immutable fact versions to source evidence.
+- [x] Extract text with page, paragraph, confidence, and optional image bounding-box location.
+- [x] Add Tesseract OCR for images and image-only PDF pages with confidence and actionable failure states.
+
+### M2c — Fact Intelligence and Retrieval
+
+- [ ] Add typed fact schemas for employment, education, projects, skills, awards, and certifications.
+- [ ] Extract structured candidate facts without granting confirmed status.
 - [ ] Implement user review for low-confidence, conflicting, and sensitive facts.
-- [ ] Add fact editing, confirmation, rejection, supersession, and history.
 - [ ] Add pgvector indexing with mandatory workspace/profile filters.
 - [ ] Add hybrid retrieval and retrieval-quality evaluation.
-- [ ] Implement profile source export and complete deletion.
 
 ### M3 — Job and Application Tracking
 
@@ -165,40 +186,63 @@ This checklist is the project-level source of truth for planned delivery. An ite
 
 - Go 1.24 or later.
 - Node.js 22.12 or later and npm.
-- Docker with Compose for optional local infrastructure.
+- Python 3.10 or later and uv.
+- Docker with Compose for the complete local stack or optional infrastructure-only development.
 - GNU Make is optional; the underlying commands can be run directly.
 
 ## Quick Start
 
-Install web dependencies:
-
-```bash
-npm --prefix apps/web install
-```
-
-Start local infrastructure and apply migrations:
+Start the complete application stack:
 
 ```bash
 cp .env.example .env
 make compose-up
+```
+
+Open `http://localhost:5173`. Compose builds and starts the Vue application, Go API, Go worker, PostgreSQL, and MinIO, and applies database migrations before the API becomes ready.
+
+Useful local endpoints are:
+
+- Web application: `http://localhost:5173`
+- API health: `http://localhost:8080/healthz`
+- MinIO console: `http://localhost:9001`
+
+Inspect service status or follow logs with:
+
+```bash
+make compose-ps
+make compose-logs
+```
+
+Development authentication maps requests to the seeded `ws_personal_dev` workspace. Production deployments must use `AUTH_MODE=oidc`, configure the issuer and client ID, and send an explicit `X-Workspace-ID` header.
+
+## Host Development
+
+Install web and document-worker dependencies:
+
+```bash
+npm --prefix apps/web install
+cd services/document-worker
+uv sync --dev --locked
+cd ../..
+```
+
+Start only PostgreSQL and MinIO, then apply migrations:
+
+```bash
+cp .env.example .env
+make compose-infra
 make migrate
 ```
 
-Run the API:
+Run the API and web application in separate terminals:
 
 ```bash
 make dev-api
-```
-
-In another terminal, run the web application:
-
-```bash
 make dev-web
 ```
 
 Open `http://localhost:5173`. Vite proxies `/api` requests to the API at `http://localhost:8080`.
-
-Development authentication maps requests to the seeded `ws_personal_dev` workspace. Production deployments must use `AUTH_MODE=oidc`, configure the issuer and client ID, and send an explicit `X-Workspace-ID` header.
 
 ## Local Infrastructure
 
@@ -206,10 +250,12 @@ PostgreSQL with pgvector and MinIO can be started with:
 
 ```bash
 cp .env.example .env
-make compose-up
+make compose-infra
 ```
 
-The example environment selects PostgreSQL and MinIO. Set `PERSISTENCE_MODE=memory` and `OBJECT_STORAGE_MODE=memory` for a zero-dependency development session.
+The example environment selects PostgreSQL and MinIO. Compose overrides service-to-service endpoints while preserving the localhost endpoints used by host processes and browser-facing signed object URLs. Set `PERSISTENCE_MODE=memory` and `OBJECT_STORAGE_MODE=memory` for a zero-dependency host development session.
+
+`make compose-down` stops the stack but retains PostgreSQL and MinIO volumes. Use `docker compose down --volumes` only when you intentionally want to delete local application data.
 
 Create a local database backup or verify a complete backup-and-restore cycle:
 
@@ -219,6 +265,15 @@ make restore-check
 ```
 
 Set `OTEL_EXPORTER_OTLP_ENDPOINT` to send API and worker traces to an OpenTelemetry-compatible collector. When it is empty, trace propagation remains enabled without exporting spans.
+
+Run the extraction engine directly against a quarantined document:
+
+```bash
+cd services/document-worker
+uv run python -m resumegpt_document_worker /absolute/path/to/document.pdf
+```
+
+The command intentionally fails when ClamAV or current malware definitions are unavailable. The hidden `--skip-malware-scan` switch exists for automated parser tests only and must not be used for user documents.
 
 ## Validation
 
@@ -239,6 +294,8 @@ internal/adapters/          Infrastructure adapters
 internal/platform/          Database, queue, storage, and telemetry abstractions
 internal/transport/httpapi/ HTTP transport
 migrations/                 Versioned embedded PostgreSQL migrations
+schemas/                    Versioned JSON Schemas
+services/document-worker/   Isolated Python document extraction
 scripts/                    Local backup and restore verification
 docs/                       Architecture and ADRs
 ```

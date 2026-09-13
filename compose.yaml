@@ -1,19 +1,52 @@
 name: resumegpt
 
+x-backend-environment: &backend-environment
+  APP_ENV: development
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  DATABASE_URL: postgres://${POSTGRES_USER:-resumegpt}:${POSTGRES_PASSWORD:-resumegpt}@postgres:5432/${POSTGRES_DB:-resumegpt}?sslmode=disable
+  PERSISTENCE_MODE: postgres
+  AUTH_MODE: development
+  DEVELOPMENT_WORKSPACE_ID: ${DEVELOPMENT_WORKSPACE_ID:-ws_personal_dev}
+  WEB_ORIGIN: http://localhost:${WEB_PORT:-5173}
+  OBJECT_STORAGE_MODE: s3
+  OBJECT_STORAGE_ENDPOINT: http://minio:9000
+  OBJECT_STORAGE_PUBLIC_ENDPOINT: ${OBJECT_STORAGE_PUBLIC_ENDPOINT:-http://localhost:9000}
+  OBJECT_STORAGE_BUCKET: ${OBJECT_STORAGE_BUCKET:-resumegpt}
+  OBJECT_STORAGE_ACCESS_KEY: ${MINIO_ROOT_USER:-resumegpt}
+  OBJECT_STORAGE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-change-me}
+  OBJECT_STORAGE_REGION: ${OBJECT_STORAGE_REGION:-us-east-1}
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+
+x-backend-service: &backend-service
+  image: resumegpt-backend:local
+  build:
+    context: .
+    dockerfile: Dockerfile
+  environment: *backend-environment
+  read_only: true
+  tmpfs:
+    - /tmp
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+
 services:
   postgres:
     image: pgvector/pgvector:pg17
     environment:
-      POSTGRES_DB: resumegpt
-      POSTGRES_USER: resumegpt
-      POSTGRES_PASSWORD: resumegpt
+      POSTGRES_DB: ${POSTGRES_DB:-resumegpt}
+      POSTGRES_USER: ${POSTGRES_USER:-resumegpt}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-resumegpt}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U resumegpt -d resumegpt"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 3s
       retries: 10
+      start_period: 5s
+    restart: unless-stopped
     volumes:
       - postgres-data:/var/lib/postgresql/data
 
@@ -21,13 +54,81 @@ services:
     image: quay.io/minio/minio:RELEASE.2025-07-23T15-54-02Z
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: resumegpt
-      MINIO_ROOT_PASSWORD: change-me
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-resumegpt}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me}
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
     volumes:
       - minio-data:/data
+
+  migrate:
+    <<: *backend-service
+    entrypoint: ["/app/migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    <<: *backend-service
+    ports:
+      - "${API_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "/app/healthcheck", "http://localhost:8080/readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    restart: unless-stopped
+
+  worker:
+    <<: *backend-service
+    entrypoint: ["/app/worker"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  web:
+    image: resumegpt-web:local
+    build:
+      context: apps/web
+      dockerfile: Dockerfile
+    ports:
+      - "${WEB_PORT:-5173}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8080/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
 
 volumes:
   postgres-data:

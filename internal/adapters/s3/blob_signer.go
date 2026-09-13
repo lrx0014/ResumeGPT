@@ -13,23 +13,41 @@ import (
 )
 
 type Config struct {
-	Endpoint  string
-	Bucket    string
-	AccessKey string
-	SecretKey string
-	Region    string
+	Endpoint       string
+	PublicEndpoint string
+	Bucket         string
+	AccessKey      string
+	SecretKey      string
+	Region         string
 }
 
 type BlobSigner struct {
-	client *minio.Client
-	bucket string
-	region string
+	client       *minio.Client
+	publicClient *minio.Client
+	bucket       string
+	region       string
 }
 
 func NewBlobSigner(cfg Config) (*BlobSigner, error) {
-	endpointURL, err := url.Parse(cfg.Endpoint)
-	if err != nil || endpointURL.Host == "" {
-		return nil, fmt.Errorf("parse object storage endpoint")
+	client, err := newClient(cfg.Endpoint, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("create internal object storage client: %w", err)
+	}
+	publicEndpoint := cfg.PublicEndpoint
+	if publicEndpoint == "" {
+		publicEndpoint = cfg.Endpoint
+	}
+	publicClient, err := newClient(publicEndpoint, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("create public object storage client: %w", err)
+	}
+	return &BlobSigner{client: client, publicClient: publicClient, bucket: cfg.Bucket, region: cfg.Region}, nil
+}
+
+func newClient(endpoint string, cfg Config) (*minio.Client, error) {
+	endpointURL, err := url.Parse(endpoint)
+	if err != nil || endpointURL.Host == "" || (endpointURL.Scheme != "http" && endpointURL.Scheme != "https") {
+		return nil, fmt.Errorf("parse endpoint")
 	}
 	client, err := minio.New(endpointURL.Host, &minio.Options{
 		Creds:  credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, ""),
@@ -37,9 +55,9 @@ func NewBlobSigner(cfg Config) (*BlobSigner, error) {
 		Region: cfg.Region,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("create object storage client: %w", err)
+		return nil, err
 	}
-	return &BlobSigner{client: client, bucket: cfg.Bucket, region: cfg.Region}, nil
+	return client, nil
 }
 
 func (s *BlobSigner) EnsureBucket(ctx context.Context) error {
@@ -61,7 +79,7 @@ func (s *BlobSigner) PresignUpload(ctx context.Context, workspaceID, objectID, c
 	if err != nil {
 		return blobstore.SignedURL{}, err
 	}
-	signed, err := s.client.PresignedPutObject(ctx, s.bucket, key, expiry)
+	signed, err := s.publicClient.PresignedPutObject(ctx, s.bucket, key, expiry)
 	if err != nil {
 		return blobstore.SignedURL{}, fmt.Errorf("presign upload: %w", err)
 	}
@@ -77,7 +95,7 @@ func (s *BlobSigner) PresignDownload(ctx context.Context, workspaceID, objectID 
 	if err != nil {
 		return blobstore.SignedURL{}, err
 	}
-	signed, err := s.client.PresignedGetObject(ctx, s.bucket, key, expiry, nil)
+	signed, err := s.publicClient.PresignedGetObject(ctx, s.bucket, key, expiry, nil)
 	if err != nil {
 		return blobstore.SignedURL{}, fmt.Errorf("presign download: %w", err)
 	}

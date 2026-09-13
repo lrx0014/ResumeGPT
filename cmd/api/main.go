@@ -14,6 +14,7 @@ import (
 	s3adapter "github.com/lrx0014/ResumeGPT/internal/adapters/s3"
 	"github.com/lrx0014/ResumeGPT/internal/identity"
 	"github.com/lrx0014/ResumeGPT/internal/job"
+	"github.com/lrx0014/ResumeGPT/internal/knowledge"
 	"github.com/lrx0014/ResumeGPT/internal/platform/blobstore"
 	"github.com/lrx0014/ResumeGPT/internal/platform/config"
 	"github.com/lrx0014/ResumeGPT/internal/platform/database"
@@ -45,6 +46,7 @@ func main() {
 	var profileRepository profile.Repository
 	var jobRepository job.Repository
 	var accessRepository identity.AccessRepository
+	var knowledgeService *knowledge.Service
 	switch cfg.PersistenceMode {
 	case "memory":
 		profileRepository = memory.NewProfileRepository()
@@ -65,6 +67,7 @@ func main() {
 		profileRepository = postgresadapter.NewProfileRepository(pool)
 		jobRepository = postgresadapter.NewJobRepository(pool)
 		accessRepository = postgresadapter.NewAccessRepository(pool)
+		knowledgeService = knowledge.NewService(postgresadapter.NewKnowledgeRepository(pool))
 	default:
 		logger.Error("unsupported persistence mode", "mode", cfg.PersistenceMode)
 		os.Exit(1)
@@ -78,11 +81,12 @@ func main() {
 		blobSigner = memory.BlobSigner{}
 	case "s3":
 		blobSigner, err = s3adapter.NewBlobSigner(s3adapter.Config{
-			Endpoint:  cfg.ObjectStorageEndpoint,
-			Bucket:    cfg.ObjectStorageBucket,
-			AccessKey: cfg.ObjectStorageAccessKey,
-			SecretKey: cfg.ObjectStorageSecretKey,
-			Region:    cfg.ObjectStorageRegion,
+			Endpoint:       cfg.ObjectStorageEndpoint,
+			PublicEndpoint: cfg.ObjectStoragePublicEndpoint,
+			Bucket:         cfg.ObjectStorageBucket,
+			AccessKey:      cfg.ObjectStorageAccessKey,
+			SecretKey:      cfg.ObjectStorageSecretKey,
+			Region:         cfg.ObjectStorageRegion,
 		})
 		if err != nil {
 			logger.Error("initialize object storage", "error", err)
@@ -125,6 +129,7 @@ func main() {
 		Access:             accessRepository,
 		DefaultWorkspaceID: developmentWorkspace(cfg),
 		Blobs:              blobSigner,
+		Knowledge:          knowledgeService,
 	})
 
 	server := &http.Server{

@@ -9,6 +9,7 @@ import (
 
 	"github.com/lrx0014/ResumeGPT/internal/identity"
 	"github.com/lrx0014/ResumeGPT/internal/job"
+	"github.com/lrx0014/ResumeGPT/internal/knowledge"
 	"github.com/lrx0014/ResumeGPT/internal/platform/blobstore"
 	"github.com/lrx0014/ResumeGPT/internal/platform/requestcontext"
 	"github.com/lrx0014/ResumeGPT/internal/profile"
@@ -26,6 +27,7 @@ type Dependencies struct {
 	Access             identity.AccessRepository
 	DefaultWorkspaceID string
 	Blobs              blobstore.Signer
+	Knowledge          *knowledge.Service
 }
 
 type API struct {
@@ -37,6 +39,7 @@ type API struct {
 	access             identity.AccessRepository
 	defaultWorkspaceID string
 	blobs              blobstore.Signer
+	knowledge          *knowledge.Service
 }
 
 func New(deps Dependencies) http.Handler {
@@ -49,9 +52,11 @@ func New(deps Dependencies) http.Handler {
 		access:             deps.Access,
 		defaultWorkspaceID: deps.DefaultWorkspaceID,
 		blobs:              deps.Blobs,
+		knowledge:          deps.Knowledge,
 	}
 
 	protected := http.NewServeMux()
+	api.registerKnowledge(protected)
 	protected.Handle("GET /v1/system/capabilities", api.requireRole(identity.RoleViewer, api.capabilities))
 	protected.Handle("GET /v1/profiles", api.requireRole(identity.RoleViewer, api.listProfiles))
 	protected.Handle("POST /v1/profiles", api.requireRole(identity.RoleEditor, api.createProfile))
@@ -77,6 +82,7 @@ func (a *API) capabilities(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"apiVersion": "v1",
 		"features": map[string]bool{
+			"knowledge":  a.knowledge != nil,
 			"profiles":   true,
 			"jobs":       true,
 			"generation": false,
@@ -186,7 +192,7 @@ func (a *API) cors(next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", a.webOrigin)
 			w.Header().Set("Vary", "Origin")
 			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key, X-Request-ID, X-Workspace-ID")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
 		}
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

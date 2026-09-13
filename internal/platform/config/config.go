@@ -7,43 +7,45 @@ import (
 )
 
 type Config struct {
-	Environment            string
-	PersistenceMode        string
-	AuthMode               string
-	DevelopmentWorkspaceID string
-	DatabaseURL            string
-	OIDCIssuer             string
-	OIDCClientID           string
-	ObjectStorageMode      string
-	ObjectStorageEndpoint  string
-	ObjectStorageBucket    string
-	ObjectStorageAccessKey string
-	ObjectStorageSecretKey string
-	ObjectStorageRegion    string
-	APIAddress             string
-	ReadTimeout            time.Duration
-	WriteTimeout           time.Duration
-	ShutdownTimeout        time.Duration
-	WebOrigin              string
+	Environment                 string
+	PersistenceMode             string
+	AuthMode                    string
+	DevelopmentWorkspaceID      string
+	DatabaseURL                 string
+	OIDCIssuer                  string
+	OIDCClientID                string
+	ObjectStorageMode           string
+	ObjectStorageEndpoint       string
+	ObjectStoragePublicEndpoint string
+	ObjectStorageBucket         string
+	ObjectStorageAccessKey      string
+	ObjectStorageSecretKey      string
+	ObjectStorageRegion         string
+	APIAddress                  string
+	ReadTimeout                 time.Duration
+	WriteTimeout                time.Duration
+	ShutdownTimeout             time.Duration
+	WebOrigin                   string
 }
 
 func Load() (Config, error) {
 	cfg := Config{
-		Environment:            getEnv("APP_ENV", "development"),
-		PersistenceMode:        getEnv("PERSISTENCE_MODE", "memory"),
-		AuthMode:               getEnv("AUTH_MODE", "development"),
-		DevelopmentWorkspaceID: getEnv("DEVELOPMENT_WORKSPACE_ID", "ws_personal_dev"),
-		DatabaseURL:            getEnv("DATABASE_URL", "postgres://resumegpt:resumegpt@localhost:5432/resumegpt?sslmode=disable"),
-		OIDCIssuer:             getEnv("OIDC_ISSUER", ""),
-		OIDCClientID:           getEnv("OIDC_CLIENT_ID", ""),
-		ObjectStorageMode:      getEnv("OBJECT_STORAGE_MODE", "memory"),
-		ObjectStorageEndpoint:  getEnv("OBJECT_STORAGE_ENDPOINT", "http://localhost:9000"),
-		ObjectStorageBucket:    getEnv("OBJECT_STORAGE_BUCKET", "resumegpt"),
-		ObjectStorageAccessKey: getEnv("OBJECT_STORAGE_ACCESS_KEY", "resumegpt"),
-		ObjectStorageSecretKey: getEnv("OBJECT_STORAGE_SECRET_KEY", "change-me"),
-		ObjectStorageRegion:    getEnv("OBJECT_STORAGE_REGION", "us-east-1"),
-		APIAddress:             getEnv("API_ADDRESS", ":8080"),
-		WebOrigin:              getEnv("WEB_ORIGIN", "http://localhost:5173"),
+		Environment:                 getEnv("APP_ENV", "development"),
+		PersistenceMode:             getEnv("PERSISTENCE_MODE", "memory"),
+		AuthMode:                    getEnv("AUTH_MODE", "development"),
+		DevelopmentWorkspaceID:      getEnv("DEVELOPMENT_WORKSPACE_ID", "ws_personal_dev"),
+		DatabaseURL:                 getEnv("DATABASE_URL", "postgres://resumegpt:resumegpt@localhost:5432/resumegpt?sslmode=disable"),
+		OIDCIssuer:                  getEnv("OIDC_ISSUER", ""),
+		OIDCClientID:                getEnv("OIDC_CLIENT_ID", ""),
+		ObjectStorageMode:           getEnv("OBJECT_STORAGE_MODE", "memory"),
+		ObjectStorageEndpoint:       getEnv("OBJECT_STORAGE_ENDPOINT", "http://localhost:9000"),
+		ObjectStoragePublicEndpoint: getEnv("OBJECT_STORAGE_PUBLIC_ENDPOINT", getEnv("OBJECT_STORAGE_ENDPOINT", "http://localhost:9000")),
+		ObjectStorageBucket:         getEnv("OBJECT_STORAGE_BUCKET", "resumegpt"),
+		ObjectStorageAccessKey:      getEnv("OBJECT_STORAGE_ACCESS_KEY", "resumegpt"),
+		ObjectStorageSecretKey:      getEnv("OBJECT_STORAGE_SECRET_KEY", "change-me"),
+		ObjectStorageRegion:         getEnv("OBJECT_STORAGE_REGION", "us-east-1"),
+		APIAddress:                  getEnv("API_ADDRESS", ":8080"),
+		WebOrigin:                   getEnv("WEB_ORIGIN", "http://localhost:5173"),
 	}
 
 	var err error

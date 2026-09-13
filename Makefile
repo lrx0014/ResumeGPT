@@ -5,7 +5,7 @@ ifneq (,$(wildcard ./.env))
     export
 endif
 
-.PHONY: help dev-api dev-worker dev-web migrate test test-go test-web build build-go build-web fmt compose-up compose-down backup restore-check
+.PHONY: help dev-api dev-worker dev-web migrate test test-go test-web test-python build build-go build-web fmt compose-up compose-infra compose-logs compose-ps compose-down backup restore-check
 
 help:
 	@echo "ResumeGPT development commands"
@@ -15,8 +15,11 @@ help:
 	@echo "  make migrate       Apply database migrations"
 	@echo "  make test          Run all tests"
 	@echo "  make build         Build backend and frontend"
-	@echo "  make compose-up    Start local infrastructure"
-	@echo "  make compose-down  Stop local infrastructure"
+	@echo "  make compose-up    Build and start the complete local stack"
+	@echo "  make compose-infra Start only PostgreSQL and MinIO"
+	@echo "  make compose-logs  Follow local stack logs"
+	@echo "  make compose-ps    Show local stack status"
+	@echo "  make compose-down  Stop the local stack"
 	@echo "  make backup        Create a PostgreSQL backup in .data/backups"
 	@echo "  make restore-check Verify PostgreSQL backup and restore locally"
 
@@ -32,13 +35,16 @@ dev-web:
 migrate:
 	go run ./cmd/migrate
 
-test: test-go test-web
+test: test-go test-web test-python
 
 test-go:
 	go test ./...
 
 test-web:
 	npm --prefix apps/web run typecheck
+
+test-python:
+	cd services/document-worker && uv run pytest
 
 build: build-go build-web
 
@@ -54,7 +60,16 @@ fmt:
 	gofmt -w $$(find cmd internal migrations -name '*.go')
 
 compose-up:
-	docker compose up -d
+	docker compose up -d --build
+
+compose-infra:
+	docker compose up -d postgres minio
+
+compose-logs:
+	docker compose logs -f
+
+compose-ps:
+	docker compose ps
 
 compose-down:
 	docker compose down

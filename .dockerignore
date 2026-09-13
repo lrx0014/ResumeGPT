@@ -1,0 +1,14 @@
+.git
+.github
+.data
+.env
+.idea
+.vscode
+bin
+coverage.out
+apps/web/dist
+apps/web/node_modules
+services/document-worker/.pytest_cache
+services/document-worker/.ruff_cache
+services/document-worker/.venv
+**/__pycache__

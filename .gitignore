@@ -15,8 +15,8 @@ apps/web/.vite/
 # Python
 __pycache__/
 .venv/
+.pytest_cache/
 *.pyc
 
 # Local runtime data
 .data/
-
