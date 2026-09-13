@@ -1,0 +1,22 @@
+.DS_Store
+.env
+.idea/
+.vscode/
+
+# Go
+bin/
+coverage.out
+
+# Node
+node_modules/
+apps/web/dist/
+apps/web/.vite/
+
+# Python
+__pycache__/
+.venv/
+*.pyc
+
+# Local runtime data
+.data/
+
