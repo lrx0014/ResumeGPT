@@ -1,4 +1,4 @@
-import type { APIError, Job, ListResponse, Profile, DocumentUpload, SignedURL, StagedDocumentUpload } from './types'
+import type { APIError, Job, JobInput, ListResponse, Profile, DocumentUpload, SignedURL, StagedDocumentUpload } from './types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
 
@@ -45,6 +45,17 @@ export const api = {
     }
   },
   listJobs: () => request<ListResponse<Job>>('/v1/jobs'),
-  createJob: (input: Pick<Job, 'title' | 'company' | 'location' | 'sourceUrl' | 'description'>) =>
+  getJob: (id: string) => request<Job>(`/v1/jobs/${encodeURIComponent(id)}`),
+  createJob: (input: JobInput) =>
     request<Job>('/v1/jobs', { method: 'POST', body: JSON.stringify(input) }),
+  updateJob: (id: string, input: JobInput) =>
+    request<Job>(`/v1/jobs/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(input) }),
+  importJobs: (urls: string[]) => request<ListResponse<Job>>('/v1/jobs/imports', { method: 'POST', body: JSON.stringify({ urls }) }),
+  deleteJob: async (id: string) => {
+    const response = await fetch(`${API_BASE_URL}/v1/jobs/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { 'X-Workspace-ID': 'ws_personal_dev' } })
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as APIError | null
+      throw new Error(payload?.error.message ?? `Request failed with status ${response.status}`)
+    }
+  },
 }

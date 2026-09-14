@@ -298,3 +298,81 @@ func TestDocumentExtractionCompletionIsTransactionallyDeduplicated(t *testing.T)
 	}
 	assertJobState(t, ctx, pool, claimed.ID, "succeeded")
 }
+
+func TestJobImportCompletionIsTransactionallyDeduplicated(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is not configured")
+	}
+	ctx := requestcontext.WithActorID(context.Background(), "usr_job_import_test")
+	pool, err := database.Open(ctx, databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	if err := database.Migrate(ctx, pool); err != nil {
+		t.Fatal(err)
+	}
+
+	workspaceID := id.New("ws")
+	if _, err := pool.Exec(ctx, `INSERT INTO workspaces (id,name,kind) VALUES ($1,'Job imports','personal')`, workspaceID); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = pool.Exec(context.Background(), "DELETE FROM workspaces WHERE id=$1", workspaceID) })
+
+	repository := postgres.NewJobRepository(pool)
+	now := time.Now().UTC()
+	value := job.Job{ID: id.New("job"), WorkspaceID: workspaceID, SourceURL: "https://www.linkedin.com/jobs/view/123",
+		Status: "interested", ImportState: "queued", CreatedAt: now, UpdatedAt: now}
+	task := workqueue.Job{ID: id.New("task"), WorkspaceID: workspaceID, Kind: id.New("integration_job_import"),
+		IdempotencyKey: value.ID, MaxAttempts: 2, AvailableAt: now}
+	queued, err := repository.QueueImport(ctx, value, task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	duplicate, err := repository.QueueImport(ctx, job.Job{ID: id.New("job"), WorkspaceID: workspaceID, SourceURL: value.SourceURL}, workqueue.Job{})
+	if err != nil || duplicate.ID != queued.ID {
+		t.Fatalf("duplicate import = %#v, error = %v", duplicate, err)
+	}
+
+	queue := postgres.NewWorkQueue(pool)
+	claimed, err := queue.ClaimKind(ctx, "job-import-integration-worker", task.Kind, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.SetImportState(ctx, claimed, "fetching", ""); err != nil {
+		t.Fatal(err)
+	}
+	processed, err := repository.StoreImport(ctx, claimed, job.ParsedJob{Title: "Staff Engineer", Company: "Example",
+		City: "Berlin", Country: "Germany", Location: "Berlin, Germany", Description: "Build APIs."})
+	if err != nil || !processed {
+		t.Fatalf("first processing result = %v, error = %v", processed, err)
+	}
+	processed, err = repository.StoreImport(ctx, claimed, job.ParsedJob{Title: "Changed"})
+	if err != nil || processed {
+		t.Fatalf("duplicate processing result = %v, error = %v", processed, err)
+	}
+	stored, err := repository.Get(ctx, workspaceID, value.ID)
+	if err != nil || stored.Title != "Staff Engineer" || stored.Company != "Example" || stored.ImportState != "ready" {
+		t.Fatalf("unexpected imported job: %#v, error = %v", stored, err)
+	}
+	var inboxCount int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM inbox_messages WHERE consumer='job-page-importer-v1' AND message_id=$1`, claimed.ID).Scan(&inboxCount); err != nil {
+		t.Fatal(err)
+	}
+	if inboxCount != 1 {
+		t.Fatalf("inbox count = %d, want 1", inboxCount)
+	}
+	assertJobState(t, ctx, pool, claimed.ID, "succeeded")
+
+	if err := repository.Delete(ctx, workspaceID, value.ID); err != nil {
+		t.Fatal(err)
+	}
+	replacement := job.Job{ID: id.New("job"), WorkspaceID: workspaceID, SourceURL: value.SourceURL,
+		Status: "interested", ImportState: "queued", CreatedAt: now, UpdatedAt: now}
+	replacementTask := workqueue.Job{ID: id.New("task"), WorkspaceID: workspaceID, Kind: task.Kind,
+		IdempotencyKey: replacement.ID, MaxAttempts: 2, AvailableAt: now}
+	if recreated, err := repository.QueueImport(ctx, replacement, replacementTask); err != nil || recreated.ID != replacement.ID {
+		t.Fatalf("reimport after deletion = %#v, error = %v", recreated, err)
+	}
+}

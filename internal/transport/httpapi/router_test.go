@@ -115,6 +115,35 @@ func TestRejectsIncompleteJob(t *testing.T) {
 	}
 }
 
+func TestImportsLinkedInAndIndeedJobs(t *testing.T) {
+	handler := newHandler()
+	request := httptest.NewRequest(http.MethodPost, "/v1/jobs/imports", bytes.NewBufferString(`{"urls":["https://www.linkedin.com/jobs/view/123","https://de.indeed.com/viewjob?jk=456"]}`))
+	result := httptest.NewRecorder()
+	handler.ServeHTTP(result, request)
+	if result.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d: %s", result.Code, http.StatusAccepted, result.Body.String())
+	}
+	var response struct {
+		Items []job.Job `json:"items"`
+	}
+	if err := json.NewDecoder(result.Body).Decode(&response); err != nil {
+		t.Fatal(err)
+	}
+	if len(response.Items) != 2 || response.Items[0].ImportState != "queued" {
+		t.Fatalf("unexpected imports: %#v", response.Items)
+	}
+}
+
+func TestRejectsUnsupportedJobImportURL(t *testing.T) {
+	handler := newHandler()
+	request := httptest.NewRequest(http.MethodPost, "/v1/jobs/imports", bytes.NewBufferString(`{"urls":["https://example.com/jobs/123"]}`))
+	result := httptest.NewRecorder()
+	handler.ServeHTTP(result, request)
+	if result.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want %d", result.Code, http.StatusUnprocessableEntity)
+	}
+}
+
 func TestHealthAddsRequestID(t *testing.T) {
 	handler := newHandler()
 	request := httptest.NewRequest(http.MethodGet, "/healthz", nil)
@@ -176,9 +205,11 @@ func newHandler() http.Handler {
 func newHandlerWithRole(role identity.Role) http.Handler {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	subject := identity.Subject{Issuer: "development", Subject: "developer"}
+	jobRepository := memory.NewJobRepository()
 	return httpapi.New(httpapi.Dependencies{
 		Profiles:      profile.NewService(memory.NewProfileRepository()),
-		Jobs:          job.NewService(memory.NewJobRepository()),
+		Jobs:          job.NewService(jobRepository),
+		JobImports:    job.NewImportService(jobRepository),
 		Logger:        logger,
 		WebOrigin:     "http://localhost:5173",
 		Authenticator: identity.DevelopmentAuthenticator{Subject: subject},

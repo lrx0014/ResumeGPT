@@ -5,7 +5,7 @@ const messages = {
     nav: {
       overview: 'Overview',
       profiles: 'Profiles',
-      jobs: 'Jobs',
+      jobs: 'Opportunities',
       generate: 'Generate',
     },
   },
@@ -13,7 +13,7 @@ const messages = {
     nav: {
       overview: 'Übersicht',
       profiles: 'Profile',
-      jobs: 'Stellen',
+      jobs: 'Chancen',
       generate: 'Erstellen',
     },
   },
@@ -25,4 +25,3 @@ export const i18n = createI18n({
   fallbackLocale: 'en',
   messages,
 })
-

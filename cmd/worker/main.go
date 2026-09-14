@@ -10,6 +10,7 @@ import (
 	postgresadapter "github.com/lrx0014/ResumeGPT/internal/adapters/postgres"
 	s3adapter "github.com/lrx0014/ResumeGPT/internal/adapters/s3"
 	"github.com/lrx0014/ResumeGPT/internal/document"
+	"github.com/lrx0014/ResumeGPT/internal/job"
 	"github.com/lrx0014/ResumeGPT/internal/platform/config"
 	"github.com/lrx0014/ResumeGPT/internal/platform/database"
 	"github.com/lrx0014/ResumeGPT/internal/platform/outbox"
@@ -71,6 +72,19 @@ func main() {
 		}
 	}()
 
+	queue := postgresadapter.NewWorkQueue(pool)
+	jobRepository := postgresadapter.NewJobRepository(pool)
+	jobProcessor := job.ImportProcessor{
+		Queue: queue, Repository: jobRepository, Fetcher: job.NewHTTPFetcher(),
+		WorkerID: id.New("job_import_worker"), Logger: logger,
+	}
+	go func() {
+		if err := jobProcessor.Run(ctx); err != nil {
+			logger.Error("run job import processor", "error", err)
+			stop()
+		}
+	}()
+
 	blobs, err := s3adapter.NewBlobSigner(s3adapter.Config{
 		Endpoint: cfg.ObjectStorageEndpoint, PublicEndpoint: cfg.ObjectStoragePublicEndpoint,
 		Bucket: cfg.ObjectStorageBucket, AccessKey: cfg.ObjectStorageAccessKey,
@@ -85,7 +99,6 @@ func main() {
 		logger.Error("initialize document extractor", "error", err)
 		os.Exit(1)
 	}
-	queue := postgresadapter.NewWorkQueue(pool)
 	processor := document.Processor{
 		Queue: queue, Repository: postgresadapter.NewDocumentRepository(pool), Blobs: blobs,
 		Extractor: extractor, WorkerID: id.New("document_worker"), Logger: logger,

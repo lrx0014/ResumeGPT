@@ -87,7 +87,7 @@ Before domain boundaries and workload profiles stabilize, full microservices add
 
 Extract a service when:
 
-- Crawling, OCR, or rendering needs a distinct resource or isolation policy.
+- URL acquisition, OCR, or rendering needs a distinct resource or isolation policy.
 - Generation and interactive API traffic require different SLOs.
 - A domain needs an independent team, release cadence, or governance boundary.
 - Profiling shows a module is a bottleneck and vertical scaling is uneconomical.
@@ -98,13 +98,11 @@ Extract a service when:
 |---|---|---|
 | Identity & Tenant | Authentication, sessions, workspaces, membership, RBAC, quotas | User, Workspace, Membership |
 | Profile | Editable profile metadata, text, avatar reference, and document import | Profile, DocumentUpload |
-| Job | URL/manual import, normalization, snapshots | Job, JobSource, JobSnapshot, Requirement |
-| Application Tracking | Status, timeline, notes, reminders, statistics | Application, StatusEvent, Note |
+| Job | Editable Job records, current application status, manual entry, and safe background URL import | Job, JobImportTask |
 | Template | DOCX/TeX templates, capabilities, page constraints, versions | Template, TemplateVersion, RenderProfile |
 | Content Generation | Planning, profile selection, generation, conversational revision | Generation, ArtifactDraft, Revision, Conversation |
 | Validation | Profile grounding, content rules, ATS, layout, and visual validation | ValidationRun, Finding, ProfileReference |
 | Artifact | Rendering, preview, conversion, download, retention | Artifact, FileVariant, RenderRun |
-| Reporting | Funnel, conversion, activity trends, export | Report, MetricSnapshot |
 | Platform | Providers, jobs, audit, configuration, notification, throttling | ProviderConfig, JobRun, AuditEvent |
 
 Modules communicate through application interfaces and domain events. They must not directly read another module's private tables. Initially they may share a PostgreSQL instance, but table ownership must be separated by schema or explicit naming.
@@ -174,14 +172,12 @@ The saved profile text is the authoritative input for generation. Direct edits u
 
 ### 6.2 Jobs and Application Tracking
 
-- `jobs`: normalized title, company, location, work mode, and language.
-- `job_sources`: URL/manual input, crawl policy, acquisition time, and content hash.
-- `job_snapshots`: immutable source snapshots so generation remains reproducible.
-- `job_requirements`: responsibilities, must-haves, nice-to-haves, keywords, seniority, and language.
-- `applications`: profile, job, current state, channel, priority, and deadline.
-- `application_status_events`: append-only state timeline.
+- `jobs`: editable title, company, location, country, city, work mode, employment type, source URL, description, application status, import state, and actionable import error.
+- `durable_jobs`: background URL acquisition with leases, bounded retries, and idempotency by normalized source URL.
 
-Default state machine:
+The Job row is the authoritative record. Manual creation writes it immediately. URL import creates a placeholder Job and a durable task in the same transaction, then fills the same editable record after extraction. There is no review, approval, source-version, or Job-snapshot lifecycle in this personal-project module.
+
+Supported application statuses are intentionally lightweight:
 
 ```text
 interested -> preparing -> applied -> screening -> interview -> offer -> accepted
@@ -190,12 +186,12 @@ interested -> preparing -> applied -> screening -> interview -> offer -> accepte
 interested/preparing/applied -> withdrawn
 ```
 
-Workspaces may customize states, but reporting maps them to standard stages.
+Users may change the current status freely. Status history, custom workflow configuration, reporting, notes, reminders, and separate application records are outside the current scope.
 
 ### 6.3 Generations and Artifact Versions
 
 - `generations`: task configuration and immutable input-snapshot references.
-- `generation_inputs`: profile-content snapshot, job snapshot, template, prompt, and language versions.
+- `generation_inputs`: profile-content and Job-content copies captured when generation starts, plus template, prompt, and language versions.
 - `artifact_drafts`: structured CV/cover-letter content conforming to versioned JSON Schema.
 - `artifact_revisions`: parent revision, instruction, diff, and author type.
 - `profile_claims`: final claims, supporting profile excerpts, and validation result.
@@ -221,12 +217,13 @@ On failure, retain an actionable processing state. The user can retry with anoth
 
 ### 7.2 Job Acquisition
 
-1. Normalize and deduplicate the URL; apply SSRF and domain-policy checks.
-2. Prefer ordinary HTTP; use a constrained headless browser only for necessary dynamic pages.
-3. Respect robots rules, terms, rate limits, authentication boundaries, and CAPTCHA.
-4. Remove scripts and untrusted instructions; retain visible job content and required metadata.
-5. Save an immutable source snapshot and normalize title, company, location, responsibilities, and requirements.
-6. Flag removed, duplicate, or incomplete postings and allow manual correction.
+1. Accept one URL from the persistent Job-page input or up to 50 URLs from the batch form.
+2. Normalize and deduplicate public HTTPS LinkedIn and Indeed URLs within the workspace.
+3. Create a placeholder Job and durable acquisition task atomically, then return the Job immediately for polling.
+4. Resolve DNS and reject any private or special-purpose address; repeat scheme and host validation after every redirect.
+5. Fetch ordinary HTML with strict redirect, header, body-size, content-type, and time limits. Do not log in, bypass CAPTCHA, or use browser automation.
+6. Prefer schema.org `JobPosting` JSON-LD, with limited Open Graph and page-title fallbacks.
+7. Update the editable Job with extracted metadata. Mark incomplete, inaccessible, or unsupported pages with an actionable state so the user can correct fields or create the Job manually.
 
 Web content is untrusted data. Text telling the model to ignore policy or reveal user information never becomes an instruction.
 
@@ -433,8 +430,10 @@ GET    /v1/profiles/{id}/document-uploads/{upload_id}
 
 POST   /v1/jobs/imports
 POST   /v1/jobs
+GET    /v1/jobs
 GET    /v1/jobs/{id}
-PATCH  /v1/applications/{id}/status
+PUT    /v1/jobs/{id}
+DELETE /v1/jobs/{id}
 
 POST   /v1/generations
 GET    /v1/generations/{id}
@@ -443,7 +442,6 @@ POST   /v1/artifacts/{id}/render
 GET    /v1/artifacts/{id}/events
 GET    /v1/artifacts/{id}/downloads/{format}
 
-GET    /v1/reports/application-funnel
 ```
 
 Long-running workflow submissions are idempotent and return `202 Accepted`, a resource ID, and a pollable job or upload URL. Simple CRUD operations return ordinary synchronous status codes. Errors return a stable code, message, retryable flag, field errors, and trace ID.
@@ -455,12 +453,15 @@ Long-running workflow submissions are idempotent and return `202 Accepted`, a re
 - `profile.deleted.v1`
 - `profile.document.uploaded.v1`
 - `profile.document.extracted.v1`
-- `job.snapshot.captured.v1`
+- `job.created.v1`
+- `job.updated.v1`
+- `job.deleted.v1`
+- `job.import.queued.v1`
+- `job.import.completed.v1`
 - `generation.requested.v1`
 - `artifact.draft.created.v1`
 - `artifact.render.completed.v1`
 - `validation.completed.v1`
-- `application.status.changed.v1`
 
 Events contain only necessary IDs, versions, and non-sensitive metadata. Do not broadcast full CVs or PII through Kafka. Event schemas require compatibility policy and a registry.
 
@@ -502,11 +503,11 @@ Go owns business policy, authorization, orchestration, state machines, APIs, and
 
 - API p50/p95/p99 latency, error rate, and active users.
 - Queue depth, wait time, retries, and dead-letter count.
-- Parsing success, OCR confidence, and crawl success.
+- Parsing success, OCR confidence, and Job-import success.
 - LLM latency, tokens, cost, schema failures, and fallback rate.
 - Generation success, unsupported-claim rate, and human-edit rate.
 - Rendering success, page compliance, and visual defects.
-- Download conversion and application-funnel metrics.
+- Download conversion and current Job-status distribution.
 
 ### 16.2 Offline Evaluation
 
@@ -645,9 +646,10 @@ The ADR index records proposed, accepted, and superseded decisions. Proposed dec
 6. [ADR-006: Managed Templates and Sandboxed Rendering](./adr/ADR-006-template-and-rendering-boundary.md)
 7. [ADR-007: Data-Classification-Driven LLM Routing](./adr/ADR-007-llm-data-and-routing-policy.md)
 8. [ADR-008: Unsupported-Claim Export Gate](./adr/ADR-008-unsupported-claim-gate.md)
-9. [ADR-009: Compliant and Constrained Job Crawling](./adr/ADR-009-job-crawling-policy.md)
+9. [ADR-009: Compliant and Constrained Job Crawling](./adr/ADR-009-job-crawling-policy.md) (superseded)
 10. [ADR-010: Workspace Tenancy and Authorization](./adr/ADR-010-workspace-tenancy-and-authorization.md)
 11. [ADR-011: Simple Editable Profiles](./adr/ADR-011-simple-editable-profiles.md)
+12. [ADR-012: Simple Job Tracking and Background URL Import](./adr/ADR-012-simple-job-tracking-and-import.md)
 
 See the [ADR index](./adr/README.md) for status definitions and maintenance rules.
 
@@ -658,7 +660,7 @@ Release acceptance baseline:
 - Every final factual claim can resolve to supporting text in the saved profile snapshot.
 - Changing an LLM provider requires only adapter/configuration changes, not domain changes.
 - Adding or changing optional vector retrieval, S3/MinIO, and Kafka/other messaging implementations does not change use-case contracts.
-- Upload, crawl, generation, and rendering jobs are idempotently retryable and survive API restart.
+- Upload, Job import, generation, and rendering jobs are idempotently retryable and survive API restart.
 - Tests cover malicious URLs, TeX, spoofed MIME types, and prompt injection.
 - The system detects page count, overflow, blank pages, clipping, and lost PDF text.
 - Every artifact can resolve its exact input snapshots, template, model, and configuration.

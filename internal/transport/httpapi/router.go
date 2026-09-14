@@ -21,6 +21,7 @@ import (
 type Dependencies struct {
 	Profiles           *profile.Service
 	Jobs               *job.Service
+	JobImports         *job.ImportService
 	Logger             *slog.Logger
 	WebOrigin          string
 	Authenticator      identity.Authenticator
@@ -33,6 +34,7 @@ type Dependencies struct {
 type API struct {
 	profiles           *profile.Service
 	jobs               *job.Service
+	jobImports         *job.ImportService
 	logger             *slog.Logger
 	webOrigin          string
 	authenticator      identity.Authenticator
@@ -46,6 +48,7 @@ func New(deps Dependencies) http.Handler {
 	api := &API{
 		profiles:           deps.Profiles,
 		jobs:               deps.Jobs,
+		jobImports:         deps.JobImports,
 		logger:             deps.Logger,
 		webOrigin:          deps.WebOrigin,
 		authenticator:      deps.Authenticator,
@@ -67,7 +70,12 @@ func New(deps Dependencies) http.Handler {
 	protected.Handle("GET /v1/profiles/{profileID}/avatar", api.requireRole(identity.RoleViewer, api.getProfileAvatar))
 	protected.Handle("GET /v1/jobs", api.requireRole(identity.RoleViewer, api.listJobs))
 	protected.Handle("POST /v1/jobs", api.requireRole(identity.RoleEditor, api.createJob))
+	if api.jobImports != nil {
+		protected.Handle("POST /v1/jobs/imports", api.requireRole(identity.RoleEditor, api.importJobs))
+	}
 	protected.Handle("GET /v1/jobs/{jobID}", api.requireRole(identity.RoleViewer, api.getJob))
+	protected.Handle("PUT /v1/jobs/{jobID}", api.requireRole(identity.RoleEditor, api.updateJob))
+	protected.Handle("DELETE /v1/jobs/{jobID}", api.requireRole(identity.RoleEditor, api.deleteJob))
 	protected.Handle("POST /v1/storage/uploads", api.requireRole(identity.RoleEditor, api.createUpload))
 	protected.Handle("GET /v1/storage/objects/{objectID}/download", api.requireRole(identity.RoleViewer, api.createDownload))
 
@@ -89,6 +97,7 @@ func (a *API) capabilities(w http.ResponseWriter, _ *http.Request) {
 			"documents":  a.documents != nil,
 			"profiles":   true,
 			"jobs":       true,
+			"jobImports": a.jobImports != nil,
 			"generation": false,
 			"rendering":  false,
 		},
@@ -200,7 +209,11 @@ func (a *API) createJob(w http.ResponseWriter, r *http.Request) {
 	}
 	item, err := a.jobs.Create(r.Context(), workspaceID(r), input)
 	if errors.Is(err, job.ErrInvalidInput) {
-		writeError(w, http.StatusUnprocessableEntity, "job_fields_required", err.Error())
+		writeError(w, http.StatusUnprocessableEntity, "invalid_job", "Provide a title, company, valid status, and valid field values.")
+		return
+	}
+	if errors.Is(err, job.ErrInvalidURL) {
+		writeError(w, http.StatusUnprocessableEntity, "invalid_job_url", "The source URL must be a valid HTTPS URL.")
 		return
 	}
 	if err != nil {
@@ -208,6 +221,58 @@ func (a *API) createJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, item)
+}
+
+func (a *API) updateJob(w http.ResponseWriter, r *http.Request) {
+	var input job.UpdateInput
+	if err := decodeJSON(w, r, &input); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", "The request body is not valid JSON.")
+		return
+	}
+	item, err := a.jobs.Update(r.Context(), workspaceID(r), r.PathValue("jobID"), input)
+	switch {
+	case errors.Is(err, job.ErrInvalidInput), errors.Is(err, job.ErrInvalidURL):
+		writeError(w, http.StatusUnprocessableEntity, "invalid_job", "Provide a title, company, valid status, and valid field values.")
+	case errors.Is(err, job.ErrNotFound):
+		writeError(w, http.StatusNotFound, "job_not_found", "The requested job does not exist.")
+	case err != nil:
+		writeError(w, http.StatusInternalServerError, "job_update_failed", "Could not update the job.")
+	default:
+		writeJSON(w, http.StatusOK, item)
+	}
+}
+
+func (a *API) deleteJob(w http.ResponseWriter, r *http.Request) {
+	err := a.jobs.Delete(r.Context(), workspaceID(r), r.PathValue("jobID"))
+	if errors.Is(err, job.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "job_not_found", "The requested job does not exist.")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "job_delete_failed", "Could not delete the job.")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *API) importJobs(w http.ResponseWriter, r *http.Request) {
+	var input job.ImportInput
+	if err := decodeJSON(w, r, &input); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", "The request body is not valid JSON.")
+		return
+	}
+	items, err := a.jobImports.Create(r.Context(), workspaceID(r), input)
+	switch {
+	case errors.Is(err, job.ErrInvalidURL):
+		writeError(w, http.StatusUnprocessableEntity, "unsupported_job_url", "Use public HTTPS LinkedIn or Indeed job URLs.")
+	case errors.Is(err, job.ErrTooManyURLs):
+		writeError(w, http.StatusUnprocessableEntity, "invalid_url_batch", "Provide between 1 and 50 job URLs.")
+	case err != nil:
+		a.logger.Error("queue job imports", "error", err)
+		writeError(w, http.StatusInternalServerError, "job_import_failed", "Could not queue the job import.")
+	default:
+		writeJSON(w, http.StatusAccepted, map[string]any{"items": items})
+	}
 }
 
 func workspaceID(r *http.Request) string {

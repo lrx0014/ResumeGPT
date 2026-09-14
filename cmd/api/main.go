@@ -48,6 +48,7 @@ func main() {
 	var accessRepository identity.AccessRepository
 	var documentRepository document.Repository
 	var documentService *document.Service
+	var jobImportService *job.ImportService
 	switch cfg.PersistenceMode {
 	case "memory":
 		profileRepository = memory.NewProfileRepository()
@@ -66,7 +67,9 @@ func main() {
 		}
 		defer pool.Close()
 		profileRepository = postgresadapter.NewProfileRepository(pool)
-		jobRepository = postgresadapter.NewJobRepository(pool)
+		postgresJobRepository := postgresadapter.NewJobRepository(pool)
+		jobRepository = postgresJobRepository
+		jobImportService = job.NewImportService(postgresJobRepository)
 		accessRepository = postgresadapter.NewAccessRepository(pool)
 		documentRepository = postgresadapter.NewDocumentRepository(pool)
 	default:
@@ -126,6 +129,7 @@ func main() {
 	handler := httpapi.New(httpapi.Dependencies{
 		Profiles:           profileService,
 		Jobs:               jobService,
+		JobImports:         jobImportService,
 		Logger:             logger,
 		WebOrigin:          cfg.WebOrigin,
 		Authenticator:      authenticator,

@@ -16,12 +16,20 @@ export interface Job {
   title: string
   company: string
   location?: string
+  country?: string
+  city?: string
+  workMode?: string
+  employmentType?: string
   sourceUrl?: string
   description?: string
   status: string
+  importState: 'manual' | 'queued' | 'fetching' | 'ready' | 'needs_user_action' | 'failed'
+  importError?: string
   createdAt: string
   updatedAt: string
 }
+
+export type JobInput = Pick<Job, 'title' | 'company' | 'location' | 'country' | 'city' | 'workMode' | 'employmentType' | 'sourceUrl' | 'description' | 'status'>
 
 export interface ListResponse<T> {
   items: T[]

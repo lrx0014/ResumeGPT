@@ -1,6 +1,6 @@
 # ADR-009: Compliant and Constrained Job Crawling
 
-- Status: Proposed
+- Status: Superseded by [ADR-012](./ADR-012-simple-job-tracking-and-import.md)
 - Date: 2026-09-13
 - Decision owners: TBD
 
@@ -53,4 +53,3 @@ Some URLs will not import automatically, but failure is explainable and recovera
 ## Revisit
 
 Review immediately for new sites, terms changes, complaints, or security events. Review every adapter at least quarterly.
-

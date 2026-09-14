@@ -16,6 +16,7 @@ ResumeGPT is a personal CV and cover-letter optimization application. This repos
 - OpenTelemetry HTTP tracing and W3C trace-context propagation.
 - Multiple editable profiles with role metadata, Markdown-friendly text, optional avatars, and full CRUD operations.
 - An isolated, malware-scanning Python extraction service for staged TXT, Markdown, TeX, DOC/DOCX, PDF, PNG, and JPEG uploads. Extracted text is loaded into the editor and is stored on the profile only after the user saves it.
+- Editable job tracking with manual entry, application status, and background import from public LinkedIn and Indeed URLs.
 - English-first internationalization setup.
 
 Infrastructure integrations remain behind application ports and adapters so that storage, identity, and messaging choices can change without rewriting domain services.
@@ -31,7 +32,7 @@ This checklist is the project-level source of truth for planned delivery. An ite
 | M0 — Foundation Skeleton | Runnable web application, API, worker, domain boundaries, and local development setup | Complete |
 | M1 — Durable Core | PostgreSQL persistence, workspace security, object storage, and recoverable background jobs | Complete |
 | M2 — Editable Profiles and Document Import | Simple profile CRUD, optional avatars, and review-before-save document extraction | Complete |
-| M3 — Job and Application Tracking | Manual Job capture exists; detail management, acquisition, workflow, and reporting remain | In progress |
+| M3 — Job and Application Tracking | Simple Job CRUD, background URL import, and application-status tracking | Complete |
 | M4 — Tailored Content Generation | Provider-independent LLM orchestration, CVs, cover letters, and iterative revision | Planned |
 | M5 — Rendering, Validation, and Trust | Managed templates, DOCX/PDF output, visual QA, and unsupported-claim controls | Planned |
 | M6 — Beta and Scale Readiness | Collaboration, quotas, observability, deployment automation, and scale-out adapters | Planned |
@@ -96,19 +97,18 @@ This checklist is the project-level source of truth for planned delivery. An ite
 
 ### M3 — Job and Application Tracking
 
-- [x] Support basic manual Job creation and listing.
-- [x] Capture title, company, location, source URL, and description.
-- [ ] Implement Job detail and editing.
-- [ ] Implement single and batch URL import.
-- [ ] Add SSRF-safe HTTP acquisition and a sandboxed browser fallback.
-- [ ] Add dedicated adapters for approved job sites.
-- [ ] Store immutable Job snapshots and detect page changes.
-- [ ] Extract responsibilities, must-haves, nice-to-haves, seniority, and keywords.
-- [ ] Detect duplicate, incomplete, expired, and removed postings.
-- [ ] Implement the configurable application status state machine.
-- [ ] Add status history, notes, deadlines, priorities, and channels.
-- [ ] Build application funnel, activity, and conversion reports.
-- [ ] Add report export and optional reminders.
+- [x] Support multiple jobs with manual creation, viewing, editing, and deletion.
+- [x] Capture title, company, location, country, city, work mode, employment type, source URL, and description.
+- [x] Track the current application status directly on each job.
+- [x] Keep a persistent single-URL import field on the Job list page.
+- [x] Support batch import of up to 50 LinkedIn or Indeed URLs.
+- [x] Queue URL imports as durable background jobs with retries and actionable failure states.
+- [x] Restrict acquisition to public HTTPS LinkedIn and Indeed pages and enforce DNS, redirect, response-size, content-type, and timeout protections.
+- [x] Extract common metadata from JobPosting JSON-LD with safe page-metadata fallbacks.
+- [x] Let users correct every imported field and fall back to manual creation when a page is unavailable.
+- [x] Deduplicate repeated imports of the same normalized URL within a workspace.
+- [x] Link each imported job back to its source page.
+- [x] Keep the Job module free of review, approval, and version-management workflows.
 
 ### M4 — Tailored Content Generation
 
