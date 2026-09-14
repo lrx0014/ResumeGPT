@@ -20,6 +20,7 @@ import (
 	"github.com/lrx0014/ResumeGPT/internal/platform/database"
 	"github.com/lrx0014/ResumeGPT/internal/platform/telemetry"
 	"github.com/lrx0014/ResumeGPT/internal/profile"
+	"github.com/lrx0014/ResumeGPT/internal/settings"
 	"github.com/lrx0014/ResumeGPT/internal/transport/httpapi"
 )
 
@@ -49,10 +50,12 @@ func main() {
 	var documentRepository document.Repository
 	var documentService *document.Service
 	var jobImportService *job.ImportService
+	var settingsRepository settings.Repository
 	switch cfg.PersistenceMode {
 	case "memory":
 		profileRepository = memory.NewProfileRepository()
 		jobRepository = memory.NewJobRepository()
+		settingsRepository = memory.NewSettingsRepository()
 		accessRepository = memory.AccessRepository{
 			Subject: identity.Subject{Issuer: "development", Subject: "developer", Email: "developer@localhost"},
 			Principal: identity.Principal{
@@ -72,12 +75,19 @@ func main() {
 		jobImportService = job.NewImportService(postgresJobRepository)
 		accessRepository = postgresadapter.NewAccessRepository(pool)
 		documentRepository = postgresadapter.NewDocumentRepository(pool)
+		settingsRepository = postgresadapter.NewSettingsRepository(pool)
 	default:
 		logger.Error("unsupported persistence mode", "mode", cfg.PersistenceMode)
 		os.Exit(1)
 	}
 	profileService := profile.NewService(profileRepository)
 	jobService := job.NewService(jobRepository)
+	tokenCipher, err := settings.NewAESGCMTokenCipher(cfg.SettingsEncryptionKey)
+	if err != nil {
+		logger.Error("initialize settings encryption", "error", err)
+		os.Exit(1)
+	}
+	settingsService := settings.NewService(settingsRepository, tokenCipher, settings.NewHTTPModelDiscoverer())
 	var blobSigner blobstore.Signer
 	switch cfg.ObjectStorageMode {
 	case "memory":
@@ -137,6 +147,7 @@ func main() {
 		DefaultWorkspaceID: developmentWorkspace(cfg),
 		Blobs:              blobSigner,
 		Documents:          documentService,
+		Settings:           settingsService,
 	})
 
 	server := &http.Server{

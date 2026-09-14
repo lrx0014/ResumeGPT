@@ -16,6 +16,7 @@ x-backend-environment: &backend-environment
   OBJECT_STORAGE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-change-me}
   OBJECT_STORAGE_REGION: ${OBJECT_STORAGE_REGION:-us-east-1}
   DOCUMENT_WORKER_URL: http://document-worker:8090
+  SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:-development-only-settings-key-change-me}
   OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
 
 x-backend-service: &backend-service

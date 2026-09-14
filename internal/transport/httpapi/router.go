@@ -13,6 +13,7 @@ import (
 	"github.com/lrx0014/ResumeGPT/internal/platform/blobstore"
 	"github.com/lrx0014/ResumeGPT/internal/platform/requestcontext"
 	"github.com/lrx0014/ResumeGPT/internal/profile"
+	"github.com/lrx0014/ResumeGPT/internal/settings"
 	"github.com/lrx0014/ResumeGPT/internal/shared/id"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/trace"
@@ -29,6 +30,7 @@ type Dependencies struct {
 	DefaultWorkspaceID string
 	Blobs              blobstore.Signer
 	Documents          *document.Service
+	Settings           *settings.Service
 }
 
 type API struct {
@@ -42,6 +44,7 @@ type API struct {
 	defaultWorkspaceID string
 	blobs              blobstore.Signer
 	documents          *document.Service
+	settings           *settings.Service
 }
 
 func New(deps Dependencies) http.Handler {
@@ -56,10 +59,12 @@ func New(deps Dependencies) http.Handler {
 		defaultWorkspaceID: deps.DefaultWorkspaceID,
 		blobs:              deps.Blobs,
 		documents:          deps.Documents,
+		settings:           deps.Settings,
 	}
 
 	protected := http.NewServeMux()
 	api.registerDocuments(protected)
+	api.registerSettings(protected)
 	protected.Handle("GET /v1/system/capabilities", api.requireRole(identity.RoleViewer, api.capabilities))
 	protected.Handle("GET /v1/profiles", api.requireRole(identity.RoleViewer, api.listProfiles))
 	protected.Handle("POST /v1/profiles", api.requireRole(identity.RoleEditor, api.createProfile))
@@ -100,6 +105,7 @@ func (a *API) capabilities(w http.ResponseWriter, _ *http.Request) {
 			"jobImports": a.jobImports != nil,
 			"generation": false,
 			"rendering":  false,
+			"settings":   a.settings != nil,
 		},
 	})
 }

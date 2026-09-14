@@ -157,7 +157,7 @@ Define ports for:
 - `TemplateRenderer`, `VisualInspector`, and `MalwareScanner`.
 - `IdentityProvider`, `SecretStore`, and `TelemetrySink`.
 
-Business objects refer to logical model aliases such as `writing-balanced-v1`, not vendor model names. Policy maps aliases to provider, version, region, timeout, budget, and fallback chain.
+Generation inputs reference the explicitly selected LLM connection ID and model name. Provider-specific request details stay behind adapters.
 
 ## 6. Core Data Model
 
@@ -200,6 +200,13 @@ Users may change the current status freely. Status history, custom workflow conf
 - `validation_runs/findings`: content, profile-grounding, layout, and security findings.
 
 Record provider, model version, prompt-template version, sampling parameters, and input hash. Raw sensitive prompts follow privacy retention policy.
+
+### 6.4 Settings and LLM Connections
+
+- `workspace_settings`: interface language and System/Light/Dark theme only.
+- `llm_connections`: named cloud/local connection mode, provider adapter, Base URL, and encrypted API token.
+
+Settings do not contain generation defaults. Each generation explicitly selects its Profile, Opportunity, connection, model, document type, output language, page target, paper size, and template. The generation input stores those selections without copying the API token.
 
 ## 7. Core Workflows
 
@@ -266,26 +273,18 @@ flowchart LR
 
 Normalize chat/responses, streaming, structured JSON, tool calls, context limits, languages, vision, residency, timeouts, retries, concurrency, cost budgets, safety settings, retention, telemetry, and provider error classes.
 
-Providers differ in JSON Schema, vision, and tool support. A use case declares capabilities and the router selects an eligible model.
+Providers differ in JSON Schema, vision, and tool support. The user explicitly selects a saved connection and one of its discovered models for each generation.
 
 ### 8.2 Provider Adapters
 
 - Implement native cloud adapters and an OpenAI-compatible adapter where appropriate.
 - Connect local models through Ollama, vLLM, or another controlled endpoint.
 - If semantic retrieval is introduced, configure its embedding provider independently from generation providers.
-- Store secrets in a secret manager, never plaintext database fields, logs, or clients.
+- Encrypt provider tokens with a deployment-owned key, never return plaintext tokens to clients, and exclude them from logs, traces, audit metadata, and events.
 
-### 8.3 Routing and Degradation
+### 8.3 Explicit Selection and Degradation
 
-| Logical model | Use | Required properties |
-|---|---|---|
-| `extract-structured` | Job and document-structure extraction | Reliable JSON, low temperature, multilingual |
-| `write-quality` | CV/letter writing | Strong instruction following and long context |
-| `verify-claims` | Profile-grounding validation | Structured decisions and supporting excerpts |
-| `vision-layout` | Visual page review | Vision, optional |
-| `embed-retrieval` | Optional semantic retrieval | Multilingual embeddings; introduce only after measured need |
-
-Fallback is allowed only between deployments with equivalent capabilities, security, and residency. Check whether a provider already completed a request before retrying, and persist each generation step under an idempotency key.
+There is no automatic provider router or fallback group in the personal-project scope. A generation request names one saved connection and model. Validate required capabilities before submitting work, fail with an actionable error when they are unavailable, and persist each generation step under an idempotency key.
 
 ## 9. Templates, Rendering, and Visual Validation
 
@@ -435,6 +434,14 @@ GET    /v1/jobs/{id}
 PUT    /v1/jobs/{id}
 DELETE /v1/jobs/{id}
 
+GET    /v1/settings
+PUT    /v1/settings
+GET    /v1/settings/llm-connections
+POST   /v1/settings/llm-connections
+PUT    /v1/settings/llm-connections/{id}
+DELETE /v1/settings/llm-connections/{id}
+POST   /v1/settings/llm-connections/{id}/test
+
 POST   /v1/generations
 GET    /v1/generations/{id}
 POST   /v1/artifacts/{id}/revisions
@@ -458,6 +465,10 @@ Long-running workflow submissions are idempotent and return `202 Accepted`, a re
 - `job.deleted.v1`
 - `job.import.queued.v1`
 - `job.import.completed.v1`
+- `settings.updated.v1`
+- `llm.connection.created.v1`
+- `llm.connection.updated.v1`
+- `llm.connection.deleted.v1`
 - `generation.requested.v1`
 - `artifact.draft.created.v1`
 - `artifact.render.completed.v1`
@@ -644,12 +655,13 @@ The ADR index records proposed, accepted, and superseded decisions. Proposed dec
 4. [ADR-004: Use pgvector for the MVP](./adr/ADR-004-vector-store.md) (superseded)
 5. [ADR-005: PostgreSQL Jobs and Transactional Outbox](./adr/ADR-005-durable-jobs-and-workflows.md)
 6. [ADR-006: Managed Templates and Sandboxed Rendering](./adr/ADR-006-template-and-rendering-boundary.md)
-7. [ADR-007: Data-Classification-Driven LLM Routing](./adr/ADR-007-llm-data-and-routing-policy.md)
+7. [ADR-007: Data-Classification-Driven LLM Routing](./adr/ADR-007-llm-data-and-routing-policy.md) (superseded)
 8. [ADR-008: Unsupported-Claim Export Gate](./adr/ADR-008-unsupported-claim-gate.md)
 9. [ADR-009: Compliant and Constrained Job Crawling](./adr/ADR-009-job-crawling-policy.md) (superseded)
 10. [ADR-010: Workspace Tenancy and Authorization](./adr/ADR-010-workspace-tenancy-and-authorization.md)
 11. [ADR-011: Simple Editable Profiles](./adr/ADR-011-simple-editable-profiles.md)
 12. [ADR-012: Simple Job Tracking and Background URL Import](./adr/ADR-012-simple-job-tracking-and-import.md)
+13. [ADR-013: User-Managed LLM Connections](./adr/ADR-013-user-managed-llm-connections.md)
 
 See the [ADR index](./adr/README.md) for status definitions and maintenance rules.
 

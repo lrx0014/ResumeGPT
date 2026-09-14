@@ -1,6 +1,6 @@
 # ADR-007: Data-Classification-Driven LLM Routing and Retention
 
-- Status: Proposed
+- Status: Superseded by [ADR-013](./ADR-013-user-managed-llm-connections.md)
 - Date: 2026-09-13
 - Decision owners: TBD
 

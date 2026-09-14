@@ -17,6 +17,7 @@ ResumeGPT is a personal CV and cover-letter optimization application. This repos
 - Multiple editable profiles with role metadata, Markdown-friendly text, optional avatars, and full CRUD operations.
 - An isolated, malware-scanning Python extraction service for staged TXT, Markdown, TeX, DOC/DOCX, PDF, PNG, and JPEG uploads. Extracted text is loaded into the editor and is stored on the profile only after the user saves it.
 - Editable job tracking with manual entry, application status, and background import from public LinkedIn and Indeed URLs.
+- Workspace Settings for encrypted cloud/local LLM connections, Ollama and OpenAI-compatible model discovery, interface language, theme, and deployment status.
 - English-first internationalization setup.
 
 Infrastructure integrations remain behind application ports and adapters so that storage, identity, and messaging choices can change without rewriting domain services.
@@ -112,11 +113,14 @@ This checklist is the project-level source of truth for planned delivery. An ite
 
 ### M4 — Tailored Content Generation
 
+- [x] Add a Settings page for reusable cloud and local LLM connections.
+- [x] Encrypt LLM API tokens at rest and never return plaintext tokens to the browser.
+- [x] Support OpenAI, OpenAI-compatible, and Ollama connection validation and model discovery.
+- [x] Persist interface language and System/Light/Dark theme preferences.
 - [ ] Define and version the ResumeDocument and CoverLetterDocument JSON Schemas.
 - [ ] Implement the provider-independent LLM gateway.
-- [ ] Add a provider capability registry and logical model aliases.
-- [ ] Support at least one cloud provider and one local OpenAI-compatible endpoint.
-- [ ] Enforce data-classification, residency, retention, and fallback policy.
+- [ ] Select the LLM connection and model explicitly for each Opportunity generation.
+- [ ] Generate successfully through at least one cloud connection and one local Ollama or OpenAI-compatible connection.
 - [ ] Freeze Profile, Job, prompt, template, and model input snapshots.
 - [ ] Build the job-requirement-to-profile-content matching plan.
 - [ ] Generate a schema-constrained content plan and draft.
@@ -255,6 +259,8 @@ make restore-check
 ```
 
 Set `OTEL_EXPORTER_OTLP_ENDPOINT` to send API and worker traces to an OpenTelemetry-compatible collector. When it is empty, trace propagation remains enabled without exporting spans.
+
+Set `SETTINGS_ENCRYPTION_KEY` to a private value of at least 32 characters before storing LLM API tokens. The Compose development default is intentionally local-only and must not be used in production.
 
 Run the extraction engine directly against a quarantined document:
 

@@ -7,6 +7,7 @@ const messages = {
       profiles: 'Profiles',
       jobs: 'Opportunities',
       generate: 'Generate',
+      settings: 'Settings',
     },
   },
   de: {
@@ -15,6 +16,7 @@ const messages = {
       profiles: 'Profile',
       jobs: 'Chancen',
       generate: 'Erstellen',
+      settings: 'Einstellungen',
     },
   },
 }

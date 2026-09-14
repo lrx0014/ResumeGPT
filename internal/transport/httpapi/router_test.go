@@ -15,6 +15,7 @@ import (
 	"github.com/lrx0014/ResumeGPT/internal/job"
 	"github.com/lrx0014/ResumeGPT/internal/platform/blobstore"
 	"github.com/lrx0014/ResumeGPT/internal/profile"
+	"github.com/lrx0014/ResumeGPT/internal/settings"
 	"github.com/lrx0014/ResumeGPT/internal/transport/httpapi"
 )
 
@@ -157,6 +158,23 @@ func TestHealthAddsRequestID(t *testing.T) {
 	}
 }
 
+func TestManagesSettingsWithoutReturningAPIToken(t *testing.T) {
+	handler := newHandler()
+	update := httptest.NewRecorder()
+	handler.ServeHTTP(update, httptest.NewRequest(http.MethodPut, "/v1/settings", bytes.NewBufferString(`{"interfaceLanguage":"de","theme":"dark"}`)))
+	if update.Code != http.StatusOK {
+		t.Fatalf("settings update status = %d: %s", update.Code, update.Body.String())
+	}
+	create := httptest.NewRecorder()
+	handler.ServeHTTP(create, httptest.NewRequest(http.MethodPost, "/v1/settings/llm-connections", bytes.NewBufferString(`{"name":"Local","executionMode":"local","provider":"ollama","baseUrl":"http://host.docker.internal:11434","apiToken":"must-not-leak"}`)))
+	if create.Code != http.StatusCreated {
+		t.Fatalf("connection create status = %d: %s", create.Code, create.Body.String())
+	}
+	if strings.Contains(create.Body.String(), "must-not-leak") || !strings.Contains(create.Body.String(), `"apiTokenConfigured":true`) {
+		t.Fatalf("unsafe connection response: %s", create.Body.String())
+	}
+}
+
 func TestViewerCannotCreateProfile(t *testing.T) {
 	handler := newHandlerWithRole(identity.RoleViewer)
 	request := httptest.NewRequest(http.MethodPost, "/v1/profiles", bytes.NewBufferString(`{"name":"Restricted"}`))
@@ -206,6 +224,10 @@ func newHandlerWithRole(role identity.Role) http.Handler {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	subject := identity.Subject{Issuer: "development", Subject: "developer"}
 	jobRepository := memory.NewJobRepository()
+	settingsCipher, err := settings.NewAESGCMTokenCipher("test-settings-encryption-key-at-least-32-characters")
+	if err != nil {
+		panic(err)
+	}
 	return httpapi.New(httpapi.Dependencies{
 		Profiles:      profile.NewService(memory.NewProfileRepository()),
 		Jobs:          job.NewService(jobRepository),
@@ -219,5 +241,6 @@ func newHandlerWithRole(role identity.Role) http.Handler {
 		},
 		DefaultWorkspaceID: "ws_personal_dev",
 		Blobs:              memory.BlobSigner{},
+		Settings:           settings.NewService(memory.NewSettingsRepository(), settingsCipher, settings.NewHTTPModelDiscoverer()),
 	})
 }

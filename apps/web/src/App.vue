@@ -1,7 +1,21 @@
 <script setup lang="ts">
+import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { api } from './lib/api'
+import { applyTheme } from './lib/preferences'
+
 const { locale, t } = useI18n()
+
+onMounted(async () => {
+  try {
+    const settings = await api.getSettings()
+    locale.value = settings.interfaceLanguage
+    applyTheme(settings.theme)
+  } catch {
+    applyTheme('system')
+  }
+})
 </script>
 
 <template>
@@ -25,16 +39,12 @@ const { locale, t } = useI18n()
         <RouterLink to="/generate" active-class="active">
           <span class="nav-icon">✦</span>{{ t('nav.generate') }}
         </RouterLink>
+        <RouterLink to="/settings" active-class="active">
+          <span class="nav-icon">⚙</span>{{ t('nav.settings') }}
+        </RouterLink>
       </nav>
 
       <div class="sidebar-footer">
-        <label class="locale-control">
-          <span>Language</span>
-          <select v-model="locale">
-            <option value="en">English</option>
-            <option value="de">Deutsch</option>
-          </select>
-        </label>
         <div class="user-card">
           <span class="avatar">DV</span>
           <span><strong>Development</strong><small>Personal workspace</small></span>
@@ -47,4 +57,3 @@ const { locale, t } = useI18n()
     </main>
   </div>
 </template>
-

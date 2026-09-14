@@ -16,6 +16,7 @@ import (
 	"github.com/lrx0014/ResumeGPT/internal/platform/requestcontext"
 	"github.com/lrx0014/ResumeGPT/internal/platform/workqueue"
 	"github.com/lrx0014/ResumeGPT/internal/profile"
+	"github.com/lrx0014/ResumeGPT/internal/settings"
 	"github.com/lrx0014/ResumeGPT/internal/shared/id"
 )
 
@@ -374,5 +375,51 @@ func TestJobImportCompletionIsTransactionallyDeduplicated(t *testing.T) {
 		IdempotencyKey: replacement.ID, MaxAttempts: 2, AvailableAt: now}
 	if recreated, err := repository.QueueImport(ctx, replacement, replacementTask); err != nil || recreated.ID != replacement.ID {
 		t.Fatalf("reimport after deletion = %#v, error = %v", recreated, err)
+	}
+}
+
+func TestSettingsRepositoryPersistsPreferencesAndEncryptedConnections(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is not configured")
+	}
+	ctx := requestcontext.WithActorID(context.Background(), "usr_settings_test")
+	pool, err := database.Open(ctx, databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	if err := database.Migrate(ctx, pool); err != nil {
+		t.Fatal(err)
+	}
+	workspaceID, otherWorkspaceID := id.New("ws"), id.New("ws")
+	if _, err := pool.Exec(ctx, `INSERT INTO workspaces (id,name,kind) VALUES ($1,'Settings','personal'),($2,'Other settings','personal')`, workspaceID, otherWorkspaceID); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(), "DELETE FROM workspaces WHERE id IN ($1,$2)", workspaceID, otherWorkspaceID)
+	})
+
+	repository := postgres.NewSettingsRepository(pool)
+	now := time.Now().UTC()
+	preferences, err := repository.SavePreferences(ctx, settings.Preferences{
+		WorkspaceID: workspaceID, InterfaceLanguage: "de", Theme: "dark", UpdatedAt: now,
+	})
+	if err != nil || preferences.Theme != "dark" {
+		t.Fatalf("preferences = %#v, error = %v", preferences, err)
+	}
+	connection := settings.StoredConnection{Connection: settings.LLMConnection{
+		ID: id.New("llm"), WorkspaceID: workspaceID, Name: "Local Ollama", ExecutionMode: "local",
+		Provider: "ollama", BaseURL: "http://host.docker.internal:11434", CreatedAt: now, UpdatedAt: now,
+	}, TokenCiphertext: []byte("encrypted-token")}
+	created, err := repository.CreateConnection(ctx, connection)
+	if err != nil || string(created.TokenCiphertext) != "encrypted-token" {
+		t.Fatalf("connection = %#v, error = %v", created, err)
+	}
+	if _, err := repository.GetConnection(ctx, otherWorkspaceID, connection.Connection.ID); !errors.Is(err, settings.ErrNotFound) {
+		t.Fatalf("cross-workspace connection error = %v, want not found", err)
+	}
+	if err := repository.DeleteConnection(ctx, workspaceID, connection.Connection.ID); err != nil {
+		t.Fatal(err)
 	}
 }

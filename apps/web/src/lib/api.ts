@@ -1,4 +1,4 @@
-import type { APIError, Job, JobInput, ListResponse, Profile, DocumentUpload, SignedURL, StagedDocumentUpload } from './types'
+import type { APIError, Job, JobInput, ListResponse, Profile, DocumentUpload, SignedURL, StagedDocumentUpload, SettingsPreferences, LLMConnection, LLMConnectionInput, LLMConnectionTest } from './types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
 
@@ -58,4 +58,21 @@ export const api = {
       throw new Error(payload?.error.message ?? `Request failed with status ${response.status}`)
     }
   },
+  getSettings: () => request<SettingsPreferences>('/v1/settings'),
+  updateSettings: (input: Pick<SettingsPreferences, 'interfaceLanguage' | 'theme'>) =>
+    request<SettingsPreferences>('/v1/settings', { method: 'PUT', body: JSON.stringify(input) }),
+  listLLMConnections: () => request<ListResponse<LLMConnection>>('/v1/settings/llm-connections'),
+  createLLMConnection: (input: LLMConnectionInput) =>
+    request<LLMConnection>('/v1/settings/llm-connections', { method: 'POST', body: JSON.stringify(input) }),
+  updateLLMConnection: (id: string, input: LLMConnectionInput) =>
+    request<LLMConnection>(`/v1/settings/llm-connections/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(input) }),
+  deleteLLMConnection: async (id: string) => {
+    const response = await fetch(`${API_BASE_URL}/v1/settings/llm-connections/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { 'X-Workspace-ID': 'ws_personal_dev' } })
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as APIError | null
+      throw new Error(payload?.error.message ?? `Request failed with status ${response.status}`)
+    }
+  },
+  testLLMConnection: (id: string) =>
+    request<LLMConnectionTest>(`/v1/settings/llm-connections/${encodeURIComponent(id)}/test`, { method: 'POST' }),
 }

@@ -43,6 +43,39 @@ export interface APIError {
   }
 }
 
+export interface SettingsPreferences {
+  workspaceId: string
+  interfaceLanguage: 'en' | 'de'
+  theme: 'system' | 'light' | 'dark'
+  updatedAt: string
+}
+
+export interface LLMConnection {
+  id: string
+  workspaceId: string
+  name: string
+  executionMode: 'cloud' | 'local'
+  provider: 'openai' | 'openai_compatible' | 'ollama'
+  baseUrl: string
+  apiTokenConfigured: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface LLMConnectionInput {
+  name: string
+  executionMode: LLMConnection['executionMode']
+  provider: LLMConnection['provider']
+  baseUrl: string
+  apiToken: string
+  clearApiToken: boolean
+}
+
+export interface LLMConnectionTest {
+  status: 'connected'
+  models: string[]
+}
+
 export type DocumentUploadState = 'staged' | 'queued' | 'ready' | 'needs_user_action' | 'security_quarantine' | 'failed'
 
 export interface DocumentUpload {
