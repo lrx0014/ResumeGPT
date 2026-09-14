@@ -2,7 +2,8 @@ FROM python:3.12-slim
 
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
-    && apt-get install --yes --no-install-recommends antiword clamav tesseract-ocr tesseract-ocr-eng \
+    && apt-get install --yes --no-install-recommends antiword clamav clamav-freshclam tesseract-ocr tesseract-ocr-eng \
+    && freshclam \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -12,4 +13,5 @@ RUN pip install --no-cache-dir uv \
 COPY resumegpt_document_worker ./resumegpt_document_worker
 
 USER 65532:65532
-ENTRYPOINT ["/app/.venv/bin/python", "-m", "resumegpt_document_worker"]
+EXPOSE 8090
+ENTRYPOINT ["/app/.venv/bin/python", "-m", "resumegpt_document_worker", "--serve"]

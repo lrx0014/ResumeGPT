@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -23,6 +24,15 @@ type Signer interface {
 	EnsureBucket(ctx context.Context) error
 	PresignUpload(ctx context.Context, workspaceID, objectID, contentType string, expiry time.Duration) (SignedURL, error)
 	PresignDownload(ctx context.Context, workspaceID, objectID string, expiry time.Duration) (SignedURL, error)
+}
+
+type Object struct {
+	Body io.ReadCloser
+	Size int64
+}
+
+type Reader interface {
+	Open(ctx context.Context, workspaceID, objectID string) (Object, error)
 }
 
 func NewObjectID() string {

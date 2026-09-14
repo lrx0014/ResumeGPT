@@ -51,6 +51,21 @@ func (q *WorkQueue) Claim(ctx context.Context, workerID string, lease time.Durat
 	return value, nil
 }
 
+func (q *WorkQueue) ClaimKind(ctx context.Context, workerID, kind string, lease time.Duration) (workqueue.Job, error) {
+	var value workqueue.Job
+	err := q.pool.QueryRow(ctx, "SELECT id, workspace_id, kind, state, idempotency_key, payload, attempt, max_attempts, available_at, deadline_at, lease_owner, lease_expires_at FROM claim_durable_job_kind($1, $2, $3)",
+		workerID, int(lease.Seconds()), kind,
+	).Scan(&value.ID, &value.WorkspaceID, &value.Kind, &value.State, &value.IdempotencyKey, &value.Payload,
+		&value.Attempt, &value.MaxAttempts, &value.AvailableAt, &value.DeadlineAt, &value.LeaseOwner, &value.LeaseExpiresAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return workqueue.Job{}, workqueue.ErrEmpty
+	}
+	if err != nil {
+		return workqueue.Job{}, fmt.Errorf("claim durable job kind: %w", err)
+	}
+	return value, nil
+}
+
 func (q *WorkQueue) Heartbeat(ctx context.Context, jobID, workerID string, lease time.Duration) error {
 	tag, err := q.pool.Exec(ctx, `
 		UPDATE durable_jobs SET heartbeat_at = now(), lease_expires_at = now() + make_interval(secs => $3), updated_at = now()
@@ -84,6 +99,16 @@ func (q *WorkQueue) Retry(ctx context.Context, value workqueue.Job, workerID, er
 		value.ID, workerID, nextState, int(delay.Seconds()), errorClass, message)
 	if err != nil || tag.RowsAffected() != 1 {
 		return fmt.Errorf("retry durable job: lease lost")
+	}
+	return nil
+}
+
+func (q *WorkQueue) Fail(ctx context.Context, jobID, workerID, errorClass, message string) error {
+	tag, err := q.pool.Exec(ctx, `
+		UPDATE durable_jobs SET state='failed',lease_owner=NULL,lease_expires_at=NULL,error_class=$3,error_message=$4,updated_at=now()
+		WHERE id=$1 AND lease_owner=$2 AND state='running'`, jobID, workerID, errorClass, message)
+	if err != nil || tag.RowsAffected() != 1 {
+		return fmt.Errorf("fail durable job: lease lost")
 	}
 	return nil
 }

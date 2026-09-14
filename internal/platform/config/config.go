@@ -21,6 +21,7 @@ type Config struct {
 	ObjectStorageAccessKey      string
 	ObjectStorageSecretKey      string
 	ObjectStorageRegion         string
+	DocumentWorkerURL           string
 	APIAddress                  string
 	ReadTimeout                 time.Duration
 	WriteTimeout                time.Duration
@@ -44,6 +45,7 @@ func Load() (Config, error) {
 		ObjectStorageAccessKey:      getEnv("OBJECT_STORAGE_ACCESS_KEY", "resumegpt"),
 		ObjectStorageSecretKey:      getEnv("OBJECT_STORAGE_SECRET_KEY", "change-me"),
 		ObjectStorageRegion:         getEnv("OBJECT_STORAGE_REGION", "us-east-1"),
+		DocumentWorkerURL:           getEnv("DOCUMENT_WORKER_URL", "http://localhost:8090"),
 		APIAddress:                  getEnv("API_ADDRESS", ":8080"),
 		WebOrigin:                   getEnv("WEB_ORIGIN", "http://localhost:5173"),
 	}

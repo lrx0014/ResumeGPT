@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lrx0014/ResumeGPT/internal/document"
 	"github.com/lrx0014/ResumeGPT/internal/identity"
 	"github.com/lrx0014/ResumeGPT/internal/job"
-	"github.com/lrx0014/ResumeGPT/internal/knowledge"
 	"github.com/lrx0014/ResumeGPT/internal/platform/blobstore"
 	"github.com/lrx0014/ResumeGPT/internal/platform/requestcontext"
 	"github.com/lrx0014/ResumeGPT/internal/profile"
@@ -27,7 +27,7 @@ type Dependencies struct {
 	Access             identity.AccessRepository
 	DefaultWorkspaceID string
 	Blobs              blobstore.Signer
-	Knowledge          *knowledge.Service
+	Documents          *document.Service
 }
 
 type API struct {
@@ -39,7 +39,7 @@ type API struct {
 	access             identity.AccessRepository
 	defaultWorkspaceID string
 	blobs              blobstore.Signer
-	knowledge          *knowledge.Service
+	documents          *document.Service
 }
 
 func New(deps Dependencies) http.Handler {
@@ -52,15 +52,19 @@ func New(deps Dependencies) http.Handler {
 		access:             deps.Access,
 		defaultWorkspaceID: deps.DefaultWorkspaceID,
 		blobs:              deps.Blobs,
-		knowledge:          deps.Knowledge,
+		documents:          deps.Documents,
 	}
 
 	protected := http.NewServeMux()
-	api.registerKnowledge(protected)
+	api.registerDocuments(protected)
 	protected.Handle("GET /v1/system/capabilities", api.requireRole(identity.RoleViewer, api.capabilities))
 	protected.Handle("GET /v1/profiles", api.requireRole(identity.RoleViewer, api.listProfiles))
 	protected.Handle("POST /v1/profiles", api.requireRole(identity.RoleEditor, api.createProfile))
 	protected.Handle("GET /v1/profiles/{profileID}", api.requireRole(identity.RoleViewer, api.getProfile))
+	protected.Handle("PUT /v1/profiles/{profileID}", api.requireRole(identity.RoleEditor, api.updateProfile))
+	protected.Handle("DELETE /v1/profiles/{profileID}", api.requireRole(identity.RoleEditor, api.deleteProfile))
+	protected.Handle("POST /v1/profiles/{profileID}/avatar-upload", api.requireRole(identity.RoleEditor, api.createAvatarUpload))
+	protected.Handle("GET /v1/profiles/{profileID}/avatar", api.requireRole(identity.RoleViewer, api.getProfileAvatar))
 	protected.Handle("GET /v1/jobs", api.requireRole(identity.RoleViewer, api.listJobs))
 	protected.Handle("POST /v1/jobs", api.requireRole(identity.RoleEditor, api.createJob))
 	protected.Handle("GET /v1/jobs/{jobID}", api.requireRole(identity.RoleViewer, api.getJob))
@@ -82,7 +86,7 @@ func (a *API) capabilities(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"apiVersion": "v1",
 		"features": map[string]bool{
-			"knowledge":  a.knowledge != nil,
+			"documents":  a.documents != nil,
 			"profiles":   true,
 			"jobs":       true,
 			"generation": false,
@@ -120,8 +124,8 @@ func (a *API) createProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	item, err := a.profiles.Create(r.Context(), workspaceID(r), input)
-	if errors.Is(err, profile.ErrInvalidName) {
-		writeError(w, http.StatusUnprocessableEntity, "profile_name_required", err.Error())
+	if errors.Is(err, profile.ErrInvalid) {
+		writeError(w, http.StatusUnprocessableEntity, "invalid_profile", "Provide a profile name and valid profile fields.")
 		return
 	}
 	if err != nil {
@@ -129,6 +133,41 @@ func (a *API) createProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, item)
+}
+
+func (a *API) updateProfile(w http.ResponseWriter, r *http.Request) {
+	var input profile.UpdateInput
+	if err := decodeJSON(w, r, &input); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", "The request body is not valid JSON.")
+		return
+	}
+	item, err := a.profiles.Update(r.Context(), workspaceID(r), r.PathValue("profileID"), input)
+	if errors.Is(err, profile.ErrInvalid) {
+		writeError(w, http.StatusUnprocessableEntity, "invalid_profile", "Provide a profile name and valid profile fields.")
+		return
+	}
+	if errors.Is(err, profile.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "profile_not_found", "The requested profile does not exist.")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "profile_update_failed", "Could not update the profile.")
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (a *API) deleteProfile(w http.ResponseWriter, r *http.Request) {
+	err := a.profiles.Delete(r.Context(), workspaceID(r), r.PathValue("profileID"))
+	if errors.Is(err, profile.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "profile_not_found", "The requested profile does not exist.")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "profile_delete_failed", "Could not delete the profile.")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (a *API) listJobs(w http.ResponseWriter, r *http.Request) {
@@ -192,7 +231,7 @@ func (a *API) cors(next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", a.webOrigin)
 			w.Header().Set("Vary", "Origin")
 			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key, X-Request-ID, X-Workspace-ID")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		}
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

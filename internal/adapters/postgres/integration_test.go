@@ -10,8 +10,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/lrx0014/ResumeGPT/internal/adapters/postgres"
+	"github.com/lrx0014/ResumeGPT/internal/document"
 	"github.com/lrx0014/ResumeGPT/internal/job"
-	"github.com/lrx0014/ResumeGPT/internal/knowledge"
 	"github.com/lrx0014/ResumeGPT/internal/platform/database"
 	"github.com/lrx0014/ResumeGPT/internal/platform/requestcontext"
 	"github.com/lrx0014/ResumeGPT/internal/platform/workqueue"
@@ -97,10 +97,11 @@ func TestRepositoriesPersistEventsAndEnforceWorkspaceScope(t *testing.T) {
 	}
 
 	queue := postgres.NewWorkQueue(pool)
+	jobKindPrefix := id.New("integration")
 	queued := workqueue.Job{
 		ID:             id.New("task"),
 		WorkspaceID:    workspaceID,
-		Kind:           "integration.test",
+		Kind:           jobKindPrefix + ".test",
 		IdempotencyKey: id.New("idem"),
 		Payload:        []byte(`{"ok":true}`),
 		MaxAttempts:    2,
@@ -109,7 +110,7 @@ func TestRepositoriesPersistEventsAndEnforceWorkspaceScope(t *testing.T) {
 	if err := queue.Enqueue(ctx, queued); err != nil {
 		t.Fatal(err)
 	}
-	claimed, err := queue.Claim(ctx, "integration-worker", time.Minute)
+	claimed, err := queue.ClaimKind(ctx, "integration-worker", queued.Kind, time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +123,7 @@ func TestRepositoriesPersistEventsAndEnforceWorkspaceScope(t *testing.T) {
 	if err := queue.Retry(ctx, claimed, "integration-worker", "transient", "retry requested", 0); err != nil {
 		t.Fatal(err)
 	}
-	claimed, err = queue.Claim(ctx, "integration-worker", time.Minute)
+	claimed, err = queue.ClaimKind(ctx, "integration-worker", queued.Kind, time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,13 +135,13 @@ func TestRepositoriesPersistEventsAndEnforceWorkspaceScope(t *testing.T) {
 	}
 
 	failedJob := workqueue.Job{
-		ID: id.New("task"), WorkspaceID: workspaceID, Kind: "integration.fail",
+		ID: id.New("task"), WorkspaceID: workspaceID, Kind: jobKindPrefix + ".fail",
 		IdempotencyKey: id.New("idem"), Payload: []byte(`{}`), MaxAttempts: 1, AvailableAt: time.Now().UTC().Add(-time.Minute),
 	}
 	if err := queue.Enqueue(ctx, failedJob); err != nil {
 		t.Fatal(err)
 	}
-	failedJob, err = queue.Claim(ctx, "integration-worker", time.Minute)
+	failedJob, err = queue.ClaimKind(ctx, "integration-worker", failedJob.Kind, time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +151,7 @@ func TestRepositoriesPersistEventsAndEnforceWorkspaceScope(t *testing.T) {
 	assertJobState(t, ctx, pool, failedJob.ID, "failed")
 
 	cancelledJob := workqueue.Job{
-		ID: id.New("task"), WorkspaceID: workspaceID, Kind: "integration.cancel",
+		ID: id.New("task"), WorkspaceID: workspaceID, Kind: jobKindPrefix + ".cancel",
 		IdempotencyKey: id.New("idem"), Payload: []byte(`{}`), MaxAttempts: 1, AvailableAt: time.Now().UTC().Add(-time.Minute),
 	}
 	if err := queue.Enqueue(ctx, cancelledJob); err != nil {
@@ -162,17 +163,17 @@ func TestRepositoriesPersistEventsAndEnforceWorkspaceScope(t *testing.T) {
 	assertJobState(t, ctx, pool, cancelledJob.ID, "cancelled")
 
 	reclaimedJob := workqueue.Job{
-		ID: id.New("task"), WorkspaceID: workspaceID, Kind: "integration.reclaim",
+		ID: id.New("task"), WorkspaceID: workspaceID, Kind: jobKindPrefix + ".reclaim",
 		IdempotencyKey: id.New("idem"), Payload: []byte(`{}`), MaxAttempts: 2, AvailableAt: time.Now().UTC().Add(-time.Minute),
 	}
 	if err := queue.Enqueue(ctx, reclaimedJob); err != nil {
 		t.Fatal(err)
 	}
-	reclaimedJob, err = queue.Claim(ctx, "expired-worker", 0)
+	reclaimedJob, err = queue.ClaimKind(ctx, "expired-worker", reclaimedJob.Kind, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	reclaimedJob, err = queue.Claim(ctx, "replacement-worker", time.Minute)
+	reclaimedJob, err = queue.ClaimKind(ctx, "replacement-worker", reclaimedJob.Kind, time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,6 +182,35 @@ func TestRepositoriesPersistEventsAndEnforceWorkspaceScope(t *testing.T) {
 	}
 	if err := queue.Complete(ctx, reclaimedJob.ID, "replacement-worker"); err != nil {
 		t.Fatal(err)
+	}
+
+	updatedProfile, err := profileService.Update(requestCtx, workspaceID, createdProfile.ID, profile.UpdateInput{
+		Name: "Updated integration profile", TargetRole: "Staff Engineer", DefaultLanguage: "en-US",
+		Content: "# Experience\n\nBuilt reliable services.", AvatarObjectID: "obj_integration_avatar",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updatedProfile.TargetRole != "Staff Engineer" || updatedProfile.Content == "" || !updatedProfile.CreatedAt.Equal(createdProfile.CreatedAt) {
+		t.Fatalf("unexpected updated profile: %#v", updatedProfile)
+	}
+	var updateEventPayload string
+	if err := pool.QueryRow(ctx, `SELECT payload::text FROM outbox_events
+		WHERE workspace_id=$1 AND aggregate_id=$2 AND topic='profile.updated.v1' ORDER BY occurred_at DESC LIMIT 1`,
+		workspaceID, createdProfile.ID).Scan(&updateEventPayload); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(updateEventPayload, updatedProfile.Content) {
+		t.Fatalf("profile content leaked into outbox payload: %s", updateEventPayload)
+	}
+	if _, err := profileService.Update(requestCtx, otherWorkspaceID, createdProfile.ID, profile.UpdateInput{Name: "Cross-workspace update"}); !errors.Is(err, profile.ErrNotFound) {
+		t.Fatalf("cross-workspace update error = %v, want not found", err)
+	}
+	if err := profileService.Delete(requestCtx, workspaceID, createdProfile.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := profileService.Get(requestCtx, workspaceID, createdProfile.ID); !errors.Is(err, profile.ErrNotFound) {
+		t.Fatalf("deleted profile read error = %v, want not found", err)
 	}
 }
 
@@ -195,13 +225,12 @@ func assertJobState(t *testing.T, ctx context.Context, pool *pgxpool.Pool, jobID
 	}
 }
 
-func TestKnowledgeLifecycle(t *testing.T) {
+func TestDocumentExtractionCompletionIsTransactionallyDeduplicated(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	if databaseURL == "" {
 		t.Skip("TEST_DATABASE_URL is not configured")
 	}
-	ctx := requestcontext.WithActorID(context.Background(), "usr_knowledge_test")
-	ctx = requestcontext.WithRequestID(ctx, "req_knowledge_test")
+	ctx := requestcontext.WithActorID(context.Background(), "usr_document_test")
 	pool, err := database.Open(ctx, databaseURL)
 	if err != nil {
 		t.Fatal(err)
@@ -211,65 +240,61 @@ func TestKnowledgeLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	workspaceID := id.New("ws")
-	otherWorkspaceID := id.New("ws")
-	profileID := id.New("prof")
-	if _, err := pool.Exec(ctx, `INSERT INTO workspaces (id,name,kind) VALUES ($1,'Knowledge','personal'),($2,'Other','personal')`, workspaceID, otherWorkspaceID); err != nil {
+	workspaceID, profileID := id.New("ws"), id.New("prof")
+	if _, err := pool.Exec(ctx, `INSERT INTO workspaces (id,name,kind) VALUES ($1,'Documents','personal')`, workspaceID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, `INSERT INTO profiles (id,workspace_id,name,created_at,updated_at) VALUES ($1,$2,'Knowledge Profile',now(),now())`, profileID, workspaceID); err != nil {
+	if _, err := pool.Exec(ctx, `INSERT INTO profiles (id,workspace_id,name,created_at,updated_at) VALUES ($1,$2,'Documents',now(),now())`, profileID, workspaceID); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		_, _ = pool.Exec(context.Background(), "DELETE FROM workspaces WHERE id IN ($1,$2)", workspaceID, otherWorkspaceID)
-	})
+	t.Cleanup(func() { _, _ = pool.Exec(context.Background(), "DELETE FROM workspaces WHERE id=$1", workspaceID) })
 
-	service := knowledge.NewService(postgres.NewKnowledgeRepository(pool))
-	created, err := service.Import(ctx, workspaceID, profileID, knowledge.Import{Name: "Career history", Text: "Built Go services\nReduced latency by 30%"})
+	repository := postgres.NewDocumentRepository(pool)
+	upload := document.Upload{
+		ID: id.New("upl"), WorkspaceID: workspaceID, ProfileID: profileID, ObjectID: id.New("obj"),
+		Name: "resume.pdf", DeclaredMediaType: "application/pdf", State: "staged",
+		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+	}
+	if err := repository.Stage(ctx, upload); err != nil {
+		t.Fatal(err)
+	}
+	if allowed, err := repository.DownloadAllowed(ctx, workspaceID, upload.ObjectID); err != nil || allowed {
+		t.Fatalf("quarantined download allowed = %v, error = %v", allowed, err)
+	}
+	job := workqueue.Job{
+		ID: id.New("task"), WorkspaceID: workspaceID, Kind: document.ExtractJobKind,
+		IdempotencyKey: upload.ID, MaxAttempts: 2, AvailableAt: time.Now().UTC(),
+	}
+	queued, err := repository.Queue(ctx, workspaceID, profileID, upload.ID, job)
 	if err != nil {
 		t.Fatal(err)
 	}
-	duplicate, err := service.Import(ctx, workspaceID, profileID, knowledge.Import{Name: "Duplicate name", Text: "Built Go services\nReduced latency by 30%"})
-	if err != nil || duplicate.ID != created.ID {
-		t.Fatalf("duplicate import = %#v, error = %v", duplicate, err)
-	}
-
-	snapshot, err := service.Snapshot(ctx, workspaceID, profileID)
-	if err != nil || len(snapshot.Sources) != 1 || len(snapshot.Segments) != 2 || len(snapshot.Facts) != 2 {
-		t.Fatalf("unexpected snapshot: %#v, error: %v", snapshot, err)
-	}
-	fact := snapshot.Facts[0]
-	for _, candidate := range snapshot.Facts {
-		if strings.Contains(candidate.Versions[0].Statement, "Go") {
-			fact = candidate
-			break
-		}
-	}
-	current := fact.Versions[0]
-	reviewed, err := service.Review(ctx, workspaceID, profileID, fact.ID, knowledge.Review{
-		ExpectedVersionID: current.ID, Statement: current.Statement, Status: "user_confirmed", Sensitive: false,
-	})
-	if err != nil || reviewed.Number != 2 {
-		t.Fatalf("unexpected review: %#v, error: %v", reviewed, err)
-	}
-	if _, err := service.Review(ctx, workspaceID, profileID, fact.ID, knowledge.Review{
-		ExpectedVersionID: current.ID, Statement: current.Statement, Status: "rejected", Sensitive: true,
-	}); !errors.Is(err, knowledge.ErrConflict) {
-		t.Fatalf("stale review error = %v, want conflict", err)
-	}
-
-	results, err := service.Search(ctx, workspaceID, profileID, "go")
-	if err != nil || len(results) != 1 || results[0].ID != reviewed.ID {
-		t.Fatalf("unexpected search results: %#v, error: %v", results, err)
-	}
-	if _, err := service.Snapshot(ctx, otherWorkspaceID, profileID); !errors.Is(err, knowledge.ErrNotFound) {
-		t.Fatalf("cross-workspace snapshot error = %v, want not found", err)
-	}
-	if err := service.DeleteSource(ctx, workspaceID, profileID, created.ID); err != nil {
+	queue := postgres.NewWorkQueue(pool)
+	claimed, err := queue.ClaimKind(ctx, "document-integration-worker", document.ExtractJobKind, time.Minute)
+	if err != nil {
 		t.Fatal(err)
 	}
-	snapshot, err = service.Snapshot(ctx, workspaceID, profileID)
-	if err != nil || len(snapshot.Sources) != 0 || len(snapshot.Facts) != 0 {
-		t.Fatalf("knowledge remained after deletion: %#v, error: %v", snapshot, err)
+	processed, err := repository.StoreExtraction(ctx, claimed, upload.ID, "Extracted evidence")
+	if err != nil || !processed {
+		t.Fatalf("first processing result = %v, error = %v", processed, err)
 	}
+	processed, err = repository.StoreExtraction(ctx, claimed, upload.ID, "Extracted evidence")
+	if err != nil || processed {
+		t.Fatalf("duplicate processing result = %v, error = %v", processed, err)
+	}
+	stored, err := repository.Get(ctx, workspaceID, profileID, upload.ID)
+	if err != nil || stored.State != "ready" || stored.JobID != queued.JobID || stored.ExtractedText != "Extracted evidence" {
+		t.Fatalf("unexpected completed upload: %#v, error = %v", stored, err)
+	}
+	if allowed, err := repository.DownloadAllowed(ctx, workspaceID, upload.ObjectID); err != nil || !allowed {
+		t.Fatalf("ready download allowed = %v, error = %v", allowed, err)
+	}
+	var inboxCount int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM inbox_messages WHERE consumer='profile-document-extractor-v1' AND message_id=$1`, claimed.ID).Scan(&inboxCount); err != nil {
+		t.Fatal(err)
+	}
+	if inboxCount != 1 {
+		t.Fatalf("inbox count = %d, want 1", inboxCount)
+	}
+	assertJobState(t, ctx, pool, claimed.ID, "succeeded")
 }

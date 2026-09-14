@@ -101,3 +101,19 @@ func (s *BlobSigner) PresignDownload(ctx context.Context, workspaceID, objectID 
 	}
 	return blobstore.SignedURL{ObjectID: objectID, URL: signed.String(), ExpiresAt: time.Now().UTC().Add(expiry)}, nil
 }
+
+func (s *BlobSigner) Open(ctx context.Context, workspaceID, objectID string) (blobstore.Object, error) {
+	key, err := blobstore.ObjectKey(workspaceID, objectID)
+	if err != nil {
+		return blobstore.Object{}, err
+	}
+	stat, err := s.client.StatObject(ctx, s.bucket, key, minio.StatObjectOptions{})
+	if err != nil {
+		return blobstore.Object{}, fmt.Errorf("stat staged object: %w", err)
+	}
+	object, err := s.client.GetObject(ctx, s.bucket, key, minio.GetObjectOptions{})
+	if err != nil {
+		return blobstore.Object{}, fmt.Errorf("open staged object: %w", err)
+	}
+	return blobstore.Object{Body: object, Size: stat.Size}, nil
+}

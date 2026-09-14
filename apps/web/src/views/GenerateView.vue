@@ -19,12 +19,11 @@ import PageHeader from '../components/PageHeader.vue'
       </div>
       <aside class="panel trust-panel">
         <span class="trust-icon">✓</span>
-        <p class="eyebrow">Evidence first</p>
-        <h2>Every material claim stays traceable.</h2>
-        <p>ResumeGPT maps job requirements to confirmed profile facts before writing. Unsupported claims are surfaced before export.</p>
-        <ul><li>Fact-level provenance</li><li>Structured draft schema</li><li>Layout and page validation</li></ul>
+        <p class="eyebrow">Profile grounded</p>
+        <h2>Every material claim stays connected to your saved profile.</h2>
+        <p>ResumeGPT maps job requirements to your profile content before writing. Unsupported claims are surfaced before export.</p>
+        <ul><li>Saved profile snapshot</li><li>Structured draft schema</li><li>Layout and page validation</li></ul>
       </aside>
     </section>
   </div>
 </template>
-

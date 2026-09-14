@@ -26,6 +26,14 @@ def test_detects_tex_by_signature_and_extension(tmp_path: Path) -> None:
     assert result.segments[1].text == "Built distributed systems"
 
 
+def test_extracts_markdown_as_editable_text(tmp_path: Path) -> None:
+    source = tmp_path / "profile.md"
+    source.write_text("# Experience\n\nBuilt distributed systems", encoding="utf-8")
+    result = extract(source, malware_scan=False)
+    assert result.media_type == "text/markdown"
+    assert result.segments[0].text == "# Experience"
+
+
 def test_extracts_docx_paragraphs_without_executing_document_content(tmp_path: Path) -> None:
     source = tmp_path / "profile.docx"
     document = b'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -40,10 +48,18 @@ def test_extracts_docx_paragraphs_without_executing_document_content(tmp_path: P
     assert [segment.text for segment in result.segments] == ["Backend engineer", "Go and PostgreSQL"]
 
 
+def test_rejects_binary_signature_extension_mismatch(tmp_path: Path) -> None:
+    source = tmp_path / "profile.doc"
+    source.write_bytes(b"%PDF-1.7\n")
+    with pytest.raises(ExtractionError) as error:
+        detect_media_type(source, source.read_bytes())
+    assert error.value.code == "extension_mismatch"
+
+
 def test_rejects_extension_mismatch_and_missing_scanner(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     source = tmp_path / "profile.pdf"
     source.write_text("This is not a PDF", encoding="utf-8")
-    with pytest.raises(ExtractionError, match=".txt or .tex"):
+    with pytest.raises(ExtractionError, match=r"\.txt, \.md, or \.tex"):
         detect_media_type(source, source.read_bytes())
     valid = tmp_path / "profile.txt"
     valid.write_text("Evidence", encoding="utf-8")
@@ -51,6 +67,18 @@ def test_rejects_extension_mismatch_and_missing_scanner(tmp_path: Path, monkeypa
     with pytest.raises(ExtractionError, match="quarantined") as error:
         extract(valid)
     assert error.value.code == "scanner_unavailable"
+
+
+def test_fails_closed_when_malware_definitions_are_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    source = tmp_path / "profile.txt"
+    source.write_text("Evidence", encoding="utf-8")
+    definitions = tmp_path / "definitions"
+    definitions.mkdir()
+    monkeypatch.setattr("shutil.which", lambda _: "/usr/bin/true")
+    monkeypatch.setenv("CLAMAV_DATABASE_DIRECTORY", str(definitions))
+    with pytest.raises(ExtractionError) as error:
+        extract(source)
+    assert error.value.code == "scanner_definitions_stale"
 
 
 @pytest.mark.skipif(shutil.which("tesseract") is None, reason="Tesseract is not installed")

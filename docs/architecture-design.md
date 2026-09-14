@@ -3,17 +3,17 @@
 > Status: Draft  
 > Target stage: Prototype / MVP, with a path to cloud-native distributed deployment  
 > Primary product language: English, with support for additional locales  
-> Last updated: 2026-09-13
+> Last updated: 2026-09-14
 
 ## 1. Goals and Design Principles
 
-ResumeGPT uses verified applicant background data and job postings to generate, optimize, and manage tailored CVs and cover letters. In addition to producing high-quality content, the system must preserve provenance, minimize fabricated claims, and reliably execute long pipelines involving file parsing, web crawling, LLM calls, template rendering, and visual validation.
+ResumeGPT uses user-maintained profile content and job postings to generate, optimize, and manage tailored CVs and cover letters. In addition to producing high-quality content, the system must keep the user's saved profile authoritative, minimize fabricated claims, and reliably execute long pipelines involving file parsing, web crawling, LLM calls, template rendering, and visual validation.
 
 Core principles:
 
-1. **Facts first:** Models generate only from user-confirmed facts. Every material claim should be traceable to evidence.
+1. **Saved profile first:** Models generate from the profile text explicitly saved by the user. Imported text is only a draft until the user saves it.
 2. **Business logic is infrastructure-independent:** LLMs, object storage, relational/vector databases, message systems, parsers, and renderers are accessed through ports and adapters.
-3. **Start as a modular monolith, split by evidence:** The MVP uses a modular API plus independently deployable workers. Extract services only where scaling, security, ownership, or reliability requires it.
+3. **Start as a modular monolith, split on measured need:** The MVP uses a modular API plus independently deployable workers. Extract services only where scaling, security, ownership, or reliability requires it.
 4. **Asynchronous and recoverable:** Long-running work uses durable jobs with idempotency, retries, deadlines, cancellation, and recovery.
 5. **Structured generation first:** LLMs produce schema-constrained content; deterministic template engines produce DOCX, TeX, and PDF.
 6. **Privacy by default:** Minimize collection and design tenant isolation, encryption, audit, export, and deletion from the outset.
@@ -23,14 +23,14 @@ Core principles:
 
 ### 2.1 MVP Scope
 
-- Multiple profiles and source submission through PDF, DOC/DOCX, TeX, TXT, PNG, JPG/JPEG, and direct text.
-- Parsing, OCR, fact extraction, human confirmation, versioning, and retrieval.
+- Multiple editable profiles with role metadata, optional avatars, and direct text entry.
+- Review-before-save text extraction from PDF, DOC/DOCX, TeX, Markdown, TXT, PNG, and JPG/JPEG files.
 - Single or batch job URL import plus manual job entry.
 - Job details, tags, application-state tracking, and basic reporting.
 - CV generation and revision by profile, job, template, and page constraint.
 - Cover-letter generation and revision by profile and job.
 - DOCX/PDF output, plus TeX template input and PDF output.
-- Fact validation, layout validation, visual checks, version comparison, and download.
+- Profile-grounding validation, layout validation, visual checks, version comparison, and download.
 - Multiple cloud providers and local models exposed through compatible adapters.
 - English-first UI with independent UI and document-language selection.
 
@@ -54,9 +54,9 @@ Use a **modular-monolith API, asynchronous workers, and an isolated rendering sa
 - `render-worker`: isolated LibreOffice, LaTeX, Chromium, and font toolchain.
 - PostgreSQL: system of record.
 - Object storage: uploads, artifacts, previews, and diagnostic attachments; MinIO is suitable locally.
-- Redis: caching, rate limits, ephemeral state, and distributed locks; never the sole record of business facts.
+- Optional Redis: caching, rate limits, ephemeral state, and distributed locks when measured load requires it; never the sole record of user content.
 - Messaging: begin with PostgreSQL Outbox and lightweight workers; add Kafka when multiple consumers or throughput justify it.
-- Vector search: begin with PostgreSQL and pgvector; switch through an adapter to Qdrant when measured scale requires it.
+- Vector search: do not deploy it for the simple Profile model. Add a PostgreSQL/pgvector adapter only if measured generation quality or input size justifies retrieval, and evaluate Qdrant only at scale.
 
 ```mermaid
 flowchart LR
@@ -65,7 +65,7 @@ flowchart LR
     G --> APP[Application Core<br/>Profiles / Jobs / Documents / Reports]
     APP --> PG[(PostgreSQL)]
     APP --> OBJ[(Object Storage)]
-    APP --> CACHE[(Redis)]
+    APP -. optional .-> CACHE[(Redis)]
     APP --> OUTBOX[(Outbox / Message Bus)]
 
     OUTBOX --> INGEST[Ingestion Worker<br/>Python]
@@ -74,10 +74,9 @@ flowchart LR
     OUTBOX --> RENDER[Sandboxed Render Worker]
 
     INGEST --> OCR[Parser / OCR Adapters]
-    INGEST --> VECTOR[(Vector Store)]
     CRAWL --> WEB[External Job Sites]
     AI --> LLM[LLM Gateway<br/>Cloud / Local]
-    AI --> VECTOR
+    AI --> PG
     RENDER --> OBJ
     RENDER --> QA[Visual & Structural QA]
 ```
@@ -98,12 +97,12 @@ Extract a service when:
 | Module | Responsibilities | Core entities |
 |---|---|---|
 | Identity & Tenant | Authentication, sessions, workspaces, membership, RBAC, quotas | User, Workspace, Membership |
-| Profile | Profiles, source material, fact confirmation, versioning | Profile, SourceDocument, Evidence, Fact |
+| Profile | Editable profile metadata, text, avatar reference, and document import | Profile, DocumentUpload |
 | Job | URL/manual import, normalization, snapshots | Job, JobSource, JobSnapshot, Requirement |
 | Application Tracking | Status, timeline, notes, reminders, statistics | Application, StatusEvent, Note |
 | Template | DOCX/TeX templates, capabilities, page constraints, versions | Template, TemplateVersion, RenderProfile |
-| Content Generation | Planning, retrieval, generation, conversational revision | Generation, ArtifactDraft, Revision, Conversation |
-| Validation | Facts, content rules, ATS, layout, and visual validation | ValidationRun, Finding, EvidenceLink |
+| Content Generation | Planning, profile selection, generation, conversational revision | Generation, ArtifactDraft, Revision, Conversation |
+| Validation | Profile grounding, content rules, ATS, layout, and visual validation | ValidationRun, Finding, ProfileReference |
 | Artifact | Rendering, preview, conversion, download, retention | Artifact, FileVariant, RenderRun |
 | Reporting | Funnel, conversion, activity trends, export | Report, MetricSnapshot |
 | Platform | Providers, jobs, audit, configuration, notification, throttling | ProviderConfig, JobRun, AuditEvent |
@@ -164,31 +163,14 @@ Business objects refer to logical model aliases such as `writing-balanced-v1`, n
 
 ## 6. Core Data Model
 
-Primary tables include an ID (UUID/ULID), `workspace_id`, timestamps, and an appropriate version. User content uses soft deletion followed by policy-controlled hard deletion; audit retention is managed separately.
+Primary tables include an ID (UUID/ULID), `workspace_id`, and timestamps. Profiles use straightforward CRUD and are hard-deleted from the active database; object and backup cleanup follows the retention policy. Immutable snapshots and versions are introduced only for workflows, such as generation, that require reproducibility.
 
-### 6.1 Profiles and Fact Repository
+### 6.1 Profiles
 
-- `profiles`: name, domain, default language, description, and state.
-- `profile_sources`: upload/text metadata, object reference, hash, parsing state, and source type.
-- `source_segments`: source text, page/paragraph/coordinates, language, and parser version.
-- `facts`: normalized employment, education, project, skill, certification, and achievement facts.
-- `fact_evidence_links`: links from fact versions to source segments.
-- `fact_versions`: original/revised values, confirmation state, and validity period.
-- `profile_fact_links`: allows profiles to share facts without copying them.
+- `profiles`: name, target role, default language, one Markdown-friendly text body, and an optional avatar object identifier.
+- `document_uploads`: quarantined object reference, declared media type, processing state, durable job reference, extracted text, and actionable error details.
 
-Use relational common fields plus typed JSONB payloads:
-
-```text
-Fact {
-  type: employment | education | project | skill | achievement | ...
-  canonical_data: JSONB
-  confidence: decimal
-  verification_status: extracted | user_confirmed | disputed | rejected
-  sensitivity: normal | personal | highly_sensitive
-}
-```
-
-Only user-confirmed facts, or high-confidence facts permitted by explicit policy, are candidates for final output. Unconfirmed facts must be visible and require confirmation.
+The saved profile text is the authoritative input for generation. Direct edits update it through an explicit save operation. Document extraction writes only to `document_uploads.extracted_text`; the browser loads that result into the editor and the user decides whether to save it. PostgreSQL remains authoritative if embeddings are added later as a rebuildable optimization.
 
 ### 6.2 Jobs and Application Tracking
 
@@ -213,30 +195,29 @@ Workspaces may customize states, but reporting maps them to standard stages.
 ### 6.3 Generations and Artifact Versions
 
 - `generations`: task configuration and immutable input-snapshot references.
-- `generation_inputs`: fact, job snapshot, template, prompt, and language versions.
+- `generation_inputs`: profile-content snapshot, job snapshot, template, prompt, and language versions.
 - `artifact_drafts`: structured CV/cover-letter content conforming to versioned JSON Schema.
 - `artifact_revisions`: parent revision, instruction, diff, and author type.
-- `evidence_claims`: final claims, fact/evidence references, and validation result.
+- `profile_claims`: final claims, supporting profile excerpts, and validation result.
 - `render_runs`: renderer/template versions, logs, state, and duration.
 - `file_variants`: PDF, DOCX, TeX, and preview-object references.
-- `validation_runs/findings`: content, fact, layout, and security findings.
+- `validation_runs/findings`: content, profile-grounding, layout, and security findings.
 
 Record provider, model version, prompt-template version, sampling parameters, and input hash. Raw sensitive prompts follow privacy retention policy.
 
 ## 7. Core Workflows
 
-### 7.1 Background-Data Ingestion
+### 7.1 Profile Editing and Document Import
 
-1. Validate type, size, and quota; hash the content and upload it to quarantine.
-2. Scan malware, real MIME type, archive bombs, and malicious macros.
-3. Create a durable ingestion job and return a pollable/subscribable job ID.
-4. Extract text and source location with parsers/OCR.
-5. Detect language, normalize, classify sensitivity, and segment text.
-6. Extract candidate facts into a schema; validate dates, units, and fields deterministically.
-7. Link facts to evidence, generate embeddings, and update the vector index.
-8. Ask the user to resolve low-confidence, conflicting, or sensitive facts.
+1. Let the user create a profile and enter or paste text directly in the editor.
+2. For file import, validate the declared type, filename, and size, then upload to workspace-scoped quarantine storage.
+3. Create a durable extraction job and return a pollable upload record.
+4. Scan malware, validate the real file type, and extract text with parsers or OCR.
+5. Store extracted text on the upload record without changing the profile.
+6. Load the result into the browser editor so the user can review and correct it.
+7. Update `profiles.content` only after the user explicitly saves.
 
-On failure, retain the source and actionable error state. Let the user correct extracted text rather than invalidating the entire profile.
+On failure, retain an actionable processing state. The user can retry with another file or enter text directly.
 
 ### 7.2 Job Acquisition
 
@@ -253,11 +234,11 @@ Web content is untrusted data. Text telling the model to ignore policy or reveal
 
 ```mermaid
 flowchart LR
-    S[Freeze input snapshots] --> R[Retrieve verified facts]
-    R --> M[Match facts to requirements]
+    S[Freeze input snapshots] --> R[Read saved profile content]
+    R --> M[Match profile content to requirements]
     M --> P[Create content plan]
     P --> D[Generate schema-bound draft]
-    D --> F[Claim/evidence verification]
+    D --> F[Profile-grounding verification]
     F --> T[Deterministic template render]
     T --> V[Structural + visual QA]
     V -->|pass| A[Downloadable artifact]
@@ -266,10 +247,10 @@ flowchart LR
     V -->|needs user| H[Human review]
 ```
 
-- Retrieval always filters by workspace, profile, and source version.
-- Build a requirement-to-fact matching matrix before writing. Missing qualifications cannot be invented.
+- Profile reads always filter by workspace and selected profile.
+- Build a requirement-to-profile-content matching plan before writing. Missing qualifications cannot be invented.
 - Output must conform to the CV/cover-letter IR schema.
-- Every experience, number, date, organization, institution, and certificate becomes an evidence-linked claim.
+- Every experience, number, date, organization, institution, and certificate must be supported by the saved profile snapshot.
 - Stronger wording may improve presentation but cannot invent metrics; use non-quantified language when no number is supported.
 - User prompts may change style and emphasis, but cannot override truthfulness, security, or tenant isolation.
 
@@ -280,7 +261,7 @@ flowchart LR
 - Use constrained operations such as `replace_bullet`, `reorder_section`, and `shorten_summary`.
 - Show semantic, layout, and claim-level diffs.
 - Record manual edits as revisions and allow users to lock sections.
-- Rerun fact and render validation before every final download.
+- Rerun profile-grounding and render validation before every final download.
 
 ## 8. LLM Gateway and Model Policy
 
@@ -294,18 +275,18 @@ Providers differ in JSON Schema, vision, and tool support. A use case declares c
 
 - Implement native cloud adapters and an OpenAI-compatible adapter where appropriate.
 - Connect local models through Ollama, vLLM, or another controlled endpoint.
-- Configure generation and embedding providers independently.
+- If semantic retrieval is introduced, configure its embedding provider independently from generation providers.
 - Store secrets in a secret manager, never plaintext database fields, logs, or clients.
 
 ### 8.3 Routing and Degradation
 
 | Logical model | Use | Required properties |
 |---|---|---|
-| `extract-structured` | Fact/job extraction | Reliable JSON, low temperature, multilingual |
+| `extract-structured` | Job and document-structure extraction | Reliable JSON, low temperature, multilingual |
 | `write-quality` | CV/letter writing | Strong instruction following and long context |
-| `verify-claims` | Evidence validation | Structured decisions and evidence references |
+| `verify-claims` | Profile-grounding validation | Structured decisions and supporting excerpts |
 | `vision-layout` | Visual page review | Vision, optional |
-| `embed-retrieval` | Semantic retrieval | Multilingual embeddings |
+| `embed-retrieval` | Optional semantic retrieval | Multilingual embeddings; introduce only after measured need |
 
 Fallback is allowed only between deployments with equivalent capabilities, security, and residency. Check whether a provider already completed a request before retrying, and persist each generation step under an idempotency key.
 
@@ -313,7 +294,7 @@ Fallback is allowed only between deployments with equivalent capabilities, secur
 
 ### 9.1 Intermediate Representation
 
-Use format-independent `ResumeDocument` and `CoverLetterDocument` JSON Schemas containing sections, blocks, style tokens, evidence references, and pagination hints. Templates map the IR to DOCX or TeX.
+Use format-independent `ResumeDocument` and `CoverLetterDocument` JSON Schemas containing sections, blocks, style tokens, supporting-profile references, and pagination hints. Templates map the IR to DOCX or TeX.
 
 Template admission validates:
 
@@ -357,21 +338,20 @@ Limit automatic repairs to two attempts. If constraints still fail, present find
 
 ### 10.2 Anti-Fabrication Controls
 
-1. Preserve source segment, page, coordinates, or user-entry provenance for facts.
-2. Separate extracted facts from user-confirmed facts.
-3. Retrieve only facts permitted for the active workspace/profile.
-4. Require `fact_ids` on generated claims; claims without evidence fail by default.
-5. Deterministically compare names, dates, numbers, and enumerated values.
-6. Use an independent semantic check for unsupported expansion, but never an LLM as the sole judge.
-7. Treat identity, organization, title, dates, education, certification, and metrics as blocking-risk claims.
-8. Require user confirmation for disputed or newly asserted facts.
-9. Block `Verified` export with unresolved claims; explicit unverified export is audited and policy-controlled.
+1. Freeze the exact saved profile content used by each generation.
+2. Retrieve profiles only within the active workspace and require an explicit profile selection.
+3. Require generated claims to cite supporting profile excerpts; unsupported high-risk claims fail by default.
+4. Deterministically compare names, dates, numbers, and enumerated values.
+5. Use an independent semantic check for unsupported expansion, but never an LLM as the sole judge.
+6. Treat identity, organization, title, dates, education, certification, and metrics as blocking-risk claims.
+7. Ask the user to add or correct profile text when required information is missing or ambiguous.
+8. Block `Verified` export with unresolved claims; explicit unverified export is audited and policy-controlled.
 
 ```json
 {
   "text": "Reduced report preparation time by 30% through automation.",
-  "fact_ids": ["fact_01..."],
-  "evidence_ids": ["segment_01..."],
+  "profile_id": "prof_01...",
+  "supporting_excerpt": "Automated the monthly reporting workflow...",
   "verification": "verified",
   "risk": "high"
 }
@@ -379,11 +359,11 @@ Limit automatic repairs to two attempts. If constraints still fail, present find
 
 ### 10.3 Prompt-Injection Isolation
 
-- Separate system policy, user instructions, profile facts, and job text into explicit trust boundaries.
+- Separate system policy, user instructions, profile content, and job text into explicit trust boundaries.
 - Uploaded and crawled text is always untrusted and cannot invoke tools.
 - Tools use an allowlist, typed arguments, and server-side authorization. Models cannot choose arbitrary URLs, SQL, paths, or workspace IDs.
 - Enforce retrieval scope in storage/repository code, not through model instructions.
-- Persist official revisions only after schema, content-policy, and evidence validation.
+- Persist official revisions only after schema, content-policy, and profile-grounding validation.
 
 ## 11. Security, Privacy, and Compliance Baseline
 
@@ -417,7 +397,7 @@ Each job records type, idempotency key, input references, attempt count, maximum
 - Publish the outbox to messaging; consumers use inbox/deduplication records.
 - Use at-least-once delivery and idempotent effects.
 - Artifact versions are immutable; state transitions use optimistic locking.
-- The vector index is rebuildable derived data with source/index state in PostgreSQL.
+- Any vector index is rebuildable derived data; saved profile content remains authoritative in PostgreSQL.
 
 ### 12.3 Error Policy
 
@@ -429,7 +409,7 @@ Each job records type, idempotency key, input references, attempt count, maximum
 | Authentication, balance, or policy rejection | Fail fast and notify the appropriate party |
 | Parser crash or malicious input | Quarantine and record a security event |
 | Page constraint failure | Bounded repair, then human decision |
-| Kafka/Qdrant unavailable | Retain outbox work; PostgreSQL remains authoritative |
+| Optional Kafka/vector service unavailable | Retain outbox work; PostgreSQL remains authoritative |
 
 Also use circuit breakers, bulkheads, provider concurrency limits, leases/heartbeats, dead-letter handling, audited replay, and graceful shutdown.
 
@@ -441,9 +421,15 @@ Use versioned REST for the MVP, SSE for generation progress, and signed URLs for
 
 ```text
 POST   /v1/profiles
-POST   /v1/profiles/{id}/sources
-GET    /v1/profiles/{id}/facts
-PATCH  /v1/facts/{id}
+GET    /v1/profiles
+GET    /v1/profiles/{id}
+PUT    /v1/profiles/{id}
+DELETE /v1/profiles/{id}
+POST   /v1/profiles/{id}/avatar-upload
+GET    /v1/profiles/{id}/avatar
+POST   /v1/profiles/{id}/document-uploads
+POST   /v1/profiles/{id}/document-uploads/{upload_id}/complete
+GET    /v1/profiles/{id}/document-uploads/{upload_id}
 
 POST   /v1/jobs/imports
 POST   /v1/jobs
@@ -460,12 +446,15 @@ GET    /v1/artifacts/{id}/downloads/{format}
 GET    /v1/reports/application-funnel
 ```
 
-Mutations support `Idempotency-Key`. Async creation returns `202 Accepted`, a resource ID, and job URL. Errors return a stable code, message, retryable flag, field errors, and trace ID.
+Long-running workflow submissions are idempotent and return `202 Accepted`, a resource ID, and a pollable job or upload URL. Simple CRUD operations return ordinary synchronous status codes. Errors return a stable code, message, retryable flag, field errors, and trace ID.
 
 ### 13.2 Domain Events
 
-- `profile.source.uploaded.v1`
-- `profile.facts.extracted.v1`
+- `profile.created.v1`
+- `profile.updated.v1`
+- `profile.deleted.v1`
+- `profile.document.uploaded.v1`
+- `profile.document.extracted.v1`
 - `job.snapshot.captured.v1`
 - `generation.requested.v1`
 - `artifact.draft.created.v1`
@@ -484,7 +473,7 @@ Events contain only necessary IDs, versions, and non-sensitive metadata. Do not 
 | Document/OCR | Python worker | Dedicated service | Better document/OCR ecosystem without contaminating the Go domain |
 | Workflow | PostgreSQL jobs + Outbox | Temporal or equivalent | Add durable workflow infrastructure only when complexity warrants it |
 | OLTP | PostgreSQL | Managed PostgreSQL | System of record; JSONB for evolving typed payloads |
-| Vector | pgvector | Qdrant cluster | Keep behind `VectorIndex` |
+| Vector | Not deployed initially | pgvector, then Qdrant if measured scale requires it | Keep optional and behind `VectorIndex` |
 | Cache | Redis when needed | Managed compatible service | Cache, rate limiting, and short locks only |
 | Events | Outbox polling | Kafka | Add when event volume/consumer count requires it |
 | Objects | MinIO / S3-compatible | Cloud object storage | One `BlobStore` contract |
@@ -528,13 +517,13 @@ Maintain a de-identified golden dataset to test:
 - Relevance, concision, grammar, and language quality.
 - JSON Schema compliance.
 - DOCX/PDF text equivalence, page count, and visual rules.
-- Multilingual, long-input, conflicting-fact, empty-profile, and malicious-prompt cases.
+- Multilingual, long-input, ambiguous-profile, empty-profile, and malicious-prompt cases.
 
 Use evaluation as a release gate. Roll out model changes through shadowing/canaries before broad adoption.
 
 ## 17. Deployment and Cloud-Native Compatibility
 
-Local development may run PostgreSQL, object storage, and optional Redis/Qdrant in containers while API and workers run locally. Production OCI images must support:
+Local development runs PostgreSQL and object storage in containers; optional Redis or vector services are added only when their owning feature is introduced. Production OCI images must support:
 
 - Twelve-factor configuration with secrets separated from ordinary configuration.
 - Stateless APIs, health probes, and graceful shutdown.
@@ -598,24 +587,24 @@ Organize Go packages by domain, not broad horizontal `controllers/services/repos
 ### Phase 0: Technical Spikes
 
 - Validate parsing/rendering with representative PDF, DOCX, and TeX samples.
-- Define Profile Fact, ResumeDocument, and CoverLetterDocument JSON Schemas.
+- Define ResumeDocument and CoverLetterDocument JSON Schemas.
 - Validate structured output with at least one cloud and one local model.
-- Validate evidence-linked generation and PDF page/overflow checks.
+- Validate profile-grounded generation and PDF page/overflow checks.
 - Define the supported template subset and sandbox boundary.
 
 ### Phase 1: Single-User MVP
 
-- Profiles, upload/text input, and fact confirmation.
+- Editable profiles, optional avatars, and review-before-save document import.
 - Job URL/manual import, details, and basic status tracking.
 - Initial CV/letter generation, revision, and PDF/DOCX download.
-- Basic evidence gate, template rendering, and deterministic visual checks.
+- Basic profile-grounding gate, template rendering, and deterministic visual checks.
 - PostgreSQL and object storage; omit Kafka/Qdrant/Redis unless already operationally justified.
 
 ### Phase 2: Beta
 
 - Workspaces, collaboration, quotas, audit, and complete deletion.
 - Multi-provider routing, budgets, fallback, and local-model policy.
-- pgvector/Qdrant and Kafka/workflow platform based on measured needs.
+- Optional pgvector/Qdrant retrieval and Kafka/workflow infrastructure only when measured needs justify them.
 - Reporting, reminders, multilingual templates, and evaluation pipelines.
 - More job-site adapters and stronger compliance management.
 
@@ -633,49 +622,49 @@ Limit the first deployed system to:
 1. Vue web application.
 2. Go API and Go worker built from one codebase.
 3. Python document worker.
-4. PostgreSQL with optional pgvector, plus S3-compatible object storage.
+4. PostgreSQL plus S3-compatible object storage.
 5. Isolated render worker.
 
-Keep Redis, Kafka, and Qdrant behind interfaces but deploy them only when needed:
+Keep Redis, Kafka, and optional vector retrieval behind interfaces, but deploy them only when needed:
 
 - Add Redis for demonstrated cache, rate-limit, or coordination load.
 - Connect Outbox to Kafka when consumers, throughput, or event-retention needs grow.
-- Move from pgvector when vector scale, filtering, or retrieval SLOs justify Qdrant.
+- Introduce pgvector only when direct profile input misses measured targets; move to Qdrant only if scale, filtering, or retrieval SLOs later justify it.
 
 This preserves replacement paths without burdening local development, CI, and prototype operations.
 
 ## 21. Architecture Decision Records
 
-These recommended decisions are currently `Proposed` and should be marked `Accepted` by the project owner before implementation:
+The ADR index records proposed, accepted, and superseded decisions. Proposed decisions require project-owner acceptance before their implementation becomes authoritative:
 
 1. [ADR-001: Modular Monolith with Independent Workers](./adr/ADR-001-modular-monolith-and-workers.md)
-2. [ADR-002: Profile Facts and Evidence](./adr/ADR-002-profile-facts-and-evidence.md)
+2. [ADR-002: Profile Facts and Evidence](./adr/ADR-002-profile-facts-and-evidence.md) (superseded)
 3. [ADR-003: Versioned Document Intermediate Representation](./adr/ADR-003-document-intermediate-representation.md)
-4. [ADR-004: Use pgvector for the MVP](./adr/ADR-004-vector-store.md)
+4. [ADR-004: Use pgvector for the MVP](./adr/ADR-004-vector-store.md) (superseded)
 5. [ADR-005: PostgreSQL Jobs and Transactional Outbox](./adr/ADR-005-durable-jobs-and-workflows.md)
 6. [ADR-006: Managed Templates and Sandboxed Rendering](./adr/ADR-006-template-and-rendering-boundary.md)
 7. [ADR-007: Data-Classification-Driven LLM Routing](./adr/ADR-007-llm-data-and-routing-policy.md)
 8. [ADR-008: Unsupported-Claim Export Gate](./adr/ADR-008-unsupported-claim-gate.md)
 9. [ADR-009: Compliant and Constrained Job Crawling](./adr/ADR-009-job-crawling-policy.md)
 10. [ADR-010: Workspace Tenancy and Authorization](./adr/ADR-010-workspace-tenancy-and-authorization.md)
+11. [ADR-011: Simple Editable Profiles](./adr/ADR-011-simple-editable-profiles.md)
 
 See the [ADR index](./adr/README.md) for status definitions and maintenance rules.
 
 ## 22. Acceptance Baseline
 
-Before implementation begins:
+Release acceptance baseline:
 
-- Every final factual claim can resolve to a user-confirmed fact and source.
+- Every final factual claim can resolve to supporting text in the saved profile snapshot.
 - Changing an LLM provider requires only adapter/configuration changes, not domain changes.
-- Qdrant/pgvector, S3/MinIO, and Kafka/other messaging implementations can change without changing use-case contracts.
+- Adding or changing optional vector retrieval, S3/MinIO, and Kafka/other messaging implementations does not change use-case contracts.
 - Upload, crawl, generation, and rendering jobs are idempotently retryable and survive API restart.
 - Tests cover malicious URLs, TeX, spoofed MIME types, and prompt injection.
 - The system detects page count, overflow, blank pages, clipping, and lost PDF text.
 - Every artifact can resolve its exact input snapshots, template, model, and configuration.
-- Workspace deletion covers PostgreSQL, object storage, vector indexes, and cache-derived data.
+- Workspace deletion covers PostgreSQL, object storage, and any optional vector indexes or cache-derived data.
 - UI locale and generation language are independent, with end-to-end coverage for English and at least one other language.
 
 ---
 
-The central architectural decision is to treat **user-confirmed, evidence-linked facts in PostgreSQL as the core asset; LLMs as replaceable reasoning and writing components; and DOCX, TeX, and PDF as deterministic renderings of structured content**. This enables rapid prototype delivery while preserving clear paths to replace models, databases, queues, storage, and deployment platforms.
-
+The central architectural decision is to treat **user-saved profile content in PostgreSQL as the core asset; LLMs as replaceable reasoning and writing components; and DOCX, TeX, and PDF as deterministic renderings of structured content**. This enables rapid prototype delivery while preserving clear paths to replace models, databases, queues, storage, and deployment platforms.

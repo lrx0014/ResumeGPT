@@ -12,9 +12,9 @@ import (
 	"github.com/lrx0014/ResumeGPT/internal/adapters/memory"
 	postgresadapter "github.com/lrx0014/ResumeGPT/internal/adapters/postgres"
 	s3adapter "github.com/lrx0014/ResumeGPT/internal/adapters/s3"
+	"github.com/lrx0014/ResumeGPT/internal/document"
 	"github.com/lrx0014/ResumeGPT/internal/identity"
 	"github.com/lrx0014/ResumeGPT/internal/job"
-	"github.com/lrx0014/ResumeGPT/internal/knowledge"
 	"github.com/lrx0014/ResumeGPT/internal/platform/blobstore"
 	"github.com/lrx0014/ResumeGPT/internal/platform/config"
 	"github.com/lrx0014/ResumeGPT/internal/platform/database"
@@ -46,7 +46,8 @@ func main() {
 	var profileRepository profile.Repository
 	var jobRepository job.Repository
 	var accessRepository identity.AccessRepository
-	var knowledgeService *knowledge.Service
+	var documentRepository document.Repository
+	var documentService *document.Service
 	switch cfg.PersistenceMode {
 	case "memory":
 		profileRepository = memory.NewProfileRepository()
@@ -67,12 +68,11 @@ func main() {
 		profileRepository = postgresadapter.NewProfileRepository(pool)
 		jobRepository = postgresadapter.NewJobRepository(pool)
 		accessRepository = postgresadapter.NewAccessRepository(pool)
-		knowledgeService = knowledge.NewService(postgresadapter.NewKnowledgeRepository(pool))
+		documentRepository = postgresadapter.NewDocumentRepository(pool)
 	default:
 		logger.Error("unsupported persistence mode", "mode", cfg.PersistenceMode)
 		os.Exit(1)
 	}
-
 	profileService := profile.NewService(profileRepository)
 	jobService := job.NewService(jobRepository)
 	var blobSigner blobstore.Signer
@@ -99,6 +99,9 @@ func main() {
 	default:
 		logger.Error("unsupported object storage mode", "mode", cfg.ObjectStorageMode)
 		os.Exit(1)
+	}
+	if _, ok := blobSigner.(blobstore.Reader); documentRepository != nil && ok {
+		documentService = document.NewService(documentRepository, blobSigner)
 	}
 	var authenticator identity.Authenticator
 	switch cfg.AuthMode {
@@ -129,7 +132,7 @@ func main() {
 		Access:             accessRepository,
 		DefaultWorkspaceID: developmentWorkspace(cfg),
 		Blobs:              blobSigner,
-		Knowledge:          knowledgeService,
+		Documents:          documentService,
 	})
 
 	server := &http.Server{

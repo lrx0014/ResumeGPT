@@ -27,7 +27,7 @@ For each logical deployment, record provider, model/version, region, allowed dat
 
 - `restricted` data may use only local or explicitly approved dedicated environments and never falls back to a public cloud.
 - A fallback must belong to an equal or stricter data-policy and regional group.
-- Send only the fact segments required for the task, not the complete profile repository.
+- Send only the explicitly selected profile and job inputs required for the task; never include unrelated profiles.
 - Explicitly disable optional provider storage. Do not assume parameters or semantics are portable across providers.
 - Local models also require authentication, TLS or controlled networking, redacted logs, and version registration.
 - Evaluate embedding, reranking, vision, and text-generation endpoints independently because each receives user data.
@@ -36,7 +36,7 @@ For each logical deployment, record provider, model/version, region, allowed dat
 
 - The business database retains immutable input references, configuration, and hashes. Raw prompts and responses use a short, configurable retention period based on product needs.
 - Production logs and traces exclude document bodies, complete prompts, token content, and signed URLs.
-- Deletion fans out to PostgreSQL, object storage, vector storage, caches, and any provider-side state that supports deletion.
+- Deletion fans out to PostgreSQL, object storage, any optional vector storage or caches, and provider-side state that supports deletion.
 - Classify PII and validate schemas/claims before persisting model output.
 
 ## Alternatives
@@ -56,4 +56,3 @@ Provider switching becomes auditable and fallback cannot bypass privacy policy. 
 ## Revisit
 
 Review immediately when provider terms, endpoint behavior, regions, or compliance requirements change, and audit the registry at least quarterly.
-

@@ -1,16 +1,18 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 import PageHeader from '../components/PageHeader.vue'
 import { api } from '../lib/api'
 import type { Profile } from '../lib/types'
 
 const profiles = ref<Profile[]>([])
+const router = useRouter()
 const loading = ref(true)
 const saving = ref(false)
 const error = ref('')
 const showForm = ref(false)
-const form = reactive({ name: '', domain: '', defaultLanguage: 'en-US', description: '' })
+const form = reactive({ name: '', targetRole: '', defaultLanguage: 'en-US', content: '', avatarObjectId: '' })
 
 async function load() {
   loading.value = true
@@ -29,9 +31,7 @@ async function createProfile() {
   error.value = ''
   try {
     const created = await api.createProfile(form)
-    profiles.value.unshift(created)
-    Object.assign(form, { name: '', domain: '', defaultLanguage: 'en-US', description: '' })
-    showForm.value = false
+    await router.push(`/profiles/${created.id}`)
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : 'Could not create the profile.'
   } finally {
@@ -44,7 +44,7 @@ onMounted(load)
 
 <template>
   <div class="page">
-    <PageHeader title="Profiles" description="Keep each professional story grounded in verified source material.">
+    <PageHeader title="Profiles" description="Create a focused profile for each role or career direction.">
       <button class="button primary" type="button" @click="showForm = !showForm">
         {{ showForm ? 'Close' : 'New profile' }}
       </button>
@@ -52,12 +52,11 @@ onMounted(load)
 
     <form v-if="showForm" class="panel form-grid" @submit.prevent="createProfile">
       <label><span>Name</span><input v-model="form.name" required placeholder="Backend Engineering" /></label>
-      <label><span>Domain</span><input v-model="form.domain" placeholder="Software engineering" /></label>
+      <label><span>Target role</span><input v-model="form.targetRole" placeholder="Senior Backend Engineer" /></label>
       <label>
         <span>Primary language</span>
         <select v-model="form.defaultLanguage"><option value="en-US">English</option><option value="de-DE">German</option></select>
       </label>
-      <label class="full"><span>Description</span><textarea v-model="form.description" rows="3" placeholder="What should this profile emphasize?" /></label>
       <div class="full form-actions"><button class="button primary" :disabled="saving">{{ saving ? 'Saving…' : 'Create profile' }}</button></div>
     </form>
 
@@ -66,7 +65,7 @@ onMounted(load)
     <div v-else-if="profiles.length" class="card-grid">
       <article v-for="profile in profiles" :key="profile.id" class="entity-card">
         <span class="entity-icon">◎</span>
-        <div><p class="eyebrow">{{ profile.domain || 'General profile' }}</p><h2>{{ profile.name }}</h2><p>{{ profile.description || 'Ready for background sources and verified facts.' }}</p></div>
+        <div><p class="eyebrow">{{ profile.targetRole || 'General profile' }}</p><h2>{{ profile.name }}</h2><p>{{ profile.content ? `${profile.content.slice(0, 140)}${profile.content.length > 140 ? '…' : ''}` : 'Add your experience, education, skills, and achievements.' }}</p></div>
         <footer><span>{{ profile.defaultLanguage }}</span><RouterLink class="text-button" :to="`/profiles/${profile.id}`">Open →</RouterLink></footer>
       </article>
     </div>

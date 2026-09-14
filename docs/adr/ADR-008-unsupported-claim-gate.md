@@ -6,11 +6,11 @@
 
 ## Context
 
-Model self-review alone cannot reliably prevent fabricated CV content. A blanket prohibition on user assertions would also reject true experience whose original evidence is unavailable. The product must distinguish source-supported, user-confirmed, and unverified statements.
+Model self-review alone cannot reliably prevent fabricated CV content. The product must compare generated claims with the exact profile text explicitly saved by the user while preserving the user's ability to export content with a clear warning.
 
 ## Decision
 
-Classify each atomic claim in the final document by risk. A high-risk unsupported claim cannot be exported as `Verified`. The preferred remedy is for the user to add or confirm a fact, create a new fact version, and rerun validation—not merely click “ignore.”
+Classify each atomic claim in the final document by risk. A high-risk claim unsupported by the saved profile snapshot cannot be exported as `Verified`. The preferred remedy is for the user to add or correct profile content and rerun validation—not merely click “ignore.”
 
 ### Risk Levels
 
@@ -20,9 +20,9 @@ Classify each atomic claim in the final document by risk. A high-risk unsupporte
 
 ### Gate Policy
 
-1. A `blocking` claim references at least one fact version in an allowed state and passes deterministic value checks.
-2. Semantic-expansion checks compare the claim with evidence. An LLM verifier is one signal, never the sole authority.
-3. When a user confirms a new fact, record the user, time, original input, and audit event, then regenerate or rebind the claim.
+1. A `blocking` claim references a supporting excerpt in the saved profile snapshot and passes deterministic value checks.
+2. Semantic-expansion checks compare the claim with saved profile content. An LLM verifier is one signal, never the sole authority.
+3. When a user changes profile content, create a new generation input snapshot and rerun or rebind the claim.
 4. A normal user may export with warnings. Unresolved blocking findings allow only an explicitly acknowledged `Unverified` export with an audit record.
 5. Managed workspaces may configure a hard block that disables all unverified exports.
 6. Do not place a visible watermark on the CV by default, because it would harm its use. Keep verification state in product and download audit records.
@@ -42,15 +42,14 @@ Classify each atomic claim in the final document by risk. A high-risk unsupporte
 
 ## Consequences
 
-The product clearly separates source-supported, user-asserted, and unverified content. Explicit unverified export preserves user autonomy, but must never be advertised as verified. Managed customers can choose a stricter policy.
+The product clearly separates profile-supported and unverified generated content. Explicit unverified export preserves user autonomy, but must never be advertised as verified. Managed customers can choose a stricter policy.
 
 ## Validation
 
 - Maintain adversarial tests for numbers, dates, title inflation, causal expansion, and cross-profile leakage.
-- Prioritize low false negatives for blocking claims while monitoring false positives and user-confirmation rates.
+- Prioritize low false negatives for blocking claims while monitoring false positives and profile-correction rates.
 - The download service checks the current validation ID server-side rather than relying on a disabled UI button.
 
 ## Revisit
 
 Review when false positives materially reduce completion, new fabrication patterns appear, or the product enters a regulated hiring context.
-

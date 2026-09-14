@@ -46,6 +46,65 @@ func TestCreateAndListProfile(t *testing.T) {
 	}
 }
 
+func TestUpdateAndDeleteProfile(t *testing.T) {
+	handler := newHandler()
+	createResult := httptest.NewRecorder()
+	handler.ServeHTTP(createResult, httptest.NewRequest(http.MethodPost, "/v1/profiles", bytes.NewBufferString(`{"name":"Original"}`)))
+	var created profile.Profile
+	if err := json.NewDecoder(createResult.Body).Decode(&created); err != nil {
+		t.Fatal(err)
+	}
+
+	updateBody := bytes.NewBufferString(`{"name":"Updated","targetRole":"Staff Engineer","defaultLanguage":"en-US","content":"# Experience\n\nBuilt APIs.","avatarObjectId":"obj_avatar"}`)
+	updateResult := httptest.NewRecorder()
+	handler.ServeHTTP(updateResult, httptest.NewRequest(http.MethodPut, "/v1/profiles/"+created.ID, updateBody))
+	if updateResult.Code != http.StatusOK {
+		t.Fatalf("update status = %d, want %d: %s", updateResult.Code, http.StatusOK, updateResult.Body.String())
+	}
+	var updated profile.Profile
+	if err := json.NewDecoder(updateResult.Body).Decode(&updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.Name != "Updated" || updated.TargetRole != "Staff Engineer" || updated.Content != "# Experience\n\nBuilt APIs." {
+		t.Fatalf("unexpected updated profile: %#v", updated)
+	}
+
+	deleteResult := httptest.NewRecorder()
+	handler.ServeHTTP(deleteResult, httptest.NewRequest(http.MethodDelete, "/v1/profiles/"+created.ID, nil))
+	if deleteResult.Code != http.StatusNoContent {
+		t.Fatalf("delete status = %d, want %d", deleteResult.Code, http.StatusNoContent)
+	}
+	getResult := httptest.NewRecorder()
+	handler.ServeHTTP(getResult, httptest.NewRequest(http.MethodGet, "/v1/profiles/"+created.ID, nil))
+	if getResult.Code != http.StatusNotFound {
+		t.Fatalf("get deleted status = %d, want %d", getResult.Code, http.StatusNotFound)
+	}
+}
+
+func TestCreatesProfileAvatarUpload(t *testing.T) {
+	handler := newHandler()
+	createResult := httptest.NewRecorder()
+	handler.ServeHTTP(createResult, httptest.NewRequest(http.MethodPost, "/v1/profiles", bytes.NewBufferString(`{"name":"Avatar profile"}`)))
+	var created profile.Profile
+	if err := json.NewDecoder(createResult.Body).Decode(&created); err != nil {
+		t.Fatal(err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/v1/profiles/"+created.ID+"/avatar-upload", bytes.NewBufferString(`{"contentType":"image/png"}`))
+	result := httptest.NewRecorder()
+	handler.ServeHTTP(result, request)
+	if result.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d: %s", result.Code, http.StatusCreated, result.Body.String())
+	}
+	var signed blobstore.SignedURL
+	if err := json.NewDecoder(result.Body).Decode(&signed); err != nil {
+		t.Fatal(err)
+	}
+	if signed.Headers["Content-Type"] != "image/png" || !strings.HasPrefix(signed.ObjectID, "obj_") {
+		t.Fatalf("unexpected avatar upload: %#v", signed)
+	}
+}
+
 func TestRejectsIncompleteJob(t *testing.T) {
 	handler := newHandler()
 	request := httptest.NewRequest(http.MethodPost, "/v1/jobs", bytes.NewBufferString(`{"title":"Engineer"}`))

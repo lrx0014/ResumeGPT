@@ -1,6 +1,6 @@
 # ADR-004: Use pgvector for the MVP
 
-- Status: Proposed
+- Status: Superseded by [ADR-011](./ADR-011-simple-editable-profiles.md)
 - Date: 2026-09-13
 - Decision owners: TBD
 
@@ -51,4 +51,3 @@ The MVP retains one backup and consistency boundary. The risk is that approximat
 ## Revisit
 
 Review whenever embedding count grows by an order of magnitude or the retrieval SLO misses its target for two consecutive weeks.
-

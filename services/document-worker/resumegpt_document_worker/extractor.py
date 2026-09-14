@@ -4,9 +4,11 @@ import csv
 import hashlib
 import io
 import json
+import os
 import shutil
 import subprocess
 import tempfile
+import time
 import zipfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -15,7 +17,7 @@ from xml.etree import ElementTree
 
 MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
 MAX_SEGMENTS = 2_000
-MAX_SEGMENT_CHARS = 10_000
+MAX_SEGMENT_BYTES = 4_000
 
 
 class ExtractionError(Exception):
@@ -47,37 +49,50 @@ class Result:
 
 def detect_media_type(path: Path, data: bytes) -> str:
     suffix = path.suffix.lower()
+    detected: str | None = None
     if data.startswith(b"%PDF-"):
-        return "application/pdf"
-    if data.startswith(b"\x89PNG\r\n\x1a\n"):
-        return "image/png"
-    if data.startswith(b"\xff\xd8\xff"):
-        return "image/jpeg"
-    if data.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"):
-        return "application/msword"
-    if data.startswith(b"PK\x03\x04"):
+        detected = "application/pdf"
+    elif data.startswith(b"\x89PNG\r\n\x1a\n"):
+        detected = "image/png"
+    elif data.startswith(b"\xff\xd8\xff"):
+        detected = "image/jpeg"
+    elif data.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"):
+        detected = "application/msword"
+    elif data.startswith(b"PK\x03\x04"):
         try:
             with zipfile.ZipFile(io.BytesIO(data)) as archive:
                 if "word/document.xml" in archive.namelist():
-                    return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    detected = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         except zipfile.BadZipFile as error:
             raise ExtractionError("invalid_archive", "The uploaded ZIP container is invalid.") from error
-        raise ExtractionError("unsupported_archive", "The uploaded archive is not a DOCX document.")
+        if detected is None:
+            raise ExtractionError("unsupported_archive", "The uploaded archive is not a DOCX document.")
+    expected_extensions = {
+        "application/pdf": {".pdf"},
+        "image/png": {".png"},
+        "image/jpeg": {".jpg", ".jpeg"},
+        "application/msword": {".doc"},
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {".docx"},
+    }
+    if detected is not None:
+        if suffix not in expected_extensions[detected]:
+            raise ExtractionError("extension_mismatch", "The filename extension does not match the detected document type.")
+        return detected
     try:
         data.decode("utf-8")
     except UnicodeDecodeError as error:
         raise ExtractionError("unsupported_media_type", "The file signature is not supported.") from error
     if suffix == ".tex":
         return "application/x-tex"
+    if suffix == ".md":
+        return "text/markdown"
     if suffix == ".txt":
         return "text/plain"
-    raise ExtractionError("extension_mismatch", "UTF-8 text must use a .txt or .tex filename.")
+    raise ExtractionError("extension_mismatch", "UTF-8 text must use a .txt, .md, or .tex filename.")
 
 
 def scan_malware(path: Path) -> str:
-    scanner = shutil.which("clamscan")
-    if scanner is None:
-        raise ExtractionError("scanner_unavailable", "Malware scanning is unavailable; the document remains quarantined.")
+    scanner = malware_scanner()
     try:
         completed = subprocess.run(
             [scanner, "--no-summary", "--stdout", str(path)],
@@ -95,6 +110,17 @@ def scan_malware(path: Path) -> str:
     raise ExtractionError("scanner_failed", "Malware scanning could not complete.")
 
 
+def malware_scanner() -> str:
+    scanner = shutil.which("clamscan")
+    if scanner is None:
+        raise ExtractionError("scanner_unavailable", "Malware scanning is unavailable; the document remains quarantined.")
+    database_directory = Path(os.environ.get("CLAMAV_DATABASE_DIRECTORY", "/var/lib/clamav"))
+    definitions = list(database_directory.glob("*.cvd")) + list(database_directory.glob("*.cld"))
+    if not definitions or time.time() - max(item.stat().st_mtime for item in definitions) > 7 * 24 * 60 * 60:
+        raise ExtractionError("scanner_definitions_stale", "Malware definitions are missing or stale; the document remains quarantined.")
+    return scanner
+
+
 def text_segments(text: str, page: int | None = None) -> list[Segment]:
     if not text.strip():
         return []
@@ -103,7 +129,7 @@ def text_segments(text: str, page: int | None = None) -> list[Segment]:
         line = line.strip()
         if not line:
             continue
-        if len(line) > MAX_SEGMENT_CHARS:
+        if len(line.encode("utf-8")) > MAX_SEGMENT_BYTES:
             raise ExtractionError("segment_too_large", "An extracted paragraph exceeds the supported length.")
         result.append(Segment(text=line, page=page, paragraph=paragraph, confidence=1.0))
     return result
@@ -219,7 +245,7 @@ def extract(path: Path, *, malware_scan: bool = True) -> Result:
     data = path.read_bytes()
     media_type = detect_media_type(path, data)
     malware_status = scan_malware(path) if malware_scan else "test_skipped"
-    if media_type in {"text/plain", "application/x-tex"}:
+    if media_type in {"text/plain", "text/markdown", "application/x-tex"}:
         segments = text_segments(data.decode("utf-8"))
     elif media_type.endswith("wordprocessingml.document"):
         segments = extract_docx(data)

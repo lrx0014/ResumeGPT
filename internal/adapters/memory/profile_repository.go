@@ -44,3 +44,26 @@ func (r *ProfileRepository) Create(_ context.Context, value profile.Profile) (pr
 	r.items[value.ID] = value
 	return value, nil
 }
+
+func (r *ProfileRepository) Update(_ context.Context, value profile.Profile) (profile.Profile, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	current, ok := r.items[value.ID]
+	if !ok || current.WorkspaceID != value.WorkspaceID {
+		return profile.Profile{}, profile.ErrNotFound
+	}
+	value.CreatedAt = current.CreatedAt
+	r.items[value.ID] = value
+	return value, nil
+}
+
+func (r *ProfileRepository) Delete(_ context.Context, workspaceID, profileID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	current, ok := r.items[profileID]
+	if !ok || current.WorkspaceID != workspaceID {
+		return profile.ErrNotFound
+	}
+	delete(r.items, profileID)
+	return nil
+}

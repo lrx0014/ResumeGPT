@@ -2,9 +2,10 @@ export interface Profile {
   id: string
   workspaceId: string
   name: string
-  domain?: string
+  targetRole?: string
   defaultLanguage: string
-  description?: string
+  content: string
+  avatarObjectId?: string
   createdAt: string
   updatedAt: string
 }
@@ -34,59 +35,37 @@ export interface APIError {
   }
 }
 
-export interface KnowledgeSource {
+export type DocumentUploadState = 'staged' | 'queued' | 'ready' | 'needs_user_action' | 'security_quarantine' | 'failed'
+
+export interface DocumentUpload {
   id: string
-  name: string
-  text: string
-  hash: string
-  mediaType: string
-  parserVersion: string
-  state: string
-  createdAt: string
-}
-
-export interface EvidenceSegment {
-  id: string
-  sourceId: string
-  page?: number
-  paragraph: number
-  text: string
-  hash: string
-  confidence: number
-  boundingBox?: { x: number; y: number; width: number; height: number }
-}
-
-export type FactStatus = 'extracted' | 'user_asserted' | 'user_confirmed' | 'disputed' | 'rejected'
-
-export interface FactVersion {
-  id: string
-  factId: string
-  number: number
-  statement: string
-  status: FactStatus
-  sensitive: boolean
-  actorId: string
-  createdAt: string
-}
-
-export interface KnowledgeFact {
-  id: string
-  evidenceSegmentIds: string[]
-  currentVersionId: string
-  versions: FactVersion[]
-}
-
-export interface FactReview {
-  expectedVersionId: string
-  statement: string
-  status: Exclude<FactStatus, 'extracted'>
-  sensitive: boolean
-}
-
-export interface KnowledgeSnapshot {
-  schemaVersion: number
+  workspaceId: string
   profileId: string
-  sources: KnowledgeSource[]
-  segments: EvidenceSegment[]
-  facts: KnowledgeFact[]
+  objectId: string
+  name: string
+  declaredMediaType: string
+  state: DocumentUploadState
+  jobId?: string
+  extractedText?: string
+  errorCode?: string
+  errorMessage?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface StagedDocumentUpload {
+  upload: DocumentUpload
+  target: {
+    objectId: string
+    url: string
+    expiresAt: string
+    headers?: Record<string, string>
+  }
+}
+
+export interface SignedURL {
+  objectId: string
+  url: string
+  expiresAt: string
+  headers?: Record<string, string>
 }

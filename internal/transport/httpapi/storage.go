@@ -32,6 +32,17 @@ func (a *API) createUpload(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) createDownload(w http.ResponseWriter, r *http.Request) {
+	if a.documents != nil {
+		allowed, err := a.documents.DownloadAllowed(r.Context(), workspaceID(r), r.PathValue("objectID"))
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "download_authorization_failed", "Could not authorize the object download.")
+			return
+		}
+		if !allowed {
+			writeError(w, http.StatusLocked, "document_quarantined", "The document remains quarantined until scanning and extraction succeed.")
+			return
+		}
+	}
 	result, err := a.blobs.PresignDownload(r.Context(), workspaceID(r), r.PathValue("objectID"), 15*time.Minute)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_object_id", "The object identifier is invalid.")

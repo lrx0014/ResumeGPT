@@ -7,7 +7,7 @@ import PageHeader from '../components/PageHeader.vue'
     <PageHeader
       eyebrow="Workspace overview"
       title="Build applications that stay true to you."
-      description="Turn verified experience into focused CVs and cover letters for every opportunity."
+      description="Turn your saved experience into focused CVs and cover letters for every opportunity."
     >
       <RouterLink class="button primary" to="/generate">Create application</RouterLink>
     </PageHeader>
@@ -26,7 +26,7 @@ import PageHeader from '../components/PageHeader.vue'
       <article class="metric-card accent">
         <span>Documents generated</span>
         <strong>—</strong>
-        <small>Evidence-backed by design</small>
+        <small>Grounded in your profile</small>
       </article>
     </section>
 
@@ -58,4 +58,3 @@ import PageHeader from '../components/PageHeader.vue'
     </section>
   </div>
 </template>
-

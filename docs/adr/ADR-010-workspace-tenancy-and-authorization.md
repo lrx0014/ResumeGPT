@@ -28,7 +28,7 @@ Use RBAC for stable roles and add resource relationships only where necessary, s
 - Application queries always apply scope; PostgreSQL Row-Level Security is a second line of defense.
 - The runtime database role is not a superuser, does not have `BYPASSRLS`, and is separate from the table owner. Evaluate `FORCE ROW LEVEL SECURITY`.
 - Object keys, cache keys, jobs, outbox events, audit events, and vector payloads include workspace ID.
-- Repositories inject the pgvector/Qdrant tenant filter; callers cannot remove it.
+- If a vector index is introduced, repositories inject its workspace/profile filter; callers cannot remove it.
 - Background-job payloads include workspace ID and revalidate resource ownership at execution.
 
 ### Invitations and Lifecycle
@@ -57,9 +57,8 @@ All code carries workspace context from the start, but future collaboration and 
 
 - Run two-workspace isolation tests for every repository.
 - Test database privileges for runtime, worker, migration, and support roles.
-- Perform dedicated security tests for IDOR, cache keys, signed URLs, vector filters, and background jobs.
+- Perform dedicated security tests for IDOR, cache keys, signed URLs, background jobs, and vector filters if vector retrieval is introduced.
 
 ## Revisit
 
 Review when adding enterprise customers, external collaborators, profile-level sharing, or region-specific deployments.
-

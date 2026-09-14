@@ -1,6 +1,6 @@
 # ADR-002: Profile Facts and Evidence
 
-- Status: Proposed
+- Status: Superseded by [ADR-011](./ADR-011-simple-editable-profiles.md)
 - Date: 2026-09-13
 - Decision owners: TBD
 
@@ -67,4 +67,3 @@ Generation and validation can reference immutable `fact_version_id` values, whil
 ## Revisit
 
 Adding a fact type does not require review. Revisit only if measured JSONB query or migration cost justifies dedicated tables.
-
