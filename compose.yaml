@@ -90,6 +90,8 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      document-worker:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "/app/healthcheck", "http://localhost:8080/readyz"]
       interval: 5s

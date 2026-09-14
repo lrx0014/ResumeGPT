@@ -15,6 +15,7 @@ import (
 	"github.com/lrx0014/ResumeGPT/internal/profile"
 	"github.com/lrx0014/ResumeGPT/internal/settings"
 	"github.com/lrx0014/ResumeGPT/internal/shared/id"
+	resumetemplate "github.com/lrx0014/ResumeGPT/internal/template"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -31,6 +32,7 @@ type Dependencies struct {
 	Blobs              blobstore.Signer
 	Documents          *document.Service
 	Settings           *settings.Service
+	Templates          *resumetemplate.Service
 }
 
 type API struct {
@@ -45,6 +47,7 @@ type API struct {
 	blobs              blobstore.Signer
 	documents          *document.Service
 	settings           *settings.Service
+	templates          *resumetemplate.Service
 }
 
 func New(deps Dependencies) http.Handler {
@@ -60,11 +63,13 @@ func New(deps Dependencies) http.Handler {
 		blobs:              deps.Blobs,
 		documents:          deps.Documents,
 		settings:           deps.Settings,
+		templates:          deps.Templates,
 	}
 
 	protected := http.NewServeMux()
 	api.registerDocuments(protected)
 	api.registerSettings(protected)
+	api.registerTemplates(protected)
 	protected.Handle("GET /v1/system/capabilities", api.requireRole(identity.RoleViewer, api.capabilities))
 	protected.Handle("GET /v1/profiles", api.requireRole(identity.RoleViewer, api.listProfiles))
 	protected.Handle("POST /v1/profiles", api.requireRole(identity.RoleEditor, api.createProfile))
@@ -99,13 +104,16 @@ func (a *API) capabilities(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"apiVersion": "v1",
 		"features": map[string]bool{
-			"documents":  a.documents != nil,
-			"profiles":   true,
-			"jobs":       true,
-			"jobImports": a.jobImports != nil,
-			"generation": false,
-			"rendering":  false,
-			"settings":   a.settings != nil,
+			"documents":        a.documents != nil,
+			"profiles":         true,
+			"jobs":             true,
+			"jobImports":       a.jobImports != nil,
+			"generation":       false,
+			"rendering":        false,
+			"settings":         a.settings != nil,
+			"templates":        a.templates != nil,
+			"templateUploads":  a.templates != nil && a.templates.UploadsEnabled(),
+			"templatePreviews": a.templates != nil && a.templates.PreviewsEnabled(),
 		},
 	})
 }

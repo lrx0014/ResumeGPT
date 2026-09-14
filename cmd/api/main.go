@@ -21,6 +21,7 @@ import (
 	"github.com/lrx0014/ResumeGPT/internal/platform/telemetry"
 	"github.com/lrx0014/ResumeGPT/internal/profile"
 	"github.com/lrx0014/ResumeGPT/internal/settings"
+	resumetemplate "github.com/lrx0014/ResumeGPT/internal/template"
 	"github.com/lrx0014/ResumeGPT/internal/transport/httpapi"
 )
 
@@ -51,11 +52,13 @@ func main() {
 	var documentService *document.Service
 	var jobImportService *job.ImportService
 	var settingsRepository settings.Repository
+	var templateRepository resumetemplate.Repository
 	switch cfg.PersistenceMode {
 	case "memory":
 		profileRepository = memory.NewProfileRepository()
 		jobRepository = memory.NewJobRepository()
 		settingsRepository = memory.NewSettingsRepository()
+		templateRepository = memory.NewTemplateRepository()
 		accessRepository = memory.AccessRepository{
 			Subject: identity.Subject{Issuer: "development", Subject: "developer", Email: "developer@localhost"},
 			Principal: identity.Principal{
@@ -76,6 +79,7 @@ func main() {
 		accessRepository = postgresadapter.NewAccessRepository(pool)
 		documentRepository = postgresadapter.NewDocumentRepository(pool)
 		settingsRepository = postgresadapter.NewSettingsRepository(pool)
+		templateRepository = postgresadapter.NewTemplateRepository(pool)
 	default:
 		logger.Error("unsupported persistence mode", "mode", cfg.PersistenceMode)
 		os.Exit(1)
@@ -116,6 +120,20 @@ func main() {
 	if _, ok := blobSigner.(blobstore.Reader); documentRepository != nil && ok {
 		documentService = document.NewService(documentRepository, blobSigner)
 	}
+	templateService := resumetemplate.NewService(templateRepository, blobSigner, documentService != nil)
+	if blobs, ok := blobSigner.(resumetemplate.TemplateBlobs); ok {
+		previewer, previewErr := document.NewHTTPExtractor(cfg.DocumentWorkerURL)
+		if previewErr != nil {
+			logger.Error("initialize template previewer", "error", previewErr)
+			os.Exit(1)
+		}
+		previewObjectID, previewErr := resumetemplate.PrepareDefaultPreview(context.Background(), blobs, previewer)
+		if previewErr != nil {
+			logger.Error("prepare built-in template preview", "error", previewErr)
+			os.Exit(1)
+		}
+		templateService.ConfigurePreview(blobs, previewObjectID)
+	}
 	var authenticator identity.Authenticator
 	switch cfg.AuthMode {
 	case "development":
@@ -148,6 +166,7 @@ func main() {
 		Blobs:              blobSigner,
 		Documents:          documentService,
 		Settings:           settingsService,
+		Templates:          templateService,
 	})
 
 	server := &http.Server{

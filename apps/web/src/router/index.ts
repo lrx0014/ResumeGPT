@@ -7,6 +7,8 @@ import JobView from '../views/JobView.vue'
 import ProfilesView from '../views/ProfilesView.vue'
 import ProfileView from '../views/ProfileView.vue'
 import SettingsView from '../views/SettingsView.vue'
+import TemplatesView from '../views/TemplatesView.vue'
+import TemplateView from '../views/TemplateView.vue'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -16,6 +18,8 @@ export const router = createRouter({
     { path: '/profiles/:profileId', name: 'profile', component: ProfileView },
     { path: '/jobs', name: 'jobs', component: JobsView },
     { path: '/jobs/:jobId', name: 'job', component: JobView },
+    { path: '/templates', name: 'templates', component: TemplatesView },
+    { path: '/templates/:templateId', name: 'template', component: TemplateView },
     { path: '/generate', name: 'generate', component: GenerateView },
     { path: '/settings', name: 'settings', component: SettingsView },
   ],

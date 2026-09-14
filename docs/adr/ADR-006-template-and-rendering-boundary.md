@@ -1,6 +1,6 @@
 # ADR-006: Managed Templates and a Sandboxed Rendering Boundary
 
-- Status: Proposed
+- Status: Superseded by [ADR-014](./ADR-014-simple-template-library.md) for template management; the sandboxed rendering guidance remains deferred
 - Date: 2026-09-13
 - Decision owners: TBD
 
@@ -47,4 +47,3 @@ The supported surface is narrower than “any Word or TeX template,” but outpu
 ## Revisit
 
 Expand capabilities one at a time using real failure samples. Supporting a file extension never implies support for every feature of that format.
-

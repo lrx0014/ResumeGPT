@@ -16,6 +16,7 @@ import (
 	"github.com/lrx0014/ResumeGPT/internal/platform/outbox"
 	"github.com/lrx0014/ResumeGPT/internal/platform/telemetry"
 	"github.com/lrx0014/ResumeGPT/internal/shared/id"
+	resumetemplate "github.com/lrx0014/ResumeGPT/internal/template"
 )
 
 func main() {
@@ -99,12 +100,20 @@ func main() {
 		logger.Error("initialize document extractor", "error", err)
 		os.Exit(1)
 	}
-	processor := document.Processor{
+	documentProcessor := document.Processor{
 		Queue: queue, Repository: postgresadapter.NewDocumentRepository(pool), Blobs: blobs,
 		Extractor: extractor, WorkerID: id.New("document_worker"), Logger: logger,
 	}
-	if err := processor.Run(ctx); err != nil {
-		logger.Error("run document processor", "error", err)
+	go func() {
+		if err := documentProcessor.Run(ctx); err != nil {
+			logger.Error("run document processor", "error", err)
+			stop()
+		}
+	}()
+	templateProcessor := resumetemplate.Processor{Queue: queue, Repository: postgresadapter.NewTemplateRepository(pool), Blobs: blobs,
+		Extractor: extractor, Previewer: extractor, WorkerID: id.New("template_worker"), Logger: logger}
+	if err := templateProcessor.Run(ctx); err != nil {
+		logger.Error("run template processor", "error", err)
 		os.Exit(1)
 	}
 	logger.Info("worker stopped")

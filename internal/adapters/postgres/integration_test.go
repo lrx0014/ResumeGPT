@@ -18,6 +18,7 @@ import (
 	"github.com/lrx0014/ResumeGPT/internal/profile"
 	"github.com/lrx0014/ResumeGPT/internal/settings"
 	"github.com/lrx0014/ResumeGPT/internal/shared/id"
+	resumetemplate "github.com/lrx0014/ResumeGPT/internal/template"
 )
 
 func TestRepositoriesPersistEventsAndEnforceWorkspaceScope(t *testing.T) {
@@ -223,6 +224,60 @@ func assertJobState(t *testing.T, ctx context.Context, pool *pgxpool.Pool, jobID
 	}
 	if actual != expected {
 		t.Fatalf("job %s state = %s, want %s", jobID, actual, expected)
+	}
+}
+
+func TestTemplateExtractionCompletionIsTransactionallyDeduplicated(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is not configured")
+	}
+	ctx := requestcontext.WithActorID(context.Background(), "usr_template_test")
+	pool, err := database.Open(ctx, databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	if err := database.Migrate(ctx, pool); err != nil {
+		t.Fatal(err)
+	}
+	workspaceID := id.New("ws")
+	if _, err := pool.Exec(ctx, `INSERT INTO workspaces (id,name,kind) VALUES ($1,'Templates','personal')`, workspaceID); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = pool.Exec(context.Background(), "DELETE FROM workspaces WHERE id=$1", workspaceID) })
+	repository := postgres.NewTemplateRepository(pool)
+	now := time.Now().UTC()
+	item := resumetemplate.Template{ID: id.New("tpl"), WorkspaceID: workspaceID, Name: "Integration template", Kind: "resume", Format: "latex", SourceName: "resume.zip", EntryFile: "src/main.tex", DeclaredMediaType: "application/zip", ObjectID: id.New("obj"), State: "staged", CreatedAt: now, UpdatedAt: now}
+	if err := repository.Stage(ctx, item); err != nil {
+		t.Fatal(err)
+	}
+	job := workqueue.Job{ID: id.New("task"), WorkspaceID: workspaceID, Kind: resumetemplate.ExtractJobKind, IdempotencyKey: item.ID, MaxAttempts: 3, AvailableAt: now}
+	queued, err := repository.Queue(ctx, workspaceID, item.ID, job)
+	if err != nil {
+		t.Fatal(err)
+	}
+	claimed, err := postgres.NewWorkQueue(pool).ClaimKind(ctx, "template-integration-worker", resumetemplate.ExtractJobKind, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	processed, err := repository.StoreExtraction(ctx, claimed, item.ID, "\\documentclass{article}", "obj_template_preview_test")
+	if err != nil || !processed {
+		t.Fatalf("processed = %v, error = %v", processed, err)
+	}
+	processed, err = repository.StoreExtraction(ctx, claimed, item.ID, "duplicate", "obj_template_preview_test")
+	if err != nil || processed {
+		t.Fatalf("duplicate processed = %v, error = %v", processed, err)
+	}
+	stored, err := repository.Get(ctx, workspaceID, item.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.State != "ready" || stored.EntryFile != "src/main.tex" || stored.Content != "\\documentclass{article}" || stored.PreviewObjectID != "obj_template_preview_test" || stored.JobID != queued.JobID {
+		t.Fatalf("unexpected stored template: %#v", stored)
+	}
+	if _, err := repository.Get(ctx, id.New("ws"), item.ID); !errors.Is(err, resumetemplate.ErrNotFound) {
+		t.Fatalf("cross-workspace error = %v", err)
 	}
 }
 

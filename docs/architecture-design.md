@@ -99,7 +99,7 @@ Extract a service when:
 | Identity & Tenant | Authentication, sessions, workspaces, membership, RBAC, quotas | User, Workspace, Membership |
 | Profile | Editable profile metadata, text, avatar reference, and document import | Profile, DocumentUpload |
 | Job | Editable Job records, current application status, manual entry, and safe background URL import | Job, JobImportTask |
-| Template | DOCX/TeX templates, capabilities, page constraints, versions | Template, TemplateVersion, RenderProfile |
+| Template | Simple resume/cover-letter TeX and Word library, original files, and extracted text | Template |
 | Content Generation | Planning, profile selection, generation, conversational revision | Generation, ArtifactDraft, Revision, Conversation |
 | Validation | Profile grounding, content rules, ATS, layout, and visual validation | ValidationRun, Finding, ProfileReference |
 | Artifact | Rendering, preview, conversion, download, retention | Artifact, FileVariant, RenderRun |
@@ -188,7 +188,15 @@ interested/preparing/applied -> withdrawn
 
 Users may change the current status freely. Status history, custom workflow configuration, reporting, notes, reminders, and separate application records are outside the current scope.
 
-### 6.3 Generations and Artifact Versions
+### 6.3 Templates
+
+- `templates`: name, description, resume/cover-letter type, TeX/LaTeX ZIP/DOC/DOCX source, optional LaTeX entry file, original and PDF-preview object references, extracted text, and processing state.
+- A read-only Rezume default is embedded in the API with its author, MIT license, and Overleaf source attribution.
+- Custom uploads use durable malware scanning, text extraction, and PDF preview generation before becoming ready.
+
+Templates use ordinary metadata CRUD and have no review, approval, publication, or version lifecycle. A LaTeX source may be one `.tex` file or a ZIP archive containing related `.tex`, style, image, and font assets. ZIP archives default to an unambiguous `main.tex`; users can provide a relative entry path when another file is the compilation root. Archive extraction rejects traversal, symbolic links, encryption, and excessive file counts or expanded sizes. Extracted text is available to later LLM workflows; a generation can copy the selected content into its own immutable input snapshot. The source preview is generated once on upload or source replacement and then loaded directly from object storage. Metadata-only edits do not regenerate it. This preview confirms that the source can be converted, but generation-time rendering and output validation remain separate isolated operations.
+
+### 6.4 Generations and Artifact Versions
 
 - `generations`: task configuration and immutable input-snapshot references.
 - `generation_inputs`: profile-content and Job-content copies captured when generation starts, plus template, prompt, and language versions.
@@ -201,7 +209,7 @@ Users may change the current status freely. Status history, custom workflow conf
 
 Record provider, model version, prompt-template version, sampling parameters, and input hash. Raw sensitive prompts follow privacy retention policy.
 
-### 6.4 Settings and LLM Connections
+### 6.5 Settings and LLM Connections
 
 - `workspace_settings`: interface language and System/Light/Dark theme only.
 - `llm_connections`: named cloud/local connection mode, provider adapter, Base URL, and encrypted API token.
@@ -288,11 +296,13 @@ There is no automatic provider router or fallback group in the personal-project 
 
 ## 9. Templates, Rendering, and Visual Validation
 
+The Template library described in Section 6.3 stores user-selected source files without an admission or approval workflow. The controls below apply when a generation attempts to render a template, not to everyday library management.
+
 ### 9.1 Intermediate Representation
 
 Use format-independent `ResumeDocument` and `CoverLetterDocument` JSON Schemas containing sections, blocks, style tokens, supporting-profile references, and pagination hints. Templates map the IR to DOCX or TeX.
 
-Template admission validates:
+Generation-time template preflight validates:
 
 - File format and macro safety.
 - Placeholders and schema compatibility.
@@ -441,6 +451,16 @@ POST   /v1/settings/llm-connections
 PUT    /v1/settings/llm-connections/{id}
 DELETE /v1/settings/llm-connections/{id}
 POST   /v1/settings/llm-connections/{id}/test
+
+GET    /v1/templates
+POST   /v1/templates/uploads
+POST   /v1/templates/{id}/complete
+POST   /v1/templates/{id}/source-upload
+GET    /v1/templates/{id}
+PUT    /v1/templates/{id}
+DELETE /v1/templates/{id}
+GET    /v1/templates/{id}/file
+GET    /v1/templates/{id}/preview
 
 POST   /v1/generations
 GET    /v1/generations/{id}
@@ -654,7 +674,7 @@ The ADR index records proposed, accepted, and superseded decisions. Proposed dec
 3. [ADR-003: Versioned Document Intermediate Representation](./adr/ADR-003-document-intermediate-representation.md)
 4. [ADR-004: Use pgvector for the MVP](./adr/ADR-004-vector-store.md) (superseded)
 5. [ADR-005: PostgreSQL Jobs and Transactional Outbox](./adr/ADR-005-durable-jobs-and-workflows.md)
-6. [ADR-006: Managed Templates and Sandboxed Rendering](./adr/ADR-006-template-and-rendering-boundary.md)
+6. [ADR-006: Managed Templates and Sandboxed Rendering](./adr/ADR-006-template-and-rendering-boundary.md) (template management superseded)
 7. [ADR-007: Data-Classification-Driven LLM Routing](./adr/ADR-007-llm-data-and-routing-policy.md) (superseded)
 8. [ADR-008: Unsupported-Claim Export Gate](./adr/ADR-008-unsupported-claim-gate.md)
 9. [ADR-009: Compliant and Constrained Job Crawling](./adr/ADR-009-job-crawling-policy.md) (superseded)
@@ -662,6 +682,7 @@ The ADR index records proposed, accepted, and superseded decisions. Proposed dec
 11. [ADR-011: Simple Editable Profiles](./adr/ADR-011-simple-editable-profiles.md)
 12. [ADR-012: Simple Job Tracking and Background URL Import](./adr/ADR-012-simple-job-tracking-and-import.md)
 13. [ADR-013: User-Managed LLM Connections](./adr/ADR-013-user-managed-llm-connections.md)
+14. [ADR-014: Simple User-Managed Template Library](./adr/ADR-014-simple-template-library.md)
 
 See the [ADR index](./adr/README.md) for status definitions and maintenance rules.
 

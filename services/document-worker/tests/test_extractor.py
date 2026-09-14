@@ -48,6 +48,27 @@ def test_extracts_docx_paragraphs_without_executing_document_content(tmp_path: P
     assert [segment.text for segment in result.segments] == ["Backend engineer", "Go and PostgreSQL"]
 
 
+def test_extracts_multifile_latex_zip_from_selected_entry(tmp_path: Path) -> None:
+    source = tmp_path / "resume.zip"
+    with zipfile.ZipFile(source, "w") as archive:
+        archive.writestr("src/resume.tex", "\\documentclass{article}\n\\input{sections/work}")
+        archive.writestr("src/sections/work.tex", "Built distributed systems")
+    result = extract(source, malware_scan=False, entry_file="src/resume.tex")
+    assert result.media_type == "application/zip"
+    assert result.segments[0].text == "File: src/resume.tex"
+    assert any(segment.text == "Built distributed systems" for segment in result.segments)
+
+
+def test_latex_zip_rejects_path_traversal(tmp_path: Path) -> None:
+    source = tmp_path / "resume.zip"
+    with zipfile.ZipFile(source, "w") as archive:
+        archive.writestr("main.tex", "\\documentclass{article}")
+        archive.writestr("../outside.sty", "unsafe")
+    with pytest.raises(ExtractionError) as error:
+        extract(source, malware_scan=False)
+    assert error.value.code == "unsafe_archive_path"
+
+
 def test_rejects_binary_signature_extension_mismatch(tmp_path: Path) -> None:
     source = tmp_path / "profile.doc"
     source.write_bytes(b"%PDF-1.7\n")

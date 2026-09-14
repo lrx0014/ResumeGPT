@@ -18,7 +18,7 @@ This directory records significant ResumeGPT architecture decisions. Once accept
 | [ADR-003](./ADR-003-document-intermediate-representation.md) | Versioned JSON IR separating content from rendering | Proposed |
 | [ADR-004](./ADR-004-vector-store.md) | Use pgvector for the MVP; evaluate Qdrant at measured thresholds | Superseded |
 | [ADR-005](./ADR-005-durable-jobs-and-workflows.md) | PostgreSQL jobs and transactional outbox for the MVP | Proposed |
-| [ADR-006](./ADR-006-template-and-rendering-boundary.md) | Managed template subset, sandboxed rendering, and PDF acceptance | Proposed |
+| [ADR-006](./ADR-006-template-and-rendering-boundary.md) | Managed template admission and sandboxed rendering | Superseded in part by ADR-014 |
 | [ADR-007](./ADR-007-llm-data-and-routing-policy.md) | Data-classification-driven provider routing and governance | Superseded |
 | [ADR-008](./ADR-008-unsupported-claim-gate.md) | Block verified export for unsupported high-risk claims | Proposed |
 | [ADR-009](./ADR-009-job-crawling-policy.md) | Compliant, constrained, auditable crawling with manual fallback | Superseded |
@@ -26,6 +26,7 @@ This directory records significant ResumeGPT architecture decisions. Once accept
 | [ADR-011](./ADR-011-simple-editable-profiles.md) | One editable text body per profile with review-before-save document extraction | Accepted |
 | [ADR-012](./ADR-012-simple-job-tracking-and-import.md) | One editable Job record with safe background import and manual fallback | Accepted |
 | [ADR-013](./ADR-013-user-managed-llm-connections.md) | User-managed encrypted LLM connections with per-generation model choice | Accepted |
+| [ADR-014](./ADR-014-simple-template-library.md) | Simple user-managed TeX and Word template library | Accepted |
 
 ## Maintenance Rules
 

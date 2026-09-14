@@ -18,6 +18,7 @@ ResumeGPT is a personal CV and cover-letter optimization application. This repos
 - An isolated, malware-scanning Python extraction service for staged TXT, Markdown, TeX, DOC/DOCX, PDF, PNG, and JPEG uploads. Extracted text is loaded into the editor and is stored on the profile only after the user saves it.
 - Editable job tracking with manual entry, application status, and background import from public LinkedIn and Indeed URLs.
 - Workspace Settings for encrypted cloud/local LLM connections, Ollama and OpenAI-compatible model discovery, interface language, theme, and deployment status.
+- A simple resume and cover-letter template library with an attributed built-in LaTeX template, single-file TeX or multi-file LaTeX ZIP uploads, Word uploads, security scanning, extracted text for generation, and cached PDF previews.
 - English-first internationalization setup.
 
 Infrastructure integrations remain behind application ports and adapters so that storage, identity, and messaging choices can change without rewriting domain services.
@@ -34,6 +35,7 @@ This checklist is the project-level source of truth for planned delivery. An ite
 | M1 — Durable Core | PostgreSQL persistence, workspace security, object storage, and recoverable background jobs | Complete |
 | M2 — Editable Profiles and Document Import | Simple profile CRUD, optional avatars, and review-before-save document extraction | Complete |
 | M3 — Job and Application Tracking | Simple Job CRUD, background URL import, and application-status tracking | Complete |
+| M3b — Template Library | Built-in and user-uploaded resume and cover-letter templates ready for generation | Complete |
 | M4 — Tailored Content Generation | Provider-independent LLM orchestration, CVs, cover letters, and iterative revision | Planned |
 | M5 — Rendering, Validation, and Trust | Managed templates, DOCX/PDF output, visual QA, and unsupported-claim controls | Planned |
 | M6 — Beta and Scale Readiness | Collaboration, quotas, observability, deployment automation, and scale-out adapters | Planned |
@@ -117,6 +119,12 @@ This checklist is the project-level source of truth for planned delivery. An ite
 - [x] Encrypt LLM API tokens at rest and never return plaintext tokens to the browser.
 - [x] Support OpenAI, OpenAI-compatible, and Ollama connection validation and model discovery.
 - [x] Persist interface language and System/Light/Dark theme preferences.
+- [x] Add a simple Template library for resume and cover-letter TeX, LaTeX ZIP, DOC, and DOCX files.
+- [x] Embed the attributed Rezume LaTeX template as the read-only default.
+- [x] Scan and extract LLM-readable text from custom templates with durable background processing.
+- [x] Let users list, view, download, edit metadata, and delete custom templates.
+- [x] Generate and store a unified PDF preview when a template source is uploaded or replaced.
+- [x] Support safe multi-file LaTeX ZIP archives with automatic or user-selected `.tex` entry files.
 - [ ] Define and version the ResumeDocument and CoverLetterDocument JSON Schemas.
 - [ ] Implement the provider-independent LLM gateway.
 - [ ] Select the LLM connection and model explicitly for each Opportunity generation.
@@ -134,8 +142,8 @@ This checklist is the project-level source of truth for planned delivery. An ite
 
 ### M5 — Rendering, Validation, and Trust
 
-- [ ] Define the managed DOCX and TeX template capability model.
-- [ ] Implement template quarantine, scanning, fixture rendering, and approval.
+- [ ] Define the supported DOCX and TeX rendering capability model.
+- [ ] Add generation-time template preflight and fixture-render compatibility checks.
 - [ ] Build a network-isolated, resource-limited render worker.
 - [ ] Generate DOCX from the document intermediate representation.
 - [ ] Generate PDF through pinned LibreOffice and TeX toolchains.

@@ -12,7 +12,7 @@ class ExactLengthBody(io.BytesIO):
 
 
 def test_extraction_handler_reads_exact_content_length(monkeypatch) -> None:
-    monkeypatch.setattr(server, "extract", lambda _: Result(
+    monkeypatch.setattr(server, "extract", lambda _, entry_file="": Result(
         media_type="text/plain",
         sha256="a" * 64,
         parser_version="document-extractor-v1",

@@ -35,6 +35,10 @@ type Reader interface {
 	Open(ctx context.Context, workspaceID, objectID string) (Object, error)
 }
 
+type Writer interface {
+	Put(ctx context.Context, workspaceID, objectID, contentType string, body io.Reader, size int64) error
+}
+
 func NewObjectID() string {
 	return id.New("obj")
 }

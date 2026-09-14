@@ -3,6 +3,7 @@ package s3
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/url"
 	"strings"
 	"time"
@@ -19,6 +20,18 @@ type Config struct {
 	AccessKey      string
 	SecretKey      string
 	Region         string
+}
+
+func (s *BlobSigner) Put(ctx context.Context, workspaceID, objectID, contentType string, body io.Reader, size int64) error {
+	key, err := blobstore.ObjectKey(workspaceID, objectID)
+	if err != nil {
+		return err
+	}
+	_, err = s.client.PutObject(ctx, s.bucket, key, body, size, minio.PutObjectOptions{ContentType: contentType})
+	if err != nil {
+		return fmt.Errorf("store object: %w", err)
+	}
+	return nil
 }
 
 type BlobSigner struct {

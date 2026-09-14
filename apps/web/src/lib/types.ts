@@ -110,3 +110,37 @@ export interface SignedURL {
   expiresAt: string
   headers?: Record<string, string>
 }
+
+export type TemplateKind = 'resume' | 'cover_letter'
+export type TemplateFormat = 'latex' | 'doc' | 'docx'
+export type TemplateState = 'staged' | 'queued' | 'ready' | 'needs_user_action' | 'security_quarantine' | 'failed'
+
+export interface Template {
+  id: string
+  workspaceId: string
+  name: string
+  kind: TemplateKind
+  format: TemplateFormat
+  description?: string
+  sourceName: string
+  entryFile?: string
+  declaredMediaType: string
+  objectId?: string
+  previewObjectId?: string
+  content?: string
+  state: TemplateState
+  jobId?: string
+  errorCode?: string
+  errorMessage?: string
+  builtIn: boolean
+  authorName?: string
+  sourceUrl?: string
+  license?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface StagedTemplate {
+  template: Template
+  target: SignedURL
+}

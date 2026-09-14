@@ -2,7 +2,7 @@ FROM python:3.12-slim
 
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
-    && apt-get install --yes --no-install-recommends antiword clamav clamav-freshclam tesseract-ocr tesseract-ocr-eng \
+    && apt-get install --yes --no-install-recommends antiword clamav clamav-freshclam libreoffice-writer tesseract-ocr tesseract-ocr-eng texlive-fonts-extra texlive-fonts-recommended texlive-latex-extra texlive-plain-generic \
     && freshclam \
     && rm -rf /var/lib/apt/lists/*
 

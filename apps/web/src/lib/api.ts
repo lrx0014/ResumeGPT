@@ -1,4 +1,4 @@
-import type { APIError, Job, JobInput, ListResponse, Profile, DocumentUpload, SignedURL, StagedDocumentUpload, SettingsPreferences, LLMConnection, LLMConnectionInput, LLMConnectionTest } from './types'
+import type { APIError, Job, JobInput, ListResponse, Profile, DocumentUpload, SignedURL, StagedDocumentUpload, SettingsPreferences, LLMConnection, LLMConnectionInput, LLMConnectionTest, StagedTemplate, Template, TemplateKind } from './types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
 
@@ -75,4 +75,34 @@ export const api = {
   },
   testLLMConnection: (id: string) =>
     request<LLMConnectionTest>(`/v1/settings/llm-connections/${encodeURIComponent(id)}/test`, { method: 'POST' }),
+  listTemplates: () => request<ListResponse<Template>>('/v1/templates'),
+  getTemplate: (id: string) => request<Template>(`/v1/templates/${encodeURIComponent(id)}`),
+  stageTemplate: (input: { name: string; kind: TemplateKind; description: string; entryFile: string; file: File }) =>
+    request<StagedTemplate>('/v1/templates/uploads', { method: 'POST', body: JSON.stringify({ name: input.name, kind: input.kind, description: input.description, sourceName: input.file.name, contentType: input.file.type || 'application/octet-stream', entryFile: input.entryFile }) }),
+  putStagedTemplate: async (target: StagedTemplate['target'], file: File) => {
+    const response = await fetch(target.url, { method: 'PUT', headers: target.headers, body: file })
+    if (!response.ok) throw new Error(`Object upload failed with status ${response.status}`)
+  },
+  completeTemplate: (id: string) => request<Template>(`/v1/templates/${encodeURIComponent(id)}/complete`, { method: 'POST' }),
+  stageTemplateSource: (id: string, file: File, entryFile = '') => request<StagedTemplate>(`/v1/templates/${encodeURIComponent(id)}/source-upload`, {
+    method: 'POST', body: JSON.stringify({ sourceName: file.name, contentType: file.type || 'application/octet-stream', entryFile }),
+  }),
+  updateTemplate: (id: string, input: Pick<Template, 'name' | 'kind' | 'description'>) =>
+    request<Template>(`/v1/templates/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(input) }),
+  deleteTemplate: async (id: string) => {
+    const response = await fetch(`${API_BASE_URL}/v1/templates/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { 'X-Workspace-ID': 'ws_personal_dev' } })
+    if (!response.ok) { const payload = (await response.json().catch(() => null)) as APIError | null; throw new Error(payload?.error.message ?? `Request failed with status ${response.status}`) }
+  },
+  downloadTemplate: async (item: Template) => {
+    const response = await fetch(`${API_BASE_URL}/v1/templates/${encodeURIComponent(item.id)}/file`, { headers: { 'X-Workspace-ID': 'ws_personal_dev' } })
+    if (!response.ok) { const payload = (await response.json().catch(() => null)) as APIError | null; throw new Error(payload?.error.message ?? `Request failed with status ${response.status}`) }
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a'); link.href = url; link.download = item.sourceName; link.click(); URL.revokeObjectURL(url)
+  },
+  templatePreview: async (id: string) => {
+    const response = await fetch(`${API_BASE_URL}/v1/templates/${encodeURIComponent(id)}/preview`, { headers: { 'X-Workspace-ID': 'ws_personal_dev' } })
+    if (!response.ok) { const payload = (await response.json().catch(() => null)) as APIError | null; throw new Error(payload?.error.message ?? `Preview failed with status ${response.status}`) }
+    return response.blob()
+  },
 }

@@ -65,14 +65,17 @@ def detect_media_type(path: Path, data: bytes) -> str:
                     detected = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         except zipfile.BadZipFile as error:
             raise ExtractionError("invalid_archive", "The uploaded ZIP container is invalid.") from error
-        if detected is None:
-            raise ExtractionError("unsupported_archive", "The uploaded archive is not a DOCX document.")
+        if detected is None and suffix == ".zip":
+            detected = "application/zip"
+        elif detected is None:
+            raise ExtractionError("unsupported_archive", "The uploaded archive is not a DOCX document or LaTeX ZIP archive.")
     expected_extensions = {
         "application/pdf": {".pdf"},
         "image/png": {".png"},
         "image/jpeg": {".jpg", ".jpeg"},
         "application/msword": {".doc"},
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {".docx"},
+        "application/zip": {".zip"},
     }
     if detected is not None:
         if suffix not in expected_extensions[detected]:
@@ -235,7 +238,32 @@ def extract_pdf(path: Path) -> list[Segment]:
     return result
 
 
-def extract(path: Path, *, malware_scan: bool = True) -> Result:
+def extract_latex_zip(data: bytes, entry_file: str) -> list[Segment]:
+    from .latex_archive import extract_latex_archive
+
+    with tempfile.TemporaryDirectory(prefix="resumegpt-latex-text-") as directory:
+        root = Path(directory)
+        entry = extract_latex_archive(data, root, entry_file)
+        tex_files = sorted(root.rglob("*.tex"))
+        tex_files.remove(entry)
+        tex_files.insert(0, entry)
+        result: list[Segment] = []
+        paragraph = 0
+        for source in tex_files:
+            try:
+                text = source.read_text(encoding="utf-8")
+            except UnicodeDecodeError as error:
+                raise ExtractionError("invalid_tex_encoding", "LaTeX source files must use UTF-8 encoding.") from error
+            relative_name = source.relative_to(root).as_posix()
+            paragraph += 1
+            result.append(Segment(text=f"File: {relative_name}", page=None, paragraph=paragraph, confidence=1.0))
+            for segment in text_segments(text):
+                paragraph += 1
+                result.append(Segment(text=segment.text, page=None, paragraph=paragraph, confidence=1.0))
+        return result
+
+
+def extract(path: Path, *, malware_scan: bool = True, entry_file: str = "") -> Result:
     try:
         size = path.stat().st_size
     except OSError as error:
@@ -251,6 +279,8 @@ def extract(path: Path, *, malware_scan: bool = True) -> Result:
         segments = extract_docx(data)
     elif media_type == "application/msword":
         segments = extract_legacy_doc(path)
+    elif media_type == "application/zip":
+        segments = extract_latex_zip(data, entry_file)
     elif media_type == "application/pdf":
         segments = extract_pdf(path)
     elif media_type in {"image/png", "image/jpeg"}:
