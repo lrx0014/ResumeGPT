@@ -3,12 +3,13 @@ import { computed, onMounted, ref } from 'vue'
 
 import PageHeader from '../components/PageHeader.vue'
 import { api } from '../lib/api'
-import type { Job, LLMConnection, Profile, Template } from '../lib/types'
+import type { GenerationRun, Job, LLMConnection, Profile, Template } from '../lib/types'
 
 const profiles = ref<Profile[]>([])
 const opportunities = ref<Job[]>([])
 const templates = ref<Template[]>([])
 const connections = ref<LLMConnection[]>([])
+const generations = ref<GenerationRun[]>([])
 const capabilities = ref<Record<string, boolean>>({})
 const loading = ref(true)
 const error = ref('')
@@ -21,13 +22,14 @@ const readyTemplates = computed(() => templates.value.filter(item => item.state 
 const customTemplates = computed(() => templates.value.filter(item => !item.builtIn).length)
 const recentOpportunities = computed(() => [...opportunities.value].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)).slice(0, 3))
 const prerequisitesReady = computed(() => preparedProfiles.value > 0 && readyOpportunities.value > 0 && readyTemplates.value > 0 && connections.value.length > 0)
+const readyGenerations = computed(() => generations.value.filter(item => item.state === 'ready').length)
 
 const setupSteps = computed(() => [
   { number: '01', title: 'Prepare your profile', description: preparedProfiles.value ? `${preparedProfiles.value} profile${preparedProfiles.value === 1 ? '' : 's'} with saved content.` : 'Add or import the experience, education, skills, and achievements you want the model to use.', to: '/profiles', complete: preparedProfiles.value > 0 },
   { number: '02', title: 'Track an opportunity', description: readyOpportunities.value ? `${readyOpportunities.value} ${readyOpportunities.value === 1 ? 'opportunity' : 'opportunities'} ready to target.` : 'Import a LinkedIn or Indeed URL, or enter the role manually.', to: '/jobs', complete: readyOpportunities.value > 0 },
   { number: '03', title: 'Choose a document template', description: readyTemplates.value ? `${readyTemplates.value} resume or cover-letter template${readyTemplates.value === 1 ? '' : 's'} ready.` : 'Use the built-in LaTeX template or upload a TeX or Word file.', to: '/templates', complete: readyTemplates.value > 0 },
   { number: '04', title: 'Connect an LLM', description: connections.value.length ? `${connections.value.length} cloud or local connection${connections.value.length === 1 ? '' : 's'} configured.` : 'Add an OpenAI, compatible, or local Ollama connection in Settings.', to: '/settings', complete: connections.value.length > 0 },
-  { number: '05', title: 'Generate for this opportunity', description: capabilities.value.generation ? 'Select the prepared inputs and create a tailored resume or cover letter.' : 'Generation is the next milestone. Your prepared inputs will be used here.', to: '/generate', complete: false, planned: !capabilities.value.generation },
+  { number: '05', title: 'Generate for this opportunity', description: readyGenerations.value ? `${readyGenerations.value} visually reviewed PDF${readyGenerations.value === 1 ? '' : 's'} ready.` : capabilities.value.generation ? 'Select the prepared inputs and create a tailored resume or cover letter.' : 'Generation is the next milestone. Your prepared inputs will be used here.', to: '/generate', complete: readyGenerations.value > 0, planned: !capabilities.value.generation },
 ])
 
 const firstIncomplete = computed(() => setupSteps.value.find(step => !step.complete && !step.planned))
@@ -50,13 +52,14 @@ function metricDetail(kind: 'profiles' | 'opportunities' | 'templates' | 'connec
 async function load() {
   loading.value = true
   const results = await Promise.allSettled([
-    api.listProfiles(), api.listJobs(), api.listTemplates(), api.listLLMConnections(), api.capabilities(),
+    api.listProfiles(), api.listJobs(), api.listTemplates(), api.listLLMConnections(), api.capabilities(), api.listGenerations(),
   ])
   if (results[0].status === 'fulfilled') profiles.value = results[0].value.items
   if (results[1].status === 'fulfilled') opportunities.value = results[1].value.items
   if (results[2].status === 'fulfilled') templates.value = results[2].value.items
   if (results[3].status === 'fulfilled') connections.value = results[3].value.items
   if (results[4].status === 'fulfilled') capabilities.value = results[4].value.features
+  if (results[5].status === 'fulfilled') generations.value = results[5].value.items
   if (results.some(result => result.status === 'rejected')) error.value = 'Some workspace data could not be loaded. Available sections are still shown.'
   loading.value = false
 }
@@ -81,6 +84,7 @@ onMounted(load)
       <RouterLink class="metric-card" to="/jobs"><span>Opportunities</span><strong>{{ loading ? '—' : opportunities.length }}</strong><small>{{ metricDetail('opportunities') }}</small></RouterLink>
       <RouterLink class="metric-card" to="/templates"><span>Ready templates</span><strong>{{ loading ? '—' : readyTemplates }}</strong><small>{{ metricDetail('templates') }}</small></RouterLink>
       <RouterLink class="metric-card" to="/settings"><span>LLM connections</span><strong>{{ loading ? '—' : connections.length }}</strong><small>{{ metricDetail('connections') }}</small></RouterLink>
+      <RouterLink class="metric-card" to="/generate"><span>Generated PDFs</span><strong>{{ loading ? '—' : readyGenerations }}</strong><small>{{ generations.some(item => item.state === 'running' || item.state === 'queued') ? 'Generation in progress' : 'Visually reviewed outputs' }}</small></RouterLink>
     </section>
 
     <div class="dashboard-grid">
@@ -116,7 +120,7 @@ onMounted(load)
 <style scoped>
 .dashboard-page { display: grid; gap: 1.25rem; }
 .dashboard-page :deep(.page-header) { margin-bottom: .5rem; }
-.overview-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 0; }
+.overview-metrics { grid-template-columns: repeat(5, minmax(0, 1fr)); margin-bottom: 0; }
 .metric-card { transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease; }
 .metric-card:hover { border-color: #b8c9bf; transform: translateY(-2px); box-shadow: 0 22px 55px rgba(29, 48, 40, .11); }
 .dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(300px, .75fr); gap: 1.25rem; align-items: start; }

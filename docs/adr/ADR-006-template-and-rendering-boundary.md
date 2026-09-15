@@ -1,6 +1,6 @@
 # ADR-006: Managed Templates and a Sandboxed Rendering Boundary
 
-- Status: Superseded by [ADR-014](./ADR-014-simple-template-library.md) for template management; the sandboxed rendering guidance remains deferred
+- Status: Superseded by [ADR-014](./ADR-014-simple-template-library.md) for template management and by [ADR-015](./ADR-015-bounded-agent-generation.md) for bounded LLM-authored LaTeX; the sandbox guidance remains active
 - Date: 2026-09-13
 - Decision owners: TBD
 

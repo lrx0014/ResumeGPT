@@ -2,6 +2,7 @@ package postgres_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/lrx0014/ResumeGPT/internal/adapters/postgres"
 	"github.com/lrx0014/ResumeGPT/internal/document"
+	"github.com/lrx0014/ResumeGPT/internal/generation"
 	"github.com/lrx0014/ResumeGPT/internal/job"
 	"github.com/lrx0014/ResumeGPT/internal/platform/database"
 	"github.com/lrx0014/ResumeGPT/internal/platform/requestcontext"
@@ -20,6 +22,46 @@ import (
 	"github.com/lrx0014/ResumeGPT/internal/shared/id"
 	resumetemplate "github.com/lrx0014/ResumeGPT/internal/template"
 )
+
+func TestGenerationRepositoryPersistsSnapshotAndScopesWorkspace(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is not configured")
+	}
+	ctx := context.Background()
+	pool, err := database.Open(ctx, databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	if err := database.Migrate(ctx, pool); err != nil {
+		t.Fatal(err)
+	}
+	workspaceID, otherWorkspaceID := id.New("ws"), id.New("ws")
+	if _, err := pool.Exec(ctx, "INSERT INTO workspaces (id,name,kind) VALUES ($1,'Generation','personal'),($2,'Other','personal')", workspaceID, otherWorkspaceID); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(), "DELETE FROM workspaces WHERE id IN ($1,$2)", workspaceID, otherWorkspaceID)
+	})
+	now := time.Now().UTC()
+	choice := generation.ModelChoice{ConnectionID: "llm_test", Model: "test-model"}
+	run := generation.Run{ID: id.New("gen"), WorkspaceID: workspaceID, ProfileID: "prof_snapshot", OpportunityID: "job_snapshot", TemplateID: "tpl_snapshot", DocumentType: "resume", Language: "English", PageTarget: "one_page", PipelineMode: "single", Writer: choice, Renderer: choice, Reviewer: choice, State: "queued", Stage: "queued", ProfileSnapshot: []byte(`{"content":"profile"}`), OpportunitySnapshot: []byte(`{"description":"job"}`), TemplateSnapshot: []byte(`{"content":"template"}`), CreatedAt: now, UpdatedAt: now}
+	payload, _ := json.Marshal(generation.Payload{RunID: run.ID})
+	task := workqueue.Job{ID: id.New("task"), WorkspaceID: workspaceID, Kind: generation.JobKind, IdempotencyKey: run.ID, Payload: payload, MaxAttempts: 3, AvailableAt: now}
+	repository := postgres.NewGenerationRepository(pool)
+	if _, err := repository.Create(ctx, run, task); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := repository.Get(ctx, workspaceID, run.ID)
+	if err != nil || stored.Writer.Model != "test-model" || !strings.Contains(string(stored.ProfileSnapshot), `"profile"`) {
+		t.Fatalf("unexpected generation: %#v, %v", stored, err)
+	}
+	other, err := repository.List(ctx, otherWorkspaceID)
+	if err != nil || len(other) != 0 {
+		t.Fatalf("cross-workspace generations: %#v, %v", other, err)
+	}
+}
 
 func TestRepositoriesPersistEventsAndEnforceWorkspaceScope(t *testing.T) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")

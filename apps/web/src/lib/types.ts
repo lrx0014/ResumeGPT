@@ -144,3 +144,19 @@ export interface StagedTemplate {
   template: Template
   target: SignedURL
 }
+
+export interface GenerationModelChoice { connectionId: string; model: string }
+export type GenerationState = 'queued' | 'running' | 'ready' | 'failed'
+export interface GenerationRun {
+  id: string; workspaceId: string; profileId: string; opportunityId: string; templateId: string
+  documentType: TemplateKind; language: string; pageTarget: 'one_page' | 'two_pages' | 'flexible'
+  customInstructions?: string; pipelineMode: 'single' | 'multi'
+  writer: GenerationModelChoice; renderer: GenerationModelChoice; reviewer: GenerationModelChoice
+  state: GenerationState; stage: string; draft?: string; review?: string; repairCount: number
+  artifactObjectId?: string; errorCode?: string; errorMessage?: string; createdAt: string; updatedAt: string
+}
+export interface GenerationInput {
+  profileId: string; opportunityId: string; templateId: string; documentType: TemplateKind
+  language: string; pageTarget: GenerationRun['pageTarget']; customInstructions: string
+  pipelineMode: GenerationRun['pipelineMode']; writer: GenerationModelChoice; renderer: GenerationModelChoice; reviewer: GenerationModelChoice
+}

@@ -27,6 +27,7 @@ This directory records significant ResumeGPT architecture decisions. Once accept
 | [ADR-012](./ADR-012-simple-job-tracking-and-import.md) | One editable Job record with safe background import and manual fallback | Accepted |
 | [ADR-013](./ADR-013-user-managed-llm-connections.md) | User-managed encrypted LLM connections with per-generation model choice | Accepted |
 | [ADR-014](./ADR-014-simple-template-library.md) | Simple user-managed TeX and Word template library | Accepted |
+| [ADR-015](./ADR-015-bounded-agent-generation.md) | Bounded single- or multi-model generation with visual repair | Accepted |
 
 ## Maintenance Rules
 

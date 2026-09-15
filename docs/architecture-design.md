@@ -198,6 +198,10 @@ Templates use ordinary metadata CRUD and have no review, approval, publication, 
 
 ### 6.4 Generations and Artifact Versions
 
+The initial implementation uses one `generation_runs` record and one durable job per output. A run freezes the selected Profile, Opportunity, Template, and model choices as JSON snapshots. The default single-model mode assigns one model to writing, LaTeX rendering, and visual review; advanced mode assigns those roles independently. Stage changes are persisted as writing, rendering, reviewing, repairing, ready, or failed. Ollama responses are consumed as a stream, and each role has a bounded output-token budget so local models cannot leave a worker waiting indefinitely for an unbounded response.
+
+LaTeX generation replaces only the selected entry source in a multi-file ZIP, preserves its assets, and compiles in the isolated document worker. The generated PDF is rasterized for visual review. Exact page targets are checked deterministically, while a vision-capable reviewer checks alignment, clipping, glyphs, spacing, and composition. Reviewer or compiler feedback may trigger at most two renderer repairs. If the selected provider explicitly reports that its model cannot accept image input, the run skips model-based visual review, stores the successfully rendered PDF, and shows a persistent warning to the user. Other reviewer failures remain actionable run failures. Word generation remains deferred until a structured DOCX renderer can preserve template styling.
+
 - `generations`: task configuration and immutable input-snapshot references.
 - `generation_inputs`: profile-content and Job-content copies captured when generation starts, plus template, prompt, and language versions.
 - `artifact_drafts`: structured CV/cover-letter content conforming to versioned JSON Schema.
@@ -292,7 +296,7 @@ Providers differ in JSON Schema, vision, and tool support. The user explicitly s
 
 ### 8.3 Explicit Selection and Degradation
 
-There is no automatic provider router or fallback group in the personal-project scope. A generation request names one saved connection and model. Validate required capabilities before submitting work, fail with an actionable error when they are unavailable, and persist each generation step under an idempotency key.
+There is no automatic provider router or fallback group in the personal-project scope. A generation request names one saved connection and model. Persist each generation step under an idempotency key. Missing required writing or rendering capabilities produce an actionable failure. Model-based visual review is best-effort: an explicit image-capability rejection degrades to the deterministic checks and a user-visible warning so a valid PDF remains available.
 
 ## 9. Templates, Rendering, and Visual Validation
 

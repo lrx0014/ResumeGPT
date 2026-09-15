@@ -13,6 +13,7 @@ import (
 	postgresadapter "github.com/lrx0014/ResumeGPT/internal/adapters/postgres"
 	s3adapter "github.com/lrx0014/ResumeGPT/internal/adapters/s3"
 	"github.com/lrx0014/ResumeGPT/internal/document"
+	"github.com/lrx0014/ResumeGPT/internal/generation"
 	"github.com/lrx0014/ResumeGPT/internal/identity"
 	"github.com/lrx0014/ResumeGPT/internal/job"
 	"github.com/lrx0014/ResumeGPT/internal/platform/blobstore"
@@ -53,6 +54,7 @@ func main() {
 	var jobImportService *job.ImportService
 	var settingsRepository settings.Repository
 	var templateRepository resumetemplate.Repository
+	var generationRepository generation.Repository
 	switch cfg.PersistenceMode {
 	case "memory":
 		profileRepository = memory.NewProfileRepository()
@@ -80,6 +82,7 @@ func main() {
 		documentRepository = postgresadapter.NewDocumentRepository(pool)
 		settingsRepository = postgresadapter.NewSettingsRepository(pool)
 		templateRepository = postgresadapter.NewTemplateRepository(pool)
+		generationRepository = postgresadapter.NewGenerationRepository(pool)
 	default:
 		logger.Error("unsupported persistence mode", "mode", cfg.PersistenceMode)
 		os.Exit(1)
@@ -134,6 +137,10 @@ func main() {
 		}
 		templateService.ConfigurePreview(blobs, previewObjectID)
 	}
+	var generationService *generation.Service
+	if reader, ok := blobSigner.(blobstore.Reader); ok && generationRepository != nil {
+		generationService = generation.NewService(generationRepository, profileService, jobService, templateService, settingsService, reader)
+	}
 	var authenticator identity.Authenticator
 	switch cfg.AuthMode {
 	case "development":
@@ -167,6 +174,7 @@ func main() {
 		Documents:          documentService,
 		Settings:           settingsService,
 		Templates:          templateService,
+		Generations:        generationService,
 	})
 
 	server := &http.Server{

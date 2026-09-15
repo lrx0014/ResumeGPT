@@ -10,11 +10,13 @@ import (
 	postgresadapter "github.com/lrx0014/ResumeGPT/internal/adapters/postgres"
 	s3adapter "github.com/lrx0014/ResumeGPT/internal/adapters/s3"
 	"github.com/lrx0014/ResumeGPT/internal/document"
+	"github.com/lrx0014/ResumeGPT/internal/generation"
 	"github.com/lrx0014/ResumeGPT/internal/job"
 	"github.com/lrx0014/ResumeGPT/internal/platform/config"
 	"github.com/lrx0014/ResumeGPT/internal/platform/database"
 	"github.com/lrx0014/ResumeGPT/internal/platform/outbox"
 	"github.com/lrx0014/ResumeGPT/internal/platform/telemetry"
+	"github.com/lrx0014/ResumeGPT/internal/settings"
 	"github.com/lrx0014/ResumeGPT/internal/shared/id"
 	resumetemplate "github.com/lrx0014/ResumeGPT/internal/template"
 )
@@ -112,8 +114,21 @@ func main() {
 	}()
 	templateProcessor := resumetemplate.Processor{Queue: queue, Repository: postgresadapter.NewTemplateRepository(pool), Blobs: blobs,
 		Extractor: extractor, Previewer: extractor, WorkerID: id.New("template_worker"), Logger: logger}
-	if err := templateProcessor.Run(ctx); err != nil {
-		logger.Error("run template processor", "error", err)
+	go func() {
+		if err := templateProcessor.Run(ctx); err != nil {
+			logger.Error("run template processor", "error", err)
+			stop()
+		}
+	}()
+	tokenCipher, err := settings.NewAESGCMTokenCipher(cfg.SettingsEncryptionKey)
+	if err != nil {
+		logger.Error("initialize settings encryption", "error", err)
+		os.Exit(1)
+	}
+	settingsService := settings.NewService(postgresadapter.NewSettingsRepository(pool), tokenCipher, settings.NewHTTPModelDiscoverer())
+	generationProcessor := generation.Processor{Queue: queue, Repository: postgresadapter.NewGenerationRepository(pool), Settings: settingsService, Blobs: blobs, Documents: extractor, Gateway: generation.NewHTTPGateway(), WorkerID: id.New("generation_worker"), Logger: logger}
+	if err := generationProcessor.Run(ctx); err != nil {
+		logger.Error("run generation processor", "error", err)
 		os.Exit(1)
 	}
 	logger.Info("worker stopped")

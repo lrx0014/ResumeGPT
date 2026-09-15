@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/lrx0014/ResumeGPT/internal/document"
+	"github.com/lrx0014/ResumeGPT/internal/generation"
 	"github.com/lrx0014/ResumeGPT/internal/identity"
 	"github.com/lrx0014/ResumeGPT/internal/job"
 	"github.com/lrx0014/ResumeGPT/internal/platform/blobstore"
@@ -33,6 +34,7 @@ type Dependencies struct {
 	Documents          *document.Service
 	Settings           *settings.Service
 	Templates          *resumetemplate.Service
+	Generations        *generation.Service
 }
 
 type API struct {
@@ -48,6 +50,7 @@ type API struct {
 	documents          *document.Service
 	settings           *settings.Service
 	templates          *resumetemplate.Service
+	generations        *generation.Service
 }
 
 func New(deps Dependencies) http.Handler {
@@ -64,12 +67,14 @@ func New(deps Dependencies) http.Handler {
 		documents:          deps.Documents,
 		settings:           deps.Settings,
 		templates:          deps.Templates,
+		generations:        deps.Generations,
 	}
 
 	protected := http.NewServeMux()
 	api.registerDocuments(protected)
 	api.registerSettings(protected)
 	api.registerTemplates(protected)
+	api.registerGenerations(protected)
 	protected.Handle("GET /v1/system/capabilities", api.requireRole(identity.RoleViewer, api.capabilities))
 	protected.Handle("GET /v1/profiles", api.requireRole(identity.RoleViewer, api.listProfiles))
 	protected.Handle("POST /v1/profiles", api.requireRole(identity.RoleEditor, api.createProfile))
@@ -108,8 +113,8 @@ func (a *API) capabilities(w http.ResponseWriter, _ *http.Request) {
 			"profiles":         true,
 			"jobs":             true,
 			"jobImports":       a.jobImports != nil,
-			"generation":       false,
-			"rendering":        false,
+			"generation":       a.generations != nil,
+			"rendering":        a.generations != nil,
 			"settings":         a.settings != nil,
 			"templates":        a.templates != nil,
 			"templateUploads":  a.templates != nil && a.templates.UploadsEnabled(),

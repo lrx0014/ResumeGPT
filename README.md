@@ -19,6 +19,7 @@ ResumeGPT is a personal CV and cover-letter optimization application. This repos
 - Editable job tracking with manual entry, application status, and background import from public LinkedIn and Indeed URLs.
 - Workspace Settings for encrypted cloud/local LLM connections, Ollama and OpenAI-compatible model discovery, interface language, theme, and deployment status.
 - A simple resume and cover-letter template library with an attributed built-in LaTeX template, single-file TeX or multi-file LaTeX ZIP uploads, Word uploads, security scanning, extracted text for generation, and cached PDF previews.
+- Durable LaTeX generation runs with single-model or specialized writer/renderer/reviewer modes, immutable input snapshots, streamed local-model responses, bounded automatic repair, safe basic-layout fallback, and stored PDF downloads.
 - English-first internationalization setup.
 
 Infrastructure integrations remain behind application ports and adapters so that storage, identity, and messaging choices can change without rewriting domain services.
@@ -36,7 +37,7 @@ This checklist is the project-level source of truth for planned delivery. An ite
 | M2 — Editable Profiles and Document Import | Simple profile CRUD, optional avatars, and review-before-save document extraction | Complete |
 | M3 — Job and Application Tracking | Simple Job CRUD, background URL import, and application-status tracking | Complete |
 | M3b — Template Library | Built-in and user-uploaded resume and cover-letter templates ready for generation | Complete |
-| M4 — Tailored Content Generation | Provider-independent LLM orchestration, CVs, cover letters, and iterative revision | Planned |
+| M4 — Tailored Content Generation | Provider-independent LLM orchestration, CVs, cover letters, and iterative revision | In progress |
 | M5 — Rendering, Validation, and Trust | Managed templates, DOCX/PDF output, visual QA, and unsupported-claim controls | Planned |
 | M6 — Beta and Scale Readiness | Collaboration, quotas, observability, deployment automation, and scale-out adapters | Planned |
 
@@ -126,15 +127,19 @@ This checklist is the project-level source of truth for planned delivery. An ite
 - [x] Generate and store a unified PDF preview when a template source is uploaded or replaced.
 - [x] Support safe multi-file LaTeX ZIP archives with automatic or user-selected `.tex` entry files.
 - [ ] Define and version the ResumeDocument and CoverLetterDocument JSON Schemas.
-- [ ] Implement the provider-independent LLM gateway.
-- [ ] Select the LLM connection and model explicitly for each Opportunity generation.
+- [x] Implement the provider-independent OpenAI, OpenAI-compatible, and Ollama chat gateway.
+- [x] Select one shared model or specialized writer, renderer, and visual-reviewer models for each Opportunity generation.
 - [ ] Generate successfully through at least one cloud connection and one local Ollama or OpenAI-compatible connection.
-- [ ] Freeze Profile, Job, prompt, template, and model input snapshots.
+- [x] Freeze Profile, Opportunity, template, and model input snapshots when a generation is queued.
 - [ ] Build the job-requirement-to-profile-content matching plan.
-- [ ] Generate a schema-constrained content plan and draft.
+- [x] Generate a profile-grounded draft and apply it to a selected LaTeX template.
 - [ ] Generate tailored one-page, two-page, and custom-length CVs.
 - [ ] Generate tailored cover letters.
-- [ ] Add streaming generation progress and cancellation.
+- [x] Show polled background progress across writing, rendering, visual review, and repair stages.
+- [x] Fall back to a ready PDF with a visible warning when the selected model explicitly rejects image input.
+- [x] Fall back to a safe basic LaTeX layout when a small renderer model returns an incomplete document.
+- [x] Let users retry failed generations while reusing a persisted writing draft when available.
+- [ ] Add cancellation and server-sent event progress streaming.
 - [ ] Implement artifact revisions with parent history and restoration.
 - [ ] Support conversational revision through allowlisted structured operations.
 - [ ] Show semantic diffs and allow users to lock sections.
@@ -147,10 +152,10 @@ This checklist is the project-level source of truth for planned delivery. An ite
 - [ ] Build a network-isolated, resource-limited render worker.
 - [ ] Generate DOCX from the document intermediate representation.
 - [ ] Generate PDF through pinned LibreOffice and TeX toolchains.
-- [ ] Produce per-page preview images.
+- [x] Produce bounded per-page images for visual LLM review.
 - [ ] Detect page-count violations, overflow, clipping, overlap, blank pages, and missing fonts.
 - [ ] Compare normalized PDF text with the structured draft.
-- [ ] Add bounded automatic layout repair.
+- [x] Add a maximum of two automatic LaTeX layout-repair attempts.
 - [ ] Split generated text into atomic claims.
 - [ ] Validate names, dates, organizations, titles, and metrics deterministically.
 - [ ] Add profile-grounded semantic-expansion checks.

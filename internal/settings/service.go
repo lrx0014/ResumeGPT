@@ -108,6 +108,18 @@ func (s *Service) TestConnection(ctx context.Context, workspaceID, connectionID 
 	return ConnectionTest{Status: "connected", Models: models}, nil
 }
 
+func (s *Service) RuntimeConnection(ctx context.Context, workspaceID, connectionID string) (RuntimeConnection, error) {
+	stored, err := s.repository.GetConnection(ctx, workspaceID, connectionID)
+	if err != nil {
+		return RuntimeConnection{}, err
+	}
+	token, err := s.cipher.Decrypt(stored.TokenCiphertext)
+	if err != nil {
+		return RuntimeConnection{}, err
+	}
+	return RuntimeConnection{Connection: stored.Connection, APIToken: token}, nil
+}
+
 func prepareConnection(input LLMConnectionInput) (LLMConnection, error) {
 	input.Name, input.ExecutionMode, input.Provider = strings.TrimSpace(input.Name), strings.TrimSpace(input.ExecutionMode), strings.TrimSpace(input.Provider)
 	input.BaseURL = strings.TrimSpace(input.BaseURL)

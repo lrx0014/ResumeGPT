@@ -1,6 +1,7 @@
 package document
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -25,6 +26,11 @@ func (e *ExtractionFailure) Error() string { return e.Message }
 type HTTPExtractor struct {
 	endpoint string
 	client   *http.Client
+}
+
+type PDFPages struct {
+	PageCount int      `json:"pageCount"`
+	Images    []string `json:"images"`
 }
 
 func NewHTTPExtractor(endpoint string) (*HTTPExtractor, error) {
@@ -120,4 +126,30 @@ func (e *HTTPExtractor) PreviewTemplate(ctx context.Context, name, entryFile str
 		return nil, &ExtractionFailure{Code: "invalid_preview", Message: "The isolated preview service returned an invalid PDF."}
 	}
 	return preview, nil
+}
+
+func (e *HTTPExtractor) PDFPages(ctx context.Context, pdf []byte) (PDFPages, error) {
+	if len(pdf) < 5 || len(pdf) > MaxDocumentBytes || string(pdf[:5]) != "%PDF-" {
+		return PDFPages{}, &ExtractionFailure{Code: "invalid_pdf", Message: "Visual review requires a valid PDF."}
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, e.endpoint+"/v1/pdf-pages", bytes.NewReader(pdf))
+	if err != nil {
+		return PDFPages{}, err
+	}
+	request.ContentLength = int64(len(pdf))
+	request.Header.Set("Content-Type", "application/pdf")
+	request.Header.Set("X-Document-Name", "generated.pdf")
+	response, err := e.client.Do(request)
+	if err != nil {
+		return PDFPages{}, &ExtractionFailure{Code: "previewer_unavailable", Message: "The visual review service is unavailable.", Retryable: true}
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return PDFPages{}, &ExtractionFailure{Code: "pdf_raster_failed", Message: "The generated PDF could not be prepared for visual review.", Retryable: response.StatusCode >= 500}
+	}
+	var result PDFPages
+	if json.NewDecoder(io.LimitReader(response.Body, 12*1024*1024)).Decode(&result) != nil || result.PageCount < 1 || len(result.Images) == 0 {
+		return PDFPages{}, &ExtractionFailure{Code: "invalid_pdf_pages", Message: "The visual review service returned an invalid result."}
+	}
+	return result, nil
 }

@@ -1,4 +1,4 @@
-import type { APIError, Job, JobInput, ListResponse, Profile, DocumentUpload, SignedURL, StagedDocumentUpload, SettingsPreferences, LLMConnection, LLMConnectionInput, LLMConnectionTest, StagedTemplate, Template, TemplateKind } from './types'
+import type { APIError, Job, JobInput, ListResponse, Profile, DocumentUpload, SignedURL, StagedDocumentUpload, SettingsPreferences, LLMConnection, LLMConnectionInput, LLMConnectionTest, StagedTemplate, Template, TemplateKind, GenerationInput, GenerationRun } from './types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
 
@@ -104,5 +104,15 @@ export const api = {
     const response = await fetch(`${API_BASE_URL}/v1/templates/${encodeURIComponent(id)}/preview`, { headers: { 'X-Workspace-ID': 'ws_personal_dev' } })
     if (!response.ok) { const payload = (await response.json().catch(() => null)) as APIError | null; throw new Error(payload?.error.message ?? `Preview failed with status ${response.status}`) }
     return response.blob()
+  },
+  listGenerations: () => request<ListResponse<GenerationRun>>('/v1/generations'),
+  getGeneration: (id: string) => request<GenerationRun>(`/v1/generations/${encodeURIComponent(id)}`),
+  createGeneration: (input: GenerationInput) => request<GenerationRun>('/v1/generations', { method: 'POST', body: JSON.stringify(input) }),
+  retryGeneration: (id: string) => request<GenerationRun>(`/v1/generations/${encodeURIComponent(id)}/retry`, { method: 'POST' }),
+  downloadGeneration: async (run: GenerationRun) => {
+    const response = await fetch(`${API_BASE_URL}/v1/generations/${encodeURIComponent(run.id)}/artifact`, { headers: { 'X-Workspace-ID': 'ws_personal_dev' } })
+    if (!response.ok) { const payload = (await response.json().catch(() => null)) as APIError | null; throw new Error(payload?.error.message ?? `Download failed with status ${response.status}`) }
+    const blob = await response.blob(); const url = URL.createObjectURL(blob); const link = document.createElement('a')
+    link.href = url; link.download = `${run.documentType}-${run.id}.pdf`; link.click(); URL.revokeObjectURL(url)
   },
 }

@@ -1,29 +1,46 @@
 <script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import PageHeader from '../components/PageHeader.vue'
+import { api } from '../lib/api'
+import type { GenerationInput, GenerationModelChoice, GenerationRun, Job, LLMConnection, Profile, Template } from '../lib/types'
+
+const profiles=ref<Profile[]>([]), opportunities=ref<Job[]>([]), templates=ref<Template[]>([]), connections=ref<LLMConnection[]>([]), runs=ref<GenerationRun[]>([])
+const models=reactive<Record<string,string[]>>({}), loading=ref(true), submitting=ref(false), error=ref(''), notice=ref('')
+const retrying=ref('')
+const emptyChoice=():GenerationModelChoice=>({connectionId:'',model:''})
+const form=reactive<GenerationInput>({profileId:'',opportunityId:'',templateId:'',documentType:'resume',language:'English',pageTarget:'one_page',customInstructions:'',pipelineMode:'single',writer:emptyChoice(),renderer:emptyChoice(),reviewer:emptyChoice()})
+let timer:number|undefined
+const matchingTemplates=computed(()=>templates.value.filter(item=>item.state==='ready'&&item.kind===form.documentType))
+const latexTemplates=computed(()=>matchingTemplates.value.filter(item=>item.format==='latex'))
+const ready=computed(()=>Boolean(form.profileId&&form.opportunityId&&form.templateId&&form.writer.connectionId&&form.writer.model&&(form.pipelineMode==='single'||(form.renderer.connectionId&&form.renderer.model&&form.reviewer.connectionId&&form.reviewer.model))))
+const active=computed(()=>runs.value.some(item=>item.state==='queued'||item.state==='running'))
+const optionName=(values:{id:string;name?:string;title?:string;company?:string}[],id:string)=>{const value=values.find(item=>item.id===id);return value?.name??([value?.title,value?.company].filter(Boolean).join(' · ')||'Deleted input')}
+const stageLabel=(run:GenerationRun)=>({queued:'Waiting',writing:'Writing content',rendering:'Applying template',reviewing:'Visual QA',repairing:`Repairing layout (${run.repairCount}/2)`,ready:'Ready',failed:'Needs attention'} as Record<string,string>)[run.stage]??run.stage
+
+async function discover(choice:GenerationModelChoice){if(!choice.connectionId||models[choice.connectionId])return;try{models[choice.connectionId]=(await api.testLLMConnection(choice.connectionId)).models;if(!choice.model)choice.model=models[choice.connectionId][0]??''}catch(cause){error.value=cause instanceof Error?cause.message:'Could not load models.'}}
+watch(()=>form.writer.connectionId,()=>discover(form.writer));watch(()=>form.renderer.connectionId,()=>discover(form.renderer));watch(()=>form.reviewer.connectionId,()=>discover(form.reviewer))
+watch(()=>form.documentType,()=>{if(!latexTemplates.value.some(item=>item.id===form.templateId))form.templateId=latexTemplates.value[0]?.id??''})
+watch(()=>form.pipelineMode,value=>{if(value==='single'){form.renderer={...form.writer};form.reviewer={...form.writer}}})
+async function load(){try{const [p,j,t,c,g]=await Promise.all([api.listProfiles(),api.listJobs(),api.listTemplates(),api.listLLMConnections(),api.listGenerations()]);profiles.value=p.items;opportunities.value=j.items;templates.value=t.items;connections.value=c.items;runs.value=g.items;if(!form.profileId)form.profileId=profiles.value[0]?.id??'';if(!form.opportunityId)form.opportunityId=opportunities.value.find(item=>item.description)?.id??'';if(!form.templateId)form.templateId=latexTemplates.value[0]?.id??'';if(!form.writer.connectionId){form.writer.connectionId=connections.value[0]?.id??'';await discover(form.writer)}}catch(cause){error.value=cause instanceof Error?cause.message:'Could not load generation inputs.'}finally{loading.value=false}}
+async function refresh(){try{runs.value=(await api.listGenerations()).items}catch{}if(!active.value&&timer){window.clearInterval(timer);timer=undefined}}
+async function download(run:GenerationRun){error.value='';try{await api.downloadGeneration(run)}catch(cause){error.value=cause instanceof Error?cause.message:'Could not download the generated PDF.'}}
+async function retry(run:GenerationRun){error.value='';notice.value='';retrying.value=run.id;try{await api.retryGeneration(run.id);notice.value='Generation queued again. The saved writing draft will be reused when available.';await refresh();if(!timer)timer=window.setInterval(refresh,2000)}catch(cause){error.value=cause instanceof Error?cause.message:'Could not retry the generation.'}finally{retrying.value=''}}
+async function generate(){error.value='';notice.value='';submitting.value=true;try{const input:GenerationInput=JSON.parse(JSON.stringify(form));if(input.pipelineMode==='single'){input.renderer={...input.writer};input.reviewer={...input.writer}}await api.createGeneration(input);notice.value='Generation queued. Writing, rendering, and visual QA continue in the background.';await refresh();if(!timer)timer=window.setInterval(refresh,2000)}catch(cause){error.value=cause instanceof Error?cause.message:'Could not start generation.'}finally{submitting.value=false}}
+onMounted(async()=>{await load();if(active.value)timer=window.setInterval(refresh,2000)});onBeforeUnmount(()=>{if(timer)window.clearInterval(timer)})
 </script>
 
-<template>
-  <div class="page">
-    <PageHeader title="Generate" description="Combine one trusted profile with one target role and a controlled template." />
-    <section class="generation-layout">
-      <div class="panel">
-        <p class="eyebrow">Configuration</p>
-        <h2>New application document</h2>
-        <div class="form-grid single">
-          <label><span>Document type</span><select><option>Curriculum vitae</option><option>Cover letter</option></select></label>
-          <label><span>Profile</span><select disabled><option>Create a profile first</option></select></label>
-          <label><span>Target job</span><select disabled><option>Add a job first</option></select></label>
-          <label><span>Page target</span><select><option>One page</option><option>Two pages</option><option>Custom</option></select></label>
-        </div>
-        <button class="button primary wide" disabled>Generate draft</button>
-      </div>
-      <aside class="panel trust-panel">
-        <span class="trust-icon">✓</span>
-        <p class="eyebrow">Profile grounded</p>
-        <h2>Every material claim stays connected to your saved profile.</h2>
-        <p>ResumeGPT maps job requirements to your profile content before writing. Unsupported claims are surfaced before export.</p>
-        <ul><li>Saved profile snapshot</li><li>Structured draft schema</li><li>Layout and page validation</li></ul>
-      </aside>
-    </section>
-  </div>
-</template>
+<template><div class="page"><PageHeader title="Generate" description="Create a profile-grounded application document, render it with your template, and automatically inspect the PDF." />
+<p v-if="error" class="notice error">{{ error }}</p><p v-if="notice" class="notice">{{ notice }}</p>
+<p v-if="!loading&&!connections.length" class="notice setup-notice">No LLM connection is configured yet. <RouterLink to="/settings">Add an OpenAI-compatible or Ollama connection in Settings →</RouterLink></p>
+<section class="generation-layout"><form class="panel generation-form" @submit.prevent="generate"><p class="eyebrow">New generation</p><h2>Application document</h2><div v-if="loading" class="empty-state compact">Loading inputs…</div><div v-else class="form-grid">
+<label><span>Document type</span><select v-model="form.documentType"><option value="resume">Resume</option><option value="cover_letter">Cover letter</option></select></label><label><span>Output language</span><input v-model="form.language" required maxlength="40" /></label>
+<label><span>Profile</span><select v-model="form.profileId" required><option value="" disabled>Select a profile</option><option v-for="item in profiles" :key="item.id" :value="item.id">{{ item.name }}</option></select></label><label><span>Opportunity</span><select v-model="form.opportunityId" required><option value="" disabled>Select an opportunity</option><option v-for="item in opportunities" :key="item.id" :value="item.id">{{ item.title }} · {{ item.company }}</option></select></label>
+<label><span>LaTeX template</span><select v-model="form.templateId" required><option value="" disabled>Select a template</option><option v-for="item in latexTemplates" :key="item.id" :value="item.id">{{ item.name }}</option></select><small v-if="matchingTemplates.some(item=>item.format!=='latex')">Word generation will follow with the structured DOCX renderer.</small></label><label><span>Page target</span><select v-model="form.pageTarget"><option value="one_page">One page</option><option value="two_pages">Two pages</option><option value="flexible">Flexible</option></select></label>
+<label class="full"><span>Custom instructions</span><textarea v-model="form.customInstructions" rows="3" maxlength="4000" placeholder="Optional tone, emphasis, or content guidance for this application only." /></label>
+<div class="full pipeline-choice"><label><input v-model="form.pipelineMode" type="radio" value="single" /> One model for the whole workflow</label><label><input v-model="form.pipelineMode" type="radio" value="multi" /> Specialized models</label></div>
+<fieldset class="full model-card"><legend>{{ form.pipelineMode==='single'?'Workflow model':'Writer model' }}</legend><div class="model-row"><label><span>Connection</span><select v-model="form.writer.connectionId"><option value="" disabled>Select connection</option><option v-for="item in connections" :key="item.id" :value="item.id">{{ item.name }}</option></select></label><label><span>Model</span><input v-model="form.writer.model" :list="`models-${form.writer.connectionId}`" placeholder="Model name" /><datalist :id="`models-${form.writer.connectionId}`"><option v-for="model in models[form.writer.connectionId]||[]" :key="model" :value="model" /></datalist></label></div><small v-if="form.pipelineMode==='single'">Choose a vision-capable model because the same model reviews rendered PDF page images.</small></fieldset>
+<template v-if="form.pipelineMode==='multi'"><fieldset class="full model-card"><legend>LaTeX renderer model</legend><div class="model-row"><label><span>Connection</span><select v-model="form.renderer.connectionId"><option value="" disabled>Select connection</option><option v-for="item in connections" :key="item.id" :value="item.id">{{ item.name }}</option></select></label><label><span>Model</span><input v-model="form.renderer.model" :list="`models-${form.renderer.connectionId}`" /><datalist :id="`models-${form.renderer.connectionId}`"><option v-for="model in models[form.renderer.connectionId]||[]" :key="model" :value="model" /></datalist></label></div></fieldset><fieldset class="full model-card"><legend>Visual reviewer model</legend><div class="model-row"><label><span>Connection</span><select v-model="form.reviewer.connectionId"><option value="" disabled>Select connection</option><option v-for="item in connections" :key="item.id" :value="item.id">{{ item.name }}</option></select></label><label><span>Vision-capable model</span><input v-model="form.reviewer.model" :list="`models-${form.reviewer.connectionId}`" /><datalist :id="`models-${form.reviewer.connectionId}`"><option v-for="model in models[form.reviewer.connectionId]||[]" :key="model" :value="model" /></datalist></label></div></fieldset></template>
+</div><button class="button primary wide" :disabled="!ready||submitting">{{ submitting?'Queuing…':'Generate PDF' }}</button></form>
+<aside class="panel trust-panel"><span class="trust-icon">✓</span><p class="eyebrow">Bounded agent workflow</p><h2>Written from your profile, then rendered and visually checked.</h2><p>The reviewer sees PDF page images and can request up to two focused layout repairs. Input snapshots keep an in-flight run stable.</p><ul><li>No facts outside the selected profile</li><li>Network-isolated LaTeX rendering</li><li>Maximum two automatic repair rounds</li></ul></aside></section>
+<section class="panel generation-history"><div class="section-title"><div><p class="eyebrow">Recent output</p><h2>Generation history</h2></div></div><div v-if="!runs.length" class="empty-state compact">No documents generated yet.</div><div v-else class="generation-runs"><article v-for="run in runs" :key="run.id" class="generation-run"><div><strong>{{ optionName(opportunities,run.opportunityId) }}</strong><p>{{ run.documentType==='resume'?'Resume':'Cover letter' }} · {{ optionName(profiles,run.profileId) }} · {{ run.pageTarget.replace('_',' ') }}</p><small v-if="run.errorMessage" class="error-text">{{ run.errorMessage }}</small><small v-else-if="run.review" :class="{'warning-text':run.review.startsWith('Visual QA skipped:')||run.review.startsWith('Template fallback used:')}">{{ run.review }}</small></div><div class="run-actions"><span class="status-pill" :class="run.state">{{ stageLabel(run) }}</span><button v-if="run.state==='failed'" class="button" type="button" :disabled="retrying===run.id" @click="retry(run)">{{ retrying===run.id?'Queuing…':'Retry' }}</button><button v-if="run.state==='ready'" class="button" type="button" @click="download(run)">Download PDF</button></div></article></div></section>
+</div></template>

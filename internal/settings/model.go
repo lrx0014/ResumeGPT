@@ -44,3 +44,8 @@ type ConnectionTest struct {
 	Status string   `json:"status"`
 	Models []string `json:"models"`
 }
+
+type RuntimeConnection struct {
+	Connection LLMConnection
+	APIToken   string
+}
