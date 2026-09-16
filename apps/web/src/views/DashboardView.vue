@@ -26,10 +26,10 @@ const readyGenerations = computed(() => generations.value.filter(item => item.st
 
 const setupSteps = computed(() => [
   { number: '01', title: 'Prepare your profile', description: preparedProfiles.value ? `${preparedProfiles.value} profile${preparedProfiles.value === 1 ? '' : 's'} with saved content.` : 'Add or import the experience, education, skills, and achievements you want the model to use.', to: '/profiles', complete: preparedProfiles.value > 0 },
-  { number: '02', title: 'Track an opportunity', description: readyOpportunities.value ? `${readyOpportunities.value} ${readyOpportunities.value === 1 ? 'opportunity' : 'opportunities'} ready to target.` : 'Import a LinkedIn or Indeed URL, or enter the role manually.', to: '/jobs', complete: readyOpportunities.value > 0 },
+  { number: '02', title: 'Track a job opportunity', description: readyOpportunities.value ? `${readyOpportunities.value} job ${readyOpportunities.value === 1 ? 'opportunity' : 'opportunities'} ready to target.` : 'Import a LinkedIn or Indeed URL, or enter the role manually.', to: '/jobs', complete: readyOpportunities.value > 0 },
   { number: '03', title: 'Choose a document template', description: readyTemplates.value ? `${readyTemplates.value} resume or cover-letter template${readyTemplates.value === 1 ? '' : 's'} ready.` : 'Use the built-in LaTeX template or upload a TeX or Word file.', to: '/templates', complete: readyTemplates.value > 0 },
   { number: '04', title: 'Connect an LLM', description: connections.value.length ? `${connections.value.length} cloud or local connection${connections.value.length === 1 ? '' : 's'} configured.` : 'Add an OpenAI, compatible, or local Ollama connection in Settings.', to: '/settings', complete: connections.value.length > 0 },
-  { number: '05', title: 'Generate for this opportunity', description: readyGenerations.value ? `${readyGenerations.value} visually reviewed PDF${readyGenerations.value === 1 ? '' : 's'} ready.` : capabilities.value.generation ? 'Select the prepared inputs and create a tailored resume or cover letter.' : 'Generation is the next milestone. Your prepared inputs will be used here.', to: '/generate', complete: readyGenerations.value > 0, planned: !capabilities.value.generation },
+  { number: '05', title: 'Generate for a job opportunity', description: readyGenerations.value ? `${readyGenerations.value} visually reviewed PDF${readyGenerations.value === 1 ? '' : 's'} ready.` : capabilities.value.generation ? 'Select the prepared inputs and create a tailored resume or cover letter.' : 'Generation is the next milestone. Your prepared inputs will be used here.', to: '/generate', complete: readyGenerations.value > 0, planned: !capabilities.value.generation },
 ])
 
 const firstIncomplete = computed(() => setupSteps.value.find(step => !step.complete && !step.planned))
@@ -71,8 +71,8 @@ onMounted(load)
   <div class="page dashboard-page">
     <PageHeader
       eyebrow="Workspace overview"
-      title="Build applications that stay true to you."
-      description="Prepare reusable profile and template inputs, track opportunities, and bring them together for tailored resumes and cover letters."
+      title="Make your CV smarter."
+      description="Tailor your CV and cover letter to each job opportunity, and track your job search in one place."
     >
       <RouterLink class="button primary" :to="primaryAction.to">{{ primaryAction.label }}</RouterLink>
     </PageHeader>
@@ -81,7 +81,7 @@ onMounted(load)
 
     <section class="metric-grid overview-metrics" aria-label="Workspace metrics">
       <RouterLink class="metric-card" to="/profiles"><span>Profiles</span><strong>{{ loading ? '—' : profiles.length }}</strong><small>{{ metricDetail('profiles') }}</small></RouterLink>
-      <RouterLink class="metric-card" to="/jobs"><span>Opportunities</span><strong>{{ loading ? '—' : opportunities.length }}</strong><small>{{ metricDetail('opportunities') }}</small></RouterLink>
+      <RouterLink class="metric-card" to="/jobs"><span>Job opportunities</span><strong>{{ loading ? '—' : opportunities.length }}</strong><small>{{ metricDetail('opportunities') }}</small></RouterLink>
       <RouterLink class="metric-card" to="/templates"><span>Ready templates</span><strong>{{ loading ? '—' : readyTemplates }}</strong><small>{{ metricDetail('templates') }}</small></RouterLink>
       <RouterLink class="metric-card" to="/settings"><span>LLM connections</span><strong>{{ loading ? '—' : connections.length }}</strong><small>{{ metricDetail('connections') }}</small></RouterLink>
       <RouterLink class="metric-card" to="/generate"><span>Generated PDFs</span><strong>{{ loading ? '—' : readyGenerations }}</strong><small>{{ generations.some(item => item.state === 'running' || item.state === 'queued') ? 'Generation in progress' : 'Visually reviewed outputs' }}</small></RouterLink>
@@ -103,7 +103,7 @@ onMounted(load)
       </section>
 
       <section class="panel recent-panel">
-        <div class="panel-heading"><div><p class="eyebrow">Live workspace</p><h2>Recent opportunities</h2></div><RouterLink class="text-button" to="/jobs">View all</RouterLink></div>
+        <div class="panel-heading"><div><p class="eyebrow">Live workspace</p><h2>Recent job opportunities</h2></div><RouterLink class="text-button" to="/jobs">View all</RouterLink></div>
         <div v-if="recentOpportunities.length" class="recent-list">
           <RouterLink v-for="item in recentOpportunities" :key="item.id" class="recent-item" :to="`/jobs/${item.id}`">
             <span class="company-mark">{{ (item.company || '?').slice(0, 2).toUpperCase() }}</span>
@@ -111,7 +111,7 @@ onMounted(load)
             <span class="status-pill">{{ item.status }}</span>
           </RouterLink>
         </div>
-        <div v-else class="empty-state compact"><span class="empty-icon">◇</span><h2>No opportunities yet</h2><p>Import a public job URL or add the role manually.</p><RouterLink class="button" to="/jobs">Add opportunity</RouterLink></div>
+        <div v-else class="empty-state compact"><span class="empty-icon">◇</span><h2>No job opportunities yet</h2><p>Import a public job URL or add the role manually.</p><RouterLink class="button" to="/jobs">Add job opportunity</RouterLink></div>
       </section>
     </div>
   </div>

@@ -55,7 +55,7 @@ async function removeJob() {
   deleting.value = true
   try {
     await api.deleteJob(jobId.value)
-    toast.success('Opportunity deleted.')
+    toast.success('Job opportunity deleted.')
     await router.push('/jobs')
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : 'Could not delete the job.'
@@ -68,8 +68,8 @@ watch(jobId, () => void load(), { immediate: true })
 
 <template>
   <div class="page job-editor">
-    <RouterLink to="/jobs">← All jobs</RouterLink>
-    <PageHeader :title="job?.title || 'Job details'" description="Review imported details, edit anything, and keep the application status current.">
+    <RouterLink to="/jobs">← All job opportunities</RouterLink>
+    <PageHeader :title="job?.title || 'Job opportunity details'" description="Review the role, update its details, and keep your application status current.">
       <div class="header-actions">
         <a v-if="job?.sourceUrl" class="button" :href="job.sourceUrl" target="_blank" rel="noopener noreferrer">Open source ↗</a>
         <button class="button" type="button" :disabled="loading" @click="load">Refresh</button>
@@ -98,7 +98,7 @@ watch(jobId, () => void load(), { immediate: true })
       </form>
       <section class="danger-zone"><div><h2>Delete job</h2><p>This removes the job from the active database.</p></div><button class="button" type="button" :disabled="deleting" @click="confirmDelete = true">Delete job</button></section>
     </template>
-    <ConfirmDialog :open="confirmDelete" title="Delete opportunity?" :message="`${[job?.title, job?.company].filter(Boolean).join(' at ') || 'This opportunity'} will be removed. This action cannot be undone.`" :busy="deleting" @cancel="confirmDelete = false" @confirm="removeJob" />
+    <ConfirmDialog :open="confirmDelete" title="Delete job opportunity?" :message="`${[job?.title, job?.company].filter(Boolean).join(' at ') || 'This job opportunity'} will be removed. This action cannot be undone.`" :busy="deleting" @cancel="confirmDelete = false" @confirm="removeJob" />
   </div>
 </template>
 

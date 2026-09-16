@@ -3,6 +3,7 @@ package job
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"testing"
@@ -54,8 +55,32 @@ type processorTestFetcher struct {
 	err    error
 }
 
+type processorTestAgentFetcher struct {
+	parsed ParsedJob
+	err    error
+}
+
+func (f processorTestAgentFetcher) Fetch(context.Context, string, ImportPayload) (ParsedJob, error) {
+	return f.parsed, f.err
+}
+
 func (f processorTestFetcher) Fetch(context.Context, string) (ParsedJob, error) {
 	return f.parsed, f.err
+}
+
+func TestImportProcessorUsesAgentFetcherForAIAssistedTask(t *testing.T) {
+	repository := &processorTestRepository{}
+	queue := &processorTestQueue{}
+	expected := ParsedJob{Title: "AI Engineer", Company: "Example"}
+	processor := ImportProcessor{Queue: queue, Repository: repository, Fetcher: processorTestFetcher{err: errors.New("standard fetcher should not run")},
+		AgentFetcher: processorTestAgentFetcher{parsed: expected}, WorkerID: "worker", Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	task := importProcessorTask(t)
+	payload, _ := json.Marshal(ImportPayload{JobID: "job_test", SourceURL: "https://careers.example.com/jobs/123", Mode: "agent", ConnectionID: "llm_test", Model: "model"})
+	task.Payload = payload
+	processor.handle(context.Background(), task)
+	if len(repository.states) != 1 || repository.states[0] != "analyzing" || repository.stored != expected {
+		t.Fatalf("unexpected agent processing result: states=%v stored=%#v", repository.states, repository.stored)
+	}
 }
 
 func TestImportProcessorStoresFetchedJob(t *testing.T) {

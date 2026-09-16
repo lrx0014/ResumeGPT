@@ -208,6 +208,8 @@ After a run is ready, the user may submit a bounded follow-up prompt. The same r
 
 A completed or failed application may also be reconfigured with another Profile, compatible Template, or set of LLM model choices. Reconfiguration refreshes the input snapshots, clears the current working result, appends a configuration-change step, and queues a full run from the writer stage. Previous timeline entries and intermediate PDFs remain available. Active applications reject concurrent reconfiguration. The UI presents this append-only history in a fixed-height, independently scrollable timeline that defaults to newest-first order and exposes the active stage as an animated timeline node.
 
+The Job Opportunities list supports reusable item selection and a shared bulk-action bar. A user can create a CV or cover letter directly from one card or select up to 50 ready opportunities and choose one Profile, compatible Template, and model configuration for the batch. The browser submits one ordinary generation command per opportunity, so every result retains an independent run, snapshot, durable task, timeline, retry path, and failure state. Partial submission failures keep only the failed opportunities in the dialog for a focused retry. The selection primitive is UI-generic so later list modules can add actions such as bulk deletion without rebuilding selection behavior.
+
 - `generations`: task configuration and immutable input-snapshot references.
 - `generation_inputs`: profile-content and Job-content copies captured when generation starts, plus template, prompt, and language versions.
 - `artifact_drafts`: structured CV/cover-letter content conforming to versioned JSON Schema.
@@ -242,15 +244,16 @@ On failure, retain an actionable processing state. The user can retry with anoth
 
 ### 7.2 Job Acquisition
 
-1. Accept one URL from the persistent Job-page input or up to 50 URLs from the batch form.
-2. Normalize and deduplicate public HTTPS LinkedIn and Indeed URLs within the workspace.
-3. Create a placeholder Job and durable acquisition task atomically, then return the Job immediately for polling.
-4. Resolve DNS and reject any private or special-purpose address; repeat scheme and host validation after every redirect.
-5. Fetch ordinary HTML with strict redirect, header, body-size, content-type, and time limits. Do not log in, bypass CAPTCHA, or use browser automation.
-6. Prefer schema.org `JobPosting` JSON-LD, with limited Open Graph and page-title fallbacks.
-7. Update the editable Job with extracted metadata. Mark incomplete, inaccessible, or unsupported pages with an actionable state so the user can correct fields or create the Job manually.
+1. Accept up to 50 URLs from the Import via URLs form and let the user explicitly enable AI assistance.
+2. In standard mode, normalize and deduplicate public HTTPS LinkedIn and Indeed URLs. Fetch bounded HTML and prefer schema.org `JobPosting` JSON-LD with limited page-metadata fallbacks.
+3. In AI-assisted mode, accept public HTTPS job pages and require an explicit saved LLM connection and model for the batch.
+4. Create a placeholder Job and durable acquisition task atomically, then return the Job immediately for polling.
+5. Start the Job Import Agent with an initial rendered-page snapshot. The agent analyzes the page from the beginning and may use only scoped tools for page inspection, structured metadata, heuristic candidates, visible text, bounded expansion, bounded scrolling, and final structured extraction.
+6. Execute browser rendering in the separate Playwright web worker. Revalidate public-network destinations, bound actions and content, and do not give the service database credentials or LLM secrets.
+7. Do not authenticate, reuse user sessions, bypass CAPTCHA or access controls, download files, fill forms, or submit applications.
+8. Validate and sanitize the Agent's schema-bound result, then update the same editable Job. Mark incomplete or inaccessible pages with an actionable state so the user can correct fields manually.
 
-Web content is untrusted data. Text telling the model to ignore policy or reveal user information never becomes an instruction.
+Web content is untrusted data. Text telling the model to ignore policy, reveal information, or invoke unrelated tools never becomes an instruction. The Agent does not receive arbitrary network, filesystem, database, or secret access.
 
 ### 7.3 CV and Cover-Letter Generation
 
@@ -574,7 +577,7 @@ Local development runs PostgreSQL and object storage in containers; optional Red
 - Twelve-factor configuration with secrets separated from ordinary configuration.
 - Stateless APIs, health probes, and graceful shutdown.
 - Queue-specific worker scaling and dedicated resources/node pools for rendering or OCR.
-- Network policies: renderer has no internet; crawler can reach only permitted networks; LLM worker reaches configured providers.
+- Network policies: renderer has no internet; the web worker can reach only validated public HTTPS destinations; the Go worker reaches configured LLM providers.
 - Backward-compatible migrations executed by a release job with rollback planning.
 - Object lifecycle policy, PostgreSQL PITR, and tested restoration.
 - Multi-AZ first; cross-region disaster recovery depends on later RPO/RTO and cost requirements.
@@ -595,6 +598,7 @@ ResumeGPT/
     api/                    # Go API composition root
     worker/                 # Go async workers
     document-worker/        # Python parsing/OCR worker
+    web-worker/             # Isolated Playwright page renderer
   internal/
     identity/
     profile/
@@ -669,7 +673,7 @@ Limit the first deployed system to:
 2. Go API and Go worker built from one codebase.
 3. Python document worker.
 4. PostgreSQL plus S3-compatible object storage.
-5. Isolated render worker.
+5. Isolated document and public-page rendering workers.
 
 Keep Redis, Kafka, and optional vector retrieval behind interfaces, but deploy them only when needed:
 

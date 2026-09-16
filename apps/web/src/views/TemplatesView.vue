@@ -93,7 +93,7 @@ onBeforeUnmount(() => window.clearTimeout(pollTimer))
 
 <template>
   <div class="page templates-page">
-    <PageHeader title="Templates" description="Keep resume and cover-letter source files ready for generation. Upload LaTeX or Word templates; ResumeGPT extracts their text without adding review or version workflows.">
+    <PageHeader title="Templates" description="Choose how your CV and cover letter look. Start with a built-in design or upload your own template.">
       <button v-if="uploadsEnabled" class="button primary" type="button" @click="showUpload = !showUpload">{{ showUpload ? 'Close' : 'Upload template' }}</button>
     </PageHeader>
     <p v-if="error" class="notice error" role="alert">{{ error }}</p>

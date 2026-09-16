@@ -152,11 +152,13 @@ func (r *JobRepository) QueueImport(ctx context.Context, value job.Job, task wor
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
-		payload, err := json.Marshal(job.ImportPayload{JobID: value.ID, SourceURL: value.SourceURL})
-		if err != nil {
-			return err
+		if len(task.Payload) == 0 {
+			payload, err := json.Marshal(job.ImportPayload{JobID: value.ID, SourceURL: value.SourceURL, Mode: "standard"})
+			if err != nil {
+				return err
+			}
+			task.Payload = payload
 		}
-		task.Payload = payload
 		if _, err := tx.Exec(ctx, `INSERT INTO jobs
 			(id,workspace_id,title,company,location,country,city,work_mode,employment_type,source_url,description,
 			status,import_state,import_error,created_at,updated_at)
@@ -201,7 +203,7 @@ func (r *JobRepository) StoreImport(ctx context.Context, task workqueue.Job, par
 		}
 		tag, err = tx.Exec(ctx, `UPDATE jobs SET title=$3,company=$4,location=$5,country=$6,city=$7,work_mode=$8,
 			employment_type=$9,description=$10,import_state=$11,import_error=$12,updated_at=now()
-			WHERE workspace_id=$1 AND id=$2 AND import_state IN ('queued','fetching')`, task.WorkspaceID, payload.JobID,
+			WHERE workspace_id=$1 AND id=$2 AND import_state IN ('queued','fetching','analyzing')`, task.WorkspaceID, payload.JobID,
 			parsed.Title, parsed.Company, parsed.Location, parsed.Country, parsed.City, parsed.WorkMode,
 			parsed.EmploymentType, parsed.Description, importState, importError)
 		if err != nil {
@@ -241,7 +243,7 @@ func (r *JobRepository) SetImportState(ctx context.Context, task workqueue.Job, 
 	}
 	return withWorkspaceTx(ctx, r.pool, task.WorkspaceID, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `UPDATE jobs SET import_state=$3,import_error=$4,updated_at=now()
-			WHERE workspace_id=$1 AND id=$2 AND import_state IN ('queued','fetching')`, task.WorkspaceID, payload.JobID, state, message)
+			WHERE workspace_id=$1 AND id=$2 AND import_state IN ('queued','fetching','analyzing')`, task.WorkspaceID, payload.JobID, state, message)
 		if err != nil || tag.RowsAffected() > 0 {
 			return err
 		}

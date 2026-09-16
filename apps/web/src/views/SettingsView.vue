@@ -167,7 +167,7 @@ onMounted(load)
 
 <template>
   <div class="page settings-page">
-    <PageHeader title="Settings" description="Manage LLM connections and interface preferences. Generation choices remain specific to each opportunity." />
+    <PageHeader title="Settings" description="Manage LLM connections and interface preferences. Generation choices remain specific to each job opportunity." />
 
     <p v-if="error" class="notice error" role="alert">{{ error }}</p>
     <div v-if="loading" class="empty-state">Loading settings…</div>
@@ -175,7 +175,7 @@ onMounted(load)
     <template v-else>
       <section class="settings-section">
         <div class="section-heading">
-          <div><p class="eyebrow">AI providers</p><h2>LLM connections</h2><p>Store reusable cloud or local endpoints. Profile, opportunity, model, and document options are selected during generation.</p></div>
+          <div><p class="eyebrow">AI providers</p><h2>LLM connections</h2><p>Store reusable cloud or local endpoints. Profile, job opportunity, model, and document options are selected during generation.</p></div>
           <button class="button primary" type="button" @click="addConnection">Add connection</button>
         </div>
 
@@ -212,7 +212,7 @@ onMounted(load)
 
       <section class="settings-section">
         <div class="section-heading"><div><p class="eyebrow">Read only</p><h2>System status</h2><p>Availability reported by the current API deployment.</p></div></div>
-        <div class="status-grid"><div v-for="(label, key) in { profiles: 'Profiles', jobs: 'Opportunities', documents: 'Document extraction', jobImports: 'Job import', settings: 'Settings API' }" :key="key" class="panel status-card"><span>{{ label }}</span><strong :class="capabilities[key] ? 'available' : 'unavailable'">{{ capabilities[key] ? 'Available' : 'Unavailable' }}</strong></div><div class="panel status-card"><span>LLM connections</span><strong :class="connections.length ? 'available' : 'unavailable'">{{ connections.length ? `${connections.length} configured` : 'Not configured' }}</strong></div></div>
+        <div class="status-grid"><div v-for="(label, key) in { profiles: 'Profiles', jobs: 'Job opportunities', documents: 'Document extraction', jobImports: 'Job import', settings: 'Settings API' }" :key="key" class="panel status-card"><span>{{ label }}</span><strong :class="capabilities[key] ? 'available' : 'unavailable'">{{ capabilities[key] ? 'Available' : 'Unavailable' }}</strong></div><div class="panel status-card"><span>LLM connections</span><strong :class="connections.length ? 'available' : 'unavailable'">{{ connections.length ? `${connections.length} configured` : 'Not configured' }}</strong></div></div>
       </section>
     </template>
     <ConfirmDialog :open="Boolean(pendingDelete)" title="Delete LLM connection?" :message="`“${pendingDelete?.name ?? ''}” will no longer be available for generation. This action cannot be undone.`" :busy="deletingId===pendingDelete?.id" @cancel="pendingDelete=null" @confirm="deleteConnection" />

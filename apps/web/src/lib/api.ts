@@ -1,4 +1,4 @@
-import type { APIError, Job, JobInput, ListResponse, Profile, DocumentUpload, SignedURL, StagedDocumentUpload, SettingsPreferences, LLMConnection, LLMConnectionInput, LLMConnectionTest, StagedTemplate, Template, TemplateKind, GenerationInput, GenerationRun, GenerationStep } from './types'
+import type { APIError, Job, JobImportInput, JobInput, ListResponse, Profile, DocumentUpload, SignedURL, StagedDocumentUpload, SettingsPreferences, LLMConnection, LLMConnectionInput, LLMConnectionTest, StagedTemplate, Template, TemplateKind, GenerationInput, GenerationRun, GenerationStep } from './types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
 
@@ -50,7 +50,7 @@ export const api = {
     request<Job>('/v1/jobs', { method: 'POST', body: JSON.stringify(input) }),
   updateJob: (id: string, input: JobInput) =>
     request<Job>(`/v1/jobs/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(input) }),
-  importJobs: (urls: string[]) => request<ListResponse<Job>>('/v1/jobs/imports', { method: 'POST', body: JSON.stringify({ urls }) }),
+  importJobs: (input: JobImportInput) => request<ListResponse<Job>>('/v1/jobs/imports', { method: 'POST', body: JSON.stringify(input) }),
   deleteJob: async (id: string) => {
     const response = await fetch(`${API_BASE_URL}/v1/jobs/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { 'X-Workspace-ID': 'ws_personal_dev' } })
     if (!response.ok) {

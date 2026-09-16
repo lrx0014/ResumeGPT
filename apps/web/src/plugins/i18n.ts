@@ -11,9 +11,9 @@ const messages = {
     nav: {
       overview: 'Overview',
       profiles: 'Profiles',
-      jobs: 'Opportunities',
+      jobs: 'Job Opportunities',
       templates: 'Templates',
-      generate: 'Generate',
+      generate: 'Create CVs',
       settings: 'Settings',
     },
   },
@@ -27,9 +27,9 @@ const messages = {
     nav: {
       overview: 'Übersicht',
       profiles: 'Profile',
-      jobs: 'Chancen',
+      jobs: 'Stellenangebote',
       templates: 'Vorlagen',
-      generate: 'Erstellen',
+      generate: 'Lebensläufe erstellen',
       settings: 'Einstellungen',
     },
   },

@@ -38,12 +38,18 @@ type CreateInput = SaveInput
 type UpdateInput = SaveInput
 
 type ImportInput struct {
-	URLs []string `json:"urls"`
+	URLs         []string `json:"urls"`
+	AIAssisted   bool     `json:"aiAssisted"`
+	ConnectionID string   `json:"connectionId"`
+	Model        string   `json:"model"`
 }
 
 type ImportPayload struct {
-	JobID     string `json:"jobId"`
-	SourceURL string `json:"sourceUrl"`
+	JobID        string `json:"jobId"`
+	SourceURL    string `json:"sourceUrl"`
+	Mode         string `json:"mode,omitempty"`
+	ConnectionID string `json:"connectionId,omitempty"`
+	Model        string `json:"model,omitempty"`
 }
 
 type ParsedJob struct {

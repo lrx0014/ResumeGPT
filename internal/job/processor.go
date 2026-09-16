@@ -17,20 +17,21 @@ type ProcessorQueue interface {
 }
 
 type ImportProcessor struct {
-	Queue      ProcessorQueue
-	Repository ImportRepository
-	Fetcher    Fetcher
-	WorkerID   string
-	Logger     *slog.Logger
+	Queue        ProcessorQueue
+	Repository   ImportRepository
+	Fetcher      Fetcher
+	AgentFetcher AgentFetcher
+	WorkerID     string
+	Logger       *slog.Logger
 }
 
 func (p *ImportProcessor) Run(ctx context.Context) error {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
-		task, err := p.Queue.ClaimKind(ctx, p.WorkerID, ImportJobKind, time.Minute)
+		task, err := p.Queue.ClaimKind(ctx, p.WorkerID, ImportJobKind, 3*time.Minute)
 		if err == nil {
-			taskContext, cancel := context.WithTimeout(ctx, 45*time.Second)
+			taskContext, cancel := context.WithTimeout(ctx, 2*time.Minute)
 			p.handle(taskContext, task)
 			cancel()
 		} else if !errors.Is(err, workqueue.ErrEmpty) {
@@ -50,14 +51,30 @@ func (p *ImportProcessor) handle(ctx context.Context, task workqueue.Job) {
 		p.finishFailure(ctx, task, "failed", "invalid_job_payload", "The job import task is invalid.", false)
 		return
 	}
-	if err := p.Repository.SetImportState(ctx, task, "fetching", ""); errors.Is(err, ErrNotFound) {
+	activeState := "fetching"
+	if payload.Mode == "agent" {
+		activeState = "analyzing"
+	}
+	if err := p.Repository.SetImportState(ctx, task, activeState, ""); errors.Is(err, ErrNotFound) {
 		p.finishFailure(ctx, task, "failed", "job_deleted", "The job was deleted before import started.", false)
 		return
 	} else if err != nil {
+		p.Logger.Error("update job import state", "task_id", task.ID, "job_id", payload.JobID,
+			"state", activeState, "error", err)
 		p.finishFailure(ctx, task, "queued", "persistence_failed", "Could not update the job import state.", true)
 		return
 	}
-	parsed, err := p.Fetcher.Fetch(ctx, payload.SourceURL)
+	var parsed ParsedJob
+	var err error
+	if payload.Mode == "agent" {
+		if p.AgentFetcher == nil {
+			err = &FetchError{Code: "ai_import_unavailable", Message: "AI-assisted import is not available. Try again later or add the job manually.", Retryable: true}
+		} else {
+			parsed, err = p.AgentFetcher.Fetch(ctx, task.WorkspaceID, payload)
+		}
+	} else {
+		parsed, err = p.Fetcher.Fetch(ctx, payload.SourceURL)
+	}
 	if err != nil {
 		var failure *FetchError
 		if !errors.As(err, &failure) {

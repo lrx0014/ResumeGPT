@@ -283,7 +283,9 @@ func (a *API) importJobs(w http.ResponseWriter, r *http.Request) {
 	items, err := a.jobImports.Create(r.Context(), workspaceID(r), input)
 	switch {
 	case errors.Is(err, job.ErrInvalidURL):
-		writeError(w, http.StatusUnprocessableEntity, "unsupported_job_url", "Use public HTTPS LinkedIn or Indeed job URLs.")
+		writeError(w, http.StatusUnprocessableEntity, "unsupported_job_url", "Use a supported public HTTPS job URL.")
+	case errors.Is(err, job.ErrInvalidAIConfig):
+		writeError(w, http.StatusUnprocessableEntity, "invalid_ai_import_config", "Select an LLM connection and model for AI-assisted import.")
 	case errors.Is(err, job.ErrTooManyURLs):
 		writeError(w, http.StatusUnprocessableEntity, "invalid_url_batch", "Provide between 1 and 50 job URLs.")
 	case err != nil:

@@ -2,6 +2,7 @@ package job
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/url"
 	"strings"
@@ -16,9 +17,10 @@ import (
 const ImportJobKind = "job.page.import.v1"
 
 var (
-	ErrInvalidInput = errors.New("invalid job input")
-	ErrInvalidURL   = errors.New("only public LinkedIn and Indeed HTTPS job URLs are supported")
-	ErrTooManyURLs  = errors.New("a batch can contain at most 50 URLs")
+	ErrInvalidInput    = errors.New("invalid job input")
+	ErrInvalidURL      = errors.New("only public LinkedIn and Indeed HTTPS job URLs are supported")
+	ErrInvalidAIConfig = errors.New("AI-assisted import requires an LLM connection and model")
+	ErrTooManyURLs     = errors.New("a batch can contain at most 50 URLs")
 )
 
 var validStatuses = map[string]bool{
@@ -141,6 +143,18 @@ func NormalizeImportURL(raw string) (string, error) {
 	return normalized, nil
 }
 
+func NormalizeAIImportURL(raw string) (string, error) {
+	normalized, err := normalizeSourceURL(raw)
+	if err != nil {
+		return "", ErrInvalidURL
+	}
+	parsed, _ := url.Parse(normalized)
+	if parsed.Port() != "" && parsed.Port() != "443" {
+		return "", ErrInvalidURL
+	}
+	return normalized, nil
+}
+
 func normalizeSourceURL(raw string) (string, error) {
 	parsed, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || parsed.Scheme != "https" || parsed.User != nil || parsed.Hostname() == "" || len(raw) > 2048 {
@@ -169,10 +183,20 @@ func (s *ImportService) Create(ctx context.Context, workspaceID string, input Im
 	if len(input.URLs) == 0 || len(input.URLs) > 50 {
 		return nil, ErrTooManyURLs
 	}
+	input.ConnectionID, input.Model = strings.TrimSpace(input.ConnectionID), strings.TrimSpace(input.Model)
+	if input.AIAssisted && (!validText(input.ConnectionID, 200, true) || !validText(input.Model, 200, true)) {
+		return nil, ErrInvalidAIConfig
+	}
 	normalizedURLs := make([]string, 0, len(input.URLs))
 	seen := make(map[string]bool, len(input.URLs))
 	for _, raw := range input.URLs {
-		sourceURL, err := NormalizeImportURL(raw)
+		var sourceURL string
+		var err error
+		if input.AIAssisted {
+			sourceURL, err = NormalizeAIImportURL(raw)
+		} else {
+			sourceURL, err = NormalizeImportURL(raw)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -187,8 +211,17 @@ func (s *ImportService) Create(ctx context.Context, workspaceID string, input Im
 		now := s.now().UTC()
 		value := Job{ID: id.New("job"), WorkspaceID: workspaceID, SourceURL: sourceURL, Status: "interested",
 			ImportState: "queued", CreatedAt: now, UpdatedAt: now}
+		mode := "standard"
+		if input.AIAssisted {
+			mode = "agent"
+		}
+		payload, err := json.Marshal(ImportPayload{JobID: value.ID, SourceURL: sourceURL, Mode: mode,
+			ConnectionID: input.ConnectionID, Model: input.Model})
+		if err != nil {
+			return nil, err
+		}
 		task := workqueue.Job{ID: id.New("task"), WorkspaceID: workspaceID, Kind: ImportJobKind,
-			IdempotencyKey: value.ID, MaxAttempts: 4, AvailableAt: now}
+			IdempotencyKey: value.ID, Payload: payload, MaxAttempts: 4, AvailableAt: now}
 		created, err := s.repository.QueueImport(ctx, value, task)
 		if err != nil {
 			return nil, err

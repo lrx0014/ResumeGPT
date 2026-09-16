@@ -16,7 +16,7 @@ ResumeGPT is a personal CV and cover-letter optimization application. This repos
 - OpenTelemetry HTTP tracing and W3C trace-context propagation.
 - Multiple editable profiles with role metadata, Markdown-friendly text, optional avatars, and full CRUD operations.
 - An isolated, malware-scanning Python extraction service for staged TXT, Markdown, TeX, DOC/DOCX, PDF, PNG, and JPEG uploads. Extracted text is loaded into the editor and is stored on the profile only after the user saves it.
-- Editable job tracking with manual entry, application status, and background import from public LinkedIn and Indeed URLs.
+- Editable job tracking with manual entry, application status, deterministic LinkedIn/Indeed import, and optional agent-assisted import from public job pages.
 - Workspace Settings for encrypted cloud/local LLM connections, Ollama and OpenAI-compatible model discovery, interface language, theme, and deployment status.
 - A simple resume and cover-letter template library with an attributed built-in LaTeX template, single-file TeX or multi-file LaTeX ZIP uploads, Word uploads, security scanning, extracted text for generation, and cached PDF previews.
 - Durable LaTeX generation runs with single-model or specialized writer/renderer/reviewer modes, immutable input snapshots, streamed local-model responses, bounded automatic repair, safe basic-layout fallback, and stored PDF downloads.
@@ -104,11 +104,14 @@ This checklist is the project-level source of truth for planned delivery. An ite
 - [x] Support multiple jobs with manual creation, viewing, editing, and deletion.
 - [x] Capture title, company, location, country, city, work mode, employment type, source URL, and description.
 - [x] Track the current application status directly on each job.
-- [x] Keep a persistent single-URL import field on the Job list page.
-- [x] Support batch import of up to 50 LinkedIn or Indeed URLs.
+- [x] Provide a focused Import via URLs form for batches of up to 50 job pages.
+- [x] Keep fast deterministic import for public LinkedIn and Indeed URLs.
 - [x] Queue URL imports as durable background jobs with retries and actionable failure states.
 - [x] Restrict acquisition to public HTTPS LinkedIn and Indeed pages and enforce DNS, redirect, response-size, content-type, and timeout protections.
 - [x] Extract common metadata from JobPosting JSON-LD with safe page-metadata fallbacks.
+- [x] Add opt-in AI-assisted import for arbitrary public HTTPS job pages with an explicitly selected LLM connection and model.
+- [x] Run AI-assisted acquisition through a LangChainGo Job Import Agent with scoped inspection, metadata, heuristic parsing, expansion, scrolling, and structured-result tools.
+- [x] Render dynamic pages in a separate Playwright worker with bounded actions, public-network validation, and no database or LLM credentials.
 - [x] Let users correct every imported field and fall back to manual creation when a page is unavailable.
 - [x] Deduplicate repeated imports of the same normalized URL within a workspace.
 - [x] Link each imported job back to its source page.
@@ -139,6 +142,7 @@ This checklist is the project-level source of truth for planned delivery. An ite
 - [ ] Generate tailored cover letters.
 - [x] Show polled background progress across writing, rendering, visual review, and repair stages.
 - [x] Make the application list the primary Generate view and move creation into a focused modal workflow.
+- [x] Add reusable list multi-selection and create CV or cover-letter generation tasks directly from one or many Job Opportunities with shared settings.
 - [x] Persist an inspectable timeline of writer drafts, rendered PDFs, reviewer feedback, warnings, and user prompts.
 - [x] Provide a generation detail page with intermediate PDF previews and follow-up prompt revisions.
 - [x] Allow completed or failed applications to switch Profiles, Templates, and LLM models and regenerate without losing prior timeline records.

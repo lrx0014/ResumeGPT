@@ -4,6 +4,7 @@
 - Date: 2026-09-14
 - Decision owners: ResumeGPT maintainers
 - Supersedes: [ADR-009](./ADR-009-job-crawling-policy.md)
+- Amended by: [ADR-016](./ADR-016-agent-assisted-job-import.md)
 
 ## Context
 

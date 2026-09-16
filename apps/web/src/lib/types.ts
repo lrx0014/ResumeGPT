@@ -23,13 +23,20 @@ export interface Job {
   sourceUrl?: string
   description?: string
   status: string
-  importState: 'manual' | 'queued' | 'fetching' | 'ready' | 'needs_user_action' | 'failed'
+  importState: 'manual' | 'queued' | 'fetching' | 'analyzing' | 'ready' | 'needs_user_action' | 'failed'
   importError?: string
   createdAt: string
   updatedAt: string
 }
 
 export type JobInput = Pick<Job, 'title' | 'company' | 'location' | 'country' | 'city' | 'workMode' | 'employmentType' | 'sourceUrl' | 'description' | 'status'>
+
+export interface JobImportInput {
+  urls: string[]
+  aiAssisted: boolean
+  connectionId?: string
+  model?: string
+}
 
 export interface ListResponse<T> {
   items: T[]

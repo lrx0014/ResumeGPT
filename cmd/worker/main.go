@@ -77,16 +77,6 @@ func main() {
 
 	queue := postgresadapter.NewWorkQueue(pool)
 	jobRepository := postgresadapter.NewJobRepository(pool)
-	jobProcessor := job.ImportProcessor{
-		Queue: queue, Repository: jobRepository, Fetcher: job.NewHTTPFetcher(),
-		WorkerID: id.New("job_import_worker"), Logger: logger,
-	}
-	go func() {
-		if err := jobProcessor.Run(ctx); err != nil {
-			logger.Error("run job import processor", "error", err)
-			stop()
-		}
-	}()
 
 	blobs, err := s3adapter.NewBlobSigner(s3adapter.Config{
 		Endpoint: cfg.ObjectStorageEndpoint, PublicEndpoint: cfg.ObjectStoragePublicEndpoint,
@@ -126,7 +116,24 @@ func main() {
 		os.Exit(1)
 	}
 	settingsService := settings.NewService(postgresadapter.NewSettingsRepository(pool), tokenCipher, settings.NewHTTPModelDiscoverer())
-	generationProcessor := generation.Processor{Queue: queue, Repository: postgresadapter.NewGenerationRepository(pool), Settings: settingsService, Blobs: blobs, Documents: extractor, Gateway: generation.NewHTTPGateway(), WorkerID: id.New("generation_worker"), Logger: logger}
+	gateway := generation.NewHTTPGateway()
+	pageBrowser, err := job.NewHTTPPageBrowser(cfg.WebWorkerURL)
+	if err != nil {
+		logger.Error("initialize AI job browser", "error", err)
+		os.Exit(1)
+	}
+	jobProcessor := job.ImportProcessor{
+		Queue: queue, Repository: jobRepository, Fetcher: job.NewHTTPFetcher(),
+		AgentFetcher: job.NewJobImportAgent(settingsService, gateway, pageBrowser),
+		WorkerID:     id.New("job_import_worker"), Logger: logger,
+	}
+	go func() {
+		if err := jobProcessor.Run(ctx); err != nil {
+			logger.Error("run job import processor", "error", err)
+			stop()
+		}
+	}()
+	generationProcessor := generation.Processor{Queue: queue, Repository: postgresadapter.NewGenerationRepository(pool), Settings: settingsService, Blobs: blobs, Documents: extractor, Gateway: gateway, WorkerID: id.New("generation_worker"), Logger: logger}
 	if err := generationProcessor.Run(ctx); err != nil {
 		logger.Error("run generation processor", "error", err)
 		os.Exit(1)

@@ -145,6 +145,16 @@ func TestRejectsUnsupportedJobImportURL(t *testing.T) {
 	}
 }
 
+func TestAcceptsPublicHTTPSURLForAIAssistedImport(t *testing.T) {
+	handler := newHandler()
+	request := httptest.NewRequest(http.MethodPost, "/v1/jobs/imports", bytes.NewBufferString(`{"urls":["https://careers.example.com/jobs/123"],"aiAssisted":true,"connectionId":"llm_test","model":"model"}`))
+	result := httptest.NewRecorder()
+	handler.ServeHTTP(result, request)
+	if result.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d: %s", result.Code, http.StatusAccepted, result.Body.String())
+	}
+}
+
 func TestHealthAddsRequestID(t *testing.T) {
 	handler := newHandler()
 	request := httptest.NewRequest(http.MethodGet, "/healthz", nil)

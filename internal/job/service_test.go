@@ -2,11 +2,13 @@ package job_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
 	"github.com/lrx0014/ResumeGPT/internal/adapters/memory"
 	"github.com/lrx0014/ResumeGPT/internal/job"
+	"github.com/lrx0014/ResumeGPT/internal/platform/workqueue"
 )
 
 func TestJobLifecycle(t *testing.T) {
@@ -71,5 +73,52 @@ func TestRejectsInvalidJobFields(t *testing.T) {
 		if _, err := service.Create(context.Background(), "ws_personal", input); !errors.Is(err, job.ErrInvalidInput) {
 			t.Fatalf("input %#v error = %v, want invalid", input, err)
 		}
+	}
+}
+
+type captureImportRepository struct {
+	task workqueue.Job
+}
+
+func (r *captureImportRepository) QueueImport(_ context.Context, value job.Job, task workqueue.Job) (job.Job, error) {
+	r.task = task
+	return value, nil
+}
+func (*captureImportRepository) StoreImport(context.Context, workqueue.Job, job.ParsedJob) (bool, error) {
+	return false, nil
+}
+func (*captureImportRepository) SetImportState(context.Context, workqueue.Job, string, string) error {
+	return nil
+}
+
+func TestAIAssistedImportAcceptsAnyPublicHTTPSHostAndQueuesModelChoice(t *testing.T) {
+	repository := &captureImportRepository{}
+	service := job.NewImportService(repository)
+	items, err := service.Create(context.Background(), "ws_personal", job.ImportInput{
+		URLs: []string{"https://careers.example.com/jobs/123#description"}, AIAssisted: true,
+		ConnectionID: "llm_test", Model: "example-model",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 || items[0].SourceURL != "https://careers.example.com/jobs/123" {
+		t.Fatalf("unexpected imported jobs: %#v", items)
+	}
+	var payload job.ImportPayload
+	if err := json.Unmarshal(repository.task.Payload, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Mode != "agent" || payload.ConnectionID != "llm_test" || payload.Model != "example-model" {
+		t.Fatalf("unexpected task payload: %#v", payload)
+	}
+}
+
+func TestAIAssistedImportRequiresModelConfiguration(t *testing.T) {
+	service := job.NewImportService(&captureImportRepository{})
+	_, err := service.Create(context.Background(), "ws_personal", job.ImportInput{
+		URLs: []string{"https://careers.example.com/jobs/123"}, AIAssisted: true,
+	})
+	if !errors.Is(err, job.ErrInvalidAIConfig) {
+		t.Fatalf("error = %v, want invalid AI configuration", err)
 	}
 }

@@ -37,7 +37,7 @@ func (r *JobRepository) StoreImport(_ context.Context, task workqueue.Job, parse
 	if !ok || current.WorkspaceID != task.WorkspaceID {
 		return false, job.ErrNotFound
 	}
-	if current.ImportState != "queued" && current.ImportState != "fetching" {
+	if current.ImportState != "queued" && current.ImportState != "fetching" && current.ImportState != "analyzing" {
 		return true, nil
 	}
 	current.Title, current.Company, current.Location = parsed.Title, parsed.Company, parsed.Location
@@ -63,7 +63,7 @@ func (r *JobRepository) SetImportState(_ context.Context, task workqueue.Job, st
 	if !ok || current.WorkspaceID != task.WorkspaceID {
 		return job.ErrNotFound
 	}
-	if current.ImportState != "queued" && current.ImportState != "fetching" {
+	if current.ImportState != "queued" && current.ImportState != "fetching" && current.ImportState != "analyzing" {
 		return nil
 	}
 	current.ImportState, current.ImportError = state, message
