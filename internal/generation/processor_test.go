@@ -139,7 +139,14 @@ func TestProcessorUsesSafeTemplateFallbackForIncompleteModelOutput(t *testing.T)
 	j, _ := json.Marshal(job.Job{Title: "Backend Engineer", Company: "Example", Description: "Build Go systems."})
 	tpl, _ := json.Marshal(resumetemplate.Template{BuiltIn: true, Format: "latex", Kind: "resume", Content: "\\documentclass{article}\\begin{document}Sample\\end{document}"})
 	repository := &processorRepository{run: Run{ID: "gen_fallback", WorkspaceID: "ws_test", Writer: ModelChoice{ConnectionID: "writer", Model: "model"}, Renderer: ModelChoice{ConnectionID: "renderer", Model: "small-model"}, Reviewer: ModelChoice{ConnectionID: "reviewer", Model: "vision-model"}, DocumentType: "resume", PageTarget: "one_page", ProfileSnapshot: p, OpportunitySnapshot: j, TemplateSnapshot: tpl}}
-	gateway := &processorGateway{responses: []string{"# Draft\n\n## Experience\n- Built reliable systems.", "incomplete LaTeX", `{"approved":true,"feedback":"The basic layout is readable."}`}}
+	gateway := &processorGateway{responses: []string{
+		"# Draft\n\n## Experience\n- Built reliable systems.",
+		"incomplete LaTeX",
+		"still incomplete",
+		"not a document",
+		"missing document markers",
+		`{"approved":true,"feedback":"The basic layout is readable."}`,
+	}}
 	blobs := &processorBlobs{}
 	processor := Processor{Repository: repository, Settings: processorSettings{}, Blobs: blobs, Documents: processorDocuments{}, Gateway: gateway, WorkerID: "worker", Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	payload, _ := json.Marshal(Payload{RunID: "gen_fallback"})
@@ -154,13 +161,23 @@ func TestProcessorUsesSafeTemplateFallbackWhenModelLatexDoesNotCompile(t *testin
 	j, _ := json.Marshal(job.Job{Title: "Backend Engineer", Company: "Example", Description: "Build Go systems."})
 	tpl, _ := json.Marshal(resumetemplate.Template{BuiltIn: true, Format: "latex", Kind: "resume", Content: "\\documentclass{article}\\begin{document}Sample\\end{document}"})
 	repository := &processorRepository{run: Run{ID: "gen_compile_fallback", WorkspaceID: "ws_test", Writer: ModelChoice{ConnectionID: "writer", Model: "model"}, Renderer: ModelChoice{ConnectionID: "renderer", Model: "small-model"}, Reviewer: ModelChoice{ConnectionID: "reviewer", Model: "vision-model"}, DocumentType: "resume", PageTarget: "one_page", ProfileSnapshot: p, OpportunitySnapshot: j, TemplateSnapshot: tpl}}
-	gateway := &processorGateway{responses: []string{"# Draft", "\\documentclass{article}\\begin{document}Invalid package use\\end{document}", `{"approved":true,"feedback":"The basic layout is readable."}`}}
+	candidate := "\\documentclass{article}\\begin{document}Invalid package use\\end{document}"
+	gateway := &processorGateway{responses: []string{"# Draft", candidate, candidate, candidate, candidate, `{"approved":true,"feedback":"The basic layout is readable."}`}}
 	documents := &fallbackDocuments{}
 	processor := Processor{Repository: repository, Settings: processorSettings{}, Blobs: &processorBlobs{}, Documents: documents, Gateway: gateway, WorkerID: "worker", Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	payload, _ := json.Marshal(Payload{RunID: "gen_compile_fallback"})
 	processor.handle(context.Background(), workqueue.Job{ID: "task", WorkspaceID: "ws_test", Payload: payload, LeaseOwner: "worker", Attempt: 1, MaxAttempts: 3})
-	if !repository.completed || documents.calls != 2 || !strings.Contains(repository.review, "could not be compiled") {
+	if !repository.completed || documents.calls != 5 || !strings.Contains(repository.review, "exhausted its repair attempts") {
 		t.Fatalf("compile fallback did not complete: repository=%#v calls=%d", repository, documents.calls)
+	}
+	var diagnosticFound bool
+	for _, step := range repository.steps {
+		if step.Kind == "system_warning" && step.Content == candidate && strings.Contains(step.Feedback, "template_compile_failed") {
+			diagnosticFound = true
+		}
+	}
+	if !diagnosticFound {
+		t.Fatalf("failed candidate and compiler diagnostic were not persisted: %#v", repository.steps)
 	}
 }
 
@@ -191,7 +208,7 @@ type fallbackDocuments struct{ calls int }
 
 func (d *fallbackDocuments) PreviewTemplate(context.Context, string, string, io.Reader, int64) ([]byte, error) {
 	d.calls++
-	if d.calls == 1 {
+	if d.calls <= 4 {
 		return nil, errors.New("model LaTeX did not compile")
 	}
 	return []byte("%PDF-fallback"), nil
@@ -225,7 +242,7 @@ func TestProcessorCompletesWrittenRenderedAndReviewedPDF(t *testing.T) {
 	if gateway.calls != 3 {
 		t.Fatalf("gateway calls = %d, want 3", gateway.calls)
 	}
-	want := []string{"writing", "rendering", "reviewing"}
+	want := []string{"writing", "rendering", "reviewing", "finalizing"}
 	if len(repository.stages) != len(want) {
 		t.Fatalf("stages = %#v", repository.stages)
 	}

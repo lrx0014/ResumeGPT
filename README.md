@@ -128,6 +128,8 @@ This checklist is the project-level source of truth for planned delivery. An ite
 - [x] Support safe multi-file LaTeX ZIP archives with automatic or user-selected `.tex` entry files.
 - [ ] Define and version the ResumeDocument and CoverLetterDocument JSON Schemas.
 - [x] Implement the provider-independent OpenAI, OpenAI-compatible, and Ollama chat gateway.
+- [x] Run generation roles through LangChainGo agents and expose PDF operations as scoped LangChainGo tools.
+- [x] Require the Template Applying Agent to study the complete template project before rendering and inject an optional Profile avatar through the template's existing photo mechanism.
 - [x] Select one shared model or specialized writer, renderer, and visual-reviewer models for each Opportunity generation.
 - [ ] Generate successfully through at least one cloud connection and one local Ollama or OpenAI-compatible connection.
 - [x] Freeze Profile, Opportunity, template, and model input snapshots when a generation is queued.
@@ -197,7 +199,7 @@ This checklist is the project-level source of truth for planned delivery. An ite
 
 ## Prerequisites
 
-- Go 1.24 or later.
+- Go 1.26.8 or later.
 - Node.js 22.12 or later and npm.
 - Python 3.10 or later and uv.
 - Docker with Compose for the complete local stack or optional infrastructure-only development.

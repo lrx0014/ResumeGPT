@@ -179,3 +179,76 @@ func replaceArchiveEntry(data []byte, requested, source string) ([]byte, string,
 	}
 	return output.Bytes(), entry, nil
 }
+
+func latexArchive(source, assetName string, asset []byte) ([]byte, error) {
+	var output bytes.Buffer
+	writer := zip.NewWriter(&output)
+	entry, err := writer.Create("main.tex")
+	if err != nil {
+		return nil, err
+	}
+	if _, err := io.WriteString(entry, source); err != nil {
+		return nil, err
+	}
+	assetEntry, err := writer.Create(assetName)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := assetEntry.Write(asset); err != nil {
+		return nil, err
+	}
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+	return output.Bytes(), nil
+}
+
+func archiveAssetPath(entry, assetName string) string {
+	directory := path.Dir(path.Clean(entry))
+	if directory == "." {
+		return assetName
+	}
+	return path.Join(directory, assetName)
+}
+
+func addArchiveFile(data []byte, name string, content []byte) ([]byte, error) {
+	reader, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return nil, err
+	}
+	var output bytes.Buffer
+	writer := zip.NewWriter(&output)
+	for _, file := range reader.File {
+		if path.Clean(file.Name) == path.Clean(name) {
+			continue
+		}
+		header := file.FileHeader
+		target, err := writer.CreateHeader(&header)
+		if err != nil {
+			return nil, err
+		}
+		input, err := file.Open()
+		if err != nil {
+			return nil, err
+		}
+		_, copyErr := io.Copy(target, input)
+		closeErr := input.Close()
+		if copyErr != nil {
+			return nil, copyErr
+		}
+		if closeErr != nil {
+			return nil, closeErr
+		}
+	}
+	asset, err := writer.Create(name)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := asset.Write(content); err != nil {
+		return nil, err
+	}
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+	return output.Bytes(), nil
+}

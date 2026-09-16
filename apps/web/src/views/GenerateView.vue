@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
+import AttentionNotice from '../components/AttentionNotice.vue'
 import ListFilters from '../components/ListFilters.vue'
 import ListPagination from '../components/ListPagination.vue'
 import PageHeader from '../components/PageHeader.vue'
@@ -19,8 +20,8 @@ const latexTemplates=computed(()=>matchingTemplates.value.filter(item=>item.form
 const ready=computed(()=>Boolean(form.profileId&&form.opportunityId&&form.templateId&&form.writer.connectionId&&form.writer.model&&(form.pipelineMode==='single'||(form.renderer.connectionId&&form.renderer.model&&form.reviewer.connectionId&&form.reviewer.model))))
 const active=computed(()=>runs.value.some(item=>item.state==='queued'||item.state==='running'))
 const optionName=(values:{id:string;name?:string;title?:string;company?:string}[],id:string)=>{const value=values.find(item=>item.id===id);return value?.name??([value?.title,value?.company].filter(Boolean).join(' · ')||'Deleted input')}
-const stageLabel=(run:GenerationRun)=>({queued:'Waiting',writing:'Writing',rendering:'Applying template',reviewing:'Visual QA',repairing:`Repairing (${run.repairCount}/2)`,ready:'Ready',failed:'Needs attention'} as Record<string,string>)[run.stage]??run.stage
-const stageProgress=(run:GenerationRun)=>({queued:8,writing:28,rendering:52,reviewing:76,repairing:86,ready:100,failed:100} as Record<string,number>)[run.stage]??0
+const stageLabel=(run:GenerationRun)=>run.state==='failed'?'Needs attention':({queued:'Waiting',writing:'Writing',rendering:'Applying template',reviewing:'Visual QA',repairing:`Repairing (${run.repairCount}/2)`,finalizing:'Finalizing',ready:'Ready'} as Record<string,string>)[run.stage]??run.stage
+const stageProgress=(run:GenerationRun)=>run.state==='failed'?100:({queued:8,writing:20,rendering:42,reviewing:64,repairing:82,finalizing:94,ready:100} as Record<string,number>)[run.stage]??0
 const formatDate=(value:string)=>new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date(value))
 const filteredRuns=computed(()=>{const query=search.value.trim().toLocaleLowerCase();return runs.value.filter(run=>{const values=[optionName(opportunities.value,run.opportunityId),optionName(profiles.value,run.profileId),optionName(templates.value,run.templateId),run.writer.model,run.documentType,run.stage];const matchesSearch=!query||values.some(value=>value.toLocaleLowerCase().includes(query));return matchesSearch&&(stateFilter.value==='all'||run.state===stateFilter.value)})})
 const visibleRuns=computed(()=>filteredRuns.value.slice((page.value-1)*pageSize.value,page.value*pageSize.value))
@@ -50,7 +51,7 @@ onMounted(async()=>{await load();if(active.value)timer=window.setInterval(refres
     <header><div><span class="document-kind">{{ run.documentType==='resume'?'Resume':'Cover letter' }}</span><h2>{{ optionName(opportunities,run.opportunityId) }}</h2><p>{{ optionName(profiles,run.profileId) }} · {{ optionName(templates,run.templateId) }}</p></div><span class="status-pill" :class="run.state">{{ stageLabel(run) }}</span></header>
     <div class="progress-track"><span :class="run.state" :style="{width:`${stageProgress(run)}%`}" /></div>
     <div class="application-meta"><span>{{ run.pageTarget.replace('_',' ') }}</span><span>{{ run.pipelineMode==='single'?'Single model':'Specialized models' }}</span><span>{{ formatDate(run.createdAt) }}</span></div>
-    <p v-if="run.errorMessage" class="card-message error-text">{{ run.errorMessage }}</p><p v-else-if="run.review?.startsWith('Template fallback used:')||run.review?.startsWith('Visual QA skipped:')" class="card-message warning-text">Completed with workflow warnings. Open the application for details.</p>
+    <AttentionNotice v-if="run.state==='failed'" compact :message="run.errorMessage||'Generation stopped before completion. Open the application to retry or review its inputs and model connection.'" :code="run.errorCode"/><p v-else-if="run.review?.startsWith('Template fallback used:')||run.review?.startsWith('Visual QA skipped:')" class="card-message warning-text">Completed with workflow warnings. Open the application for details.</p>
     <footer><span>{{ run.writer.model }}</span><div class="card-actions"><button class="text-button danger-text" type="button" @click="pendingDelete=run">Delete</button><RouterLink v-if="run.state!=='queued'&&run.state!=='running'" class="text-button" :to="{path:`/generate/${run.id}`,query:{edit:'1'}}">Edit</RouterLink><RouterLink class="button" :to="`/generate/${run.id}`">View</RouterLink></div></footer>
   </article></TransitionGroup><div v-else class="empty-state compact"><h2>No matching applications</h2><p>Try another keyword or status.</p></div><ListPagination v-if="filteredRuns.length" v-model:page="page" v-model:page-size="pageSize" :total="filteredRuns.length" /></template>
 

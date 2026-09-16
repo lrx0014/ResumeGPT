@@ -283,7 +283,7 @@ func (r *GenerationRepository) Complete(ctx context.Context, task workqueue.Job,
 }
 func (r *GenerationRepository) Fail(ctx context.Context, task workqueue.Job, code, message string) error {
 	return withWorkspaceTx(ctx, r.pool, task.WorkspaceID, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `UPDATE generation_runs SET state='failed',stage='failed',error_code=$3,error_message=$4,updated_at=now() WHERE workspace_id=$1 AND job_id=$2`, task.WorkspaceID, task.ID, code, message)
+		_, err := tx.Exec(ctx, `UPDATE generation_runs SET state='failed',error_code=$3,error_message=$4,updated_at=now() WHERE workspace_id=$1 AND job_id=$2`, task.WorkspaceID, task.ID, code, message)
 		return err
 	})
 }

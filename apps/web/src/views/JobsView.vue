@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 
 import ConfirmDialog from '../components/ConfirmDialog.vue'
+import AttentionNotice from '../components/AttentionNotice.vue'
 import ListFilters from '../components/ListFilters.vue'
 import ListPagination from '../components/ListPagination.vue'
 import PageHeader from '../components/PageHeader.vue'
@@ -166,6 +167,7 @@ onBeforeUnmount(() => { if (pollTimer) window.clearInterval(pollTimer) })
           <h2>{{ item.title || 'Importing job details…' }}</h2>
           <p>{{ item.company || 'Company pending' }}<span v-if="item.location"> · {{ item.location }}</span><span v-else-if="item.city || item.country"> · {{ [item.city, item.country].filter(Boolean).join(', ') }}</span></p>
           <small v-if="importLabel(item)" :class="{ 'import-warning': item.importState === 'needs_user_action' || item.importState === 'failed' }">{{ importLabel(item) }}</small>
+          <AttentionNotice v-if="item.importState === 'needs_user_action' || item.importState === 'failed'" compact :message="item.importError || 'ResumeGPT could not extract complete job details from this page. Open the opportunity to enter or correct the missing information.'" />
         </div>
         <span class="status-pill">{{ item.status }}</span>
         <div class="row-actions"><RouterLink class="text-button" :to="`/jobs/${item.id}`">View →</RouterLink><a v-if="item.sourceUrl" class="source-link" :href="item.sourceUrl" target="_blank" rel="noopener noreferrer">Source ↗</a><button class="text-button danger-text" type="button" @click="pendingDelete = item">Delete</button></div>

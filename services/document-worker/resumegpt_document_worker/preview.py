@@ -12,6 +12,8 @@ from .latex_archive import extract_latex_archive
 
 MAX_PREVIEW_BYTES = 20 * 1024 * 1024
 MISSING_LATEX_FILE = re.compile(r"LaTeX Error: File [`']([^`']+)' not found\.")
+LATEX_ERROR_LINE = re.compile(r"(?m)^!\s*(.+?)\s*$")
+LATEX_SOURCE_LINE = re.compile(r"(?m)^l\.\d+\s+(.+?)\s*$")
 
 
 def _render_failure_message(completed: subprocess.CompletedProcess[bytes], latex: bool) -> str:
@@ -20,6 +22,13 @@ def _render_failure_message(completed: subprocess.CompletedProcess[bytes], latex
         missing = MISSING_LATEX_FILE.search(output)
         if missing:
             return f"LaTeX dependency or project file '{missing.group(1)}' is missing. Add it to the ZIP or install the required TeX package."
+        latex_error = LATEX_ERROR_LINE.search(output)
+        if latex_error:
+            detail = " ".join(latex_error.group(1).split())
+            source_line = LATEX_SOURCE_LINE.search(output, latex_error.end())
+            if source_line:
+                detail += f" Near: {' '.join(source_line.group(1).split())}"
+            return f"LaTeX compilation failed: {detail[:600]}"
     return "The template could not be rendered as PDF. Check its packages, fonts, or document structure."
 
 

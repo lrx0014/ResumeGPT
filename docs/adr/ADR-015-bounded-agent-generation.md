@@ -13,22 +13,25 @@ ResumeGPT now has editable Profiles, Opportunities, user-managed LLM connections
 
 Each generation is one durable background run with immutable JSON snapshots of the selected Profile, Opportunity, Template, and model choices. The default `single` mode maps one connection and model to all roles. The optional `multi` mode selects a writer, renderer, and visual reviewer independently.
 
+LLM-backed roles use LangChainGo agents rather than a project-specific agent protocol. The writer, template applier, visual reviewer, and layout polisher run through the standard LangChainGo agent executor and its bounded ReAct `Action`, `Observation`, and `Final Answer` loop. ResumeGPT's encrypted provider connections are exposed through a LangChainGo `llms.Model` adapter. Each agent receives only its scoped LangChainGo tools: immutable generation context for the writer, complete template-source reading followed by sandboxed PDF compilation for template application, sandboxed PDF compilation for polishing, and bounded PDF rasterization for the visual reviewer. Artifact storage is also a standard tool but remains processor-controlled because persistence is not an LLM decision. The durable processor remains responsible for ordering, retries, persisted stages, and the repair limit.
+
 Each material result is appended to a simple generation timeline: configuration change, writer draft, rendered PDF and source, reviewer feedback, workflow warning, or user follow-up prompt. A ready run can be queued again with one follow-up instruction; the renderer receives the grounded draft and current LaTeX, and previous timeline entries remain immutable. A completed or failed run can also refresh its Profile, Template, and model snapshots and restart from writing while retaining the same append-only history.
 
 The bounded workflow is:
 
 1. The writer produces profile-grounded Markdown content from the saved Profile and Opportunity.
-2. The renderer produces one complete LaTeX entry file while preserving the selected template's class, macros, and asset references.
-3. The isolated document worker compiles it with shell escape disabled and no network access.
-4. The document worker rasterizes up to three PDF pages for the reviewer.
-5. Deterministic page-count validation and the visual reviewer can request a repair from the renderer.
-6. The workflow stops after at most two repairs and either stores a reliable PDF or returns an actionable failure.
+2. The template applier must first read the complete extracted template project and identify its entry structure, public macros, usage examples, local assets, and optional portrait mechanism.
+3. The renderer produces one complete LaTeX entry file while preserving and correctly using the selected template's class, macros, and asset references.
+4. The isolated document worker compiles it with shell escape disabled and no network access.
+5. The document worker rasterizes up to three PDF pages for the reviewer.
+6. Deterministic page-count validation and the visual reviewer can request a repair from the renderer.
+7. The workflow stops after at most two repairs and either stores a reliable PDF or returns an actionable failure.
 
 If the selected reviewer model explicitly rejects image input, the workflow degrades to the deterministic PDF and page-count checks. It stores the compiled PDF as ready and records a persistent warning that model-based visual QA was skipped. Connection failures, timeouts, malformed reviewer output, and other review errors do not use this fallback.
 
 Ollama responses are streamed and every role has a bounded output-token budget. If a renderer still returns an incomplete LaTeX document, ResumeGPT generates a safely escaped basic LaTeX layout from the grounded Markdown draft. The PDF remains available, while a persistent warning makes it clear that the selected template was not applied.
 
-For a multi-file LaTeX ZIP, only the selected or automatically discovered entry file is replaced; other source and asset files are preserved. Provider-specific OpenAI, OpenAI-compatible, and Ollama requests remain behind one gateway.
+For a multi-file LaTeX ZIP, only the selected or automatically discovered entry file is replaced; other source and asset files are preserved. When the selected Profile has a PNG or JPEG avatar, generation injects it beside the entry file under a stable `resumegpt-avatar.*` filename. The template applier uses the template's existing portrait macro or slot when one exists and does not invent a new photo layout when it does not. Single-file LaTeX templates are packaged with the same asset convention for compilation. Provider-specific OpenAI, OpenAI-compatible, and Ollama requests remain behind one gateway.
 
 The first increment supports LaTeX output. Word templates remain manageable and previewable, but are not selectable for generation until a structured DOCX renderer can preserve styles reliably.
 
@@ -39,7 +42,8 @@ The first increment supports LaTeX output. Word templates remain manageable and 
 - Renderer prompts forbid external commands, file writes, network access, and shell escape.
 - Compilation retains the isolated, read-only document-worker boundary.
 - API tokens are resolved only inside the worker and are never copied into generation snapshots.
-- Runs use explicit states rather than a general-purpose agent graph or workflow engine.
+- LangChainGo agents and tools operate inside explicit durable stages; they do not replace the job queue with an unbounded agent graph or workflow engine.
+- Tools expose only scoped document operations and never grant agents arbitrary shell, filesystem, database, object-store, or network access.
 
 ## Consequences
 

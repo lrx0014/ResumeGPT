@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { useRoute, useRouter } from 'vue-router'
 
 import GenerationPdfPreview from '../components/GenerationPdfPreview.vue'
+import GenerationWorkflow from '../components/GenerationWorkflow.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { api } from '../lib/api'
 import { toast } from '../lib/toast'
@@ -35,7 +36,7 @@ const active = computed(() => run.value?.state === 'queued' || run.value?.state 
 const title = computed(() => { const item = opportunities.value.find(value => value.id === run.value?.opportunityId); return item ? [item.title, item.company].filter(Boolean).join(' · ') : 'Application details' })
 const profileName = computed(() => profiles.value.find(value => value.id === run.value?.profileId)?.name ?? 'Deleted profile')
 const templateName = computed(() => templates.value.find(value => value.id === run.value?.templateId)?.name ?? 'Deleted template')
-const stageLabel = computed(() => run.value ? ({ queued: 'Waiting to start', writing: 'Writing content', rendering: 'Applying template', reviewing: 'Reviewing the PDF', repairing: `Repairing layout (${run.value.repairCount}/2)`, ready: 'Ready', failed: 'Needs attention' } as Record<string, string>)[run.value.stage] ?? run.value.stage : '')
+const stageLabel = computed(() => run.value ? run.value.state === 'failed' ? 'Needs attention' : ({ queued: 'Waiting to start', writing: 'Writing content', rendering: 'Applying template', reviewing: 'Reviewing the PDF', repairing: `Repairing layout (${run.value.repairCount}/2)`, finalizing: 'Finalizing PDF', ready: 'Ready' } as Record<string, string>)[run.value.stage] ?? run.value.stage : '')
 const activeIcon = computed(() => ({ queued: 'Q', writing: 'W', rendering: 'P', reviewing: 'R', repairing: 'R' } as Record<string, string>)[run.value?.stage ?? 'queued'] ?? '•')
 const sortedSteps = computed(() => [...steps.value].sort((left, right) => sortOrder.value === 'desc' ? right.sequence - left.sequence : left.sequence - right.sequence))
 const matchingTemplates = computed(() => templates.value.filter(item => item.state === 'ready' && item.kind === editForm.documentType && item.format === 'latex'))
@@ -131,6 +132,7 @@ onBeforeUnmount(() => { if (timer) window.clearInterval(timer) })
     <div v-if="loading" class="empty-state">Loading application…</div>
     <template v-else-if="run">
       <section class="panel run-summary"><div><span class="status-pill" :class="run.state">{{ stageLabel }}</span><h2>{{ run.documentType === 'resume' ? 'Resume' : 'Cover letter' }}</h2><p>{{ profileName }} · {{ templateName }} · {{ run.pageTarget.replace('_', ' ') }} · {{ run.language }}</p></div><div class="summary-actions"><button v-if="!active" class="button" type="button" :disabled="submitting" @click="openEditor">Edit &amp; regenerate</button><button v-if="run.state === 'failed'" class="button" :disabled="submitting" @click="retry">Retry</button><button v-if="run.state === 'ready'" class="button primary" @click="download">Download PDF</button></div></section>
+      <GenerationWorkflow :run="run" />
 
       <section class="detail-grid">
         <div class="panel timeline-panel">

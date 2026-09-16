@@ -21,6 +21,12 @@ class Failed:
     stderr = b""
 
 
+class FailedSyntax:
+    returncode = 1
+    stdout = b"! Undefined control sequence.\nl.42 \\unknowncommand{Resume}"
+    stderr = b""
+
+
 def test_render_tex_preview_uses_no_shell_escape(monkeypatch) -> None:
     captured: list[str] = []
     monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/pdflatex")
@@ -86,4 +92,12 @@ def test_render_tex_preview_reports_missing_dependency(monkeypatch) -> None:
     monkeypatch.setattr("subprocess.run", lambda *args, **kwargs: Failed())
 
     with pytest.raises(ExtractionError, match="fontawesome\\.sty"):
+        render_preview("resume.tex", b"\\documentclass{article}")
+
+
+def test_render_tex_preview_reports_specific_latex_error(monkeypatch) -> None:
+    monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/pdflatex")
+    monkeypatch.setattr("subprocess.run", lambda *args, **kwargs: FailedSyntax())
+
+    with pytest.raises(ExtractionError, match=r"Undefined control sequence.*unknowncommand"):
         render_preview("resume.tex", b"\\documentclass{article}")

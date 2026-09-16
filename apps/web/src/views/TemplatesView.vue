@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
+import AttentionNotice from '../components/AttentionNotice.vue'
 import ListFilters from '../components/ListFilters.vue'
 import ListPagination from '../components/ListPagination.vue'
 import PageHeader from '../components/PageHeader.vue'
@@ -116,6 +117,7 @@ onBeforeUnmount(() => window.clearTimeout(pollTimer))
           <div class="template-tags"><span class="format-pill">{{ formatLabel(item) }}</span><span class="status-pill">{{ item.builtIn ? 'Built in' : item.state.replaceAll('_', ' ') }}</span></div>
           <span v-if="item.authorName">By {{ item.authorName }} · {{ item.license }}</span><span v-else>{{ item.sourceName }}</span>
         </div>
+        <AttentionNotice v-if="['needs_user_action','security_quarantine','failed'].includes(item.state)" compact :message="item.errorMessage || 'Template processing could not finish. Open the template and replace its source file to try again.'" :code="item.errorCode" />
         <footer><RouterLink class="text-button" :to="`/templates/${item.id}`">View</RouterLink><div><button v-if="item.state === 'ready'" class="text-button" type="button" @click="download(item)">Download</button><button v-if="!item.builtIn" class="text-button danger-text" type="button" @click="pendingDelete = item">Delete</button></div></footer>
       </article>
     </TransitionGroup>
