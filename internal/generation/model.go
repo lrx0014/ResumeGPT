@@ -64,6 +64,20 @@ type Run struct {
 }
 
 type Payload struct {
-	RunID       string `json:"runId"`
-	UseFallback bool   `json:"useFallback,omitempty"`
+	RunID          string `json:"runId"`
+	UseFallback    bool   `json:"useFallback,omitempty"`
+	RevisionPrompt string `json:"revisionPrompt,omitempty"`
+}
+
+type Step struct {
+	ID               string    `json:"id"`
+	WorkspaceID      string    `json:"workspaceId"`
+	GenerationID     string    `json:"generationId"`
+	Kind             string    `json:"kind"`
+	Sequence         int       `json:"sequence"`
+	Content          string    `json:"content,omitempty"`
+	Feedback         string    `json:"feedback,omitempty"`
+	ArtifactObjectID string    `json:"artifactObjectId,omitempty"`
+	RepairCount      int       `json:"repairCount"`
+	CreatedAt        time.Time `json:"createdAt"`
 }

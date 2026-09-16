@@ -10,7 +10,13 @@ type Repository interface {
 	Create(context.Context, Run, workqueue.Job) (Run, error)
 	List(context.Context, string) ([]Run, error)
 	Get(context.Context, string, string) (Run, error)
+	Delete(context.Context, string, string) error
+	Reconfigure(context.Context, Run) (Run, error)
 	Retry(context.Context, string, string) (Run, error)
+	Revise(context.Context, string, string, string) (Run, error)
+	RecordStep(context.Context, workqueue.Job, Step) error
+	ListSteps(context.Context, string, string) ([]Step, error)
+	GetStep(context.Context, string, string, string) (Step, error)
 	SetStage(context.Context, workqueue.Job, string, string, string, int) error
 	Complete(context.Context, workqueue.Job, string, string, string, string, int) error
 	Fail(context.Context, workqueue.Job, string, string) error

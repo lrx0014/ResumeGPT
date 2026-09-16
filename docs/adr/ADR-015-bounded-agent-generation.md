@@ -13,6 +13,8 @@ ResumeGPT now has editable Profiles, Opportunities, user-managed LLM connections
 
 Each generation is one durable background run with immutable JSON snapshots of the selected Profile, Opportunity, Template, and model choices. The default `single` mode maps one connection and model to all roles. The optional `multi` mode selects a writer, renderer, and visual reviewer independently.
 
+Each material result is appended to a simple generation timeline: configuration change, writer draft, rendered PDF and source, reviewer feedback, workflow warning, or user follow-up prompt. A ready run can be queued again with one follow-up instruction; the renderer receives the grounded draft and current LaTeX, and previous timeline entries remain immutable. A completed or failed run can also refresh its Profile, Template, and model snapshots and restart from writing while retaining the same append-only history.
+
 The bounded workflow is:
 
 1. The writer produces profile-grounded Markdown content from the saved Profile and Opportunity.

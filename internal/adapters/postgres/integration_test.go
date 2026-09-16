@@ -48,7 +48,7 @@ func TestGenerationRepositoryPersistsSnapshotAndScopesWorkspace(t *testing.T) {
 	choice := generation.ModelChoice{ConnectionID: "llm_test", Model: "test-model"}
 	run := generation.Run{ID: id.New("gen"), WorkspaceID: workspaceID, ProfileID: "prof_snapshot", OpportunityID: "job_snapshot", TemplateID: "tpl_snapshot", DocumentType: "resume", Language: "English", PageTarget: "one_page", PipelineMode: "single", Writer: choice, Renderer: choice, Reviewer: choice, State: "queued", Stage: "queued", ProfileSnapshot: []byte(`{"content":"profile"}`), OpportunitySnapshot: []byte(`{"description":"job"}`), TemplateSnapshot: []byte(`{"content":"template"}`), CreatedAt: now, UpdatedAt: now}
 	payload, _ := json.Marshal(generation.Payload{RunID: run.ID})
-	task := workqueue.Job{ID: id.New("task"), WorkspaceID: workspaceID, Kind: generation.JobKind, IdempotencyKey: run.ID, Payload: payload, MaxAttempts: 3, AvailableAt: now}
+	task := workqueue.Job{ID: id.New("task"), WorkspaceID: workspaceID, Kind: "integration.generation", IdempotencyKey: run.ID, Payload: payload, MaxAttempts: 3, AvailableAt: now}
 	repository := postgres.NewGenerationRepository(pool)
 	if _, err := repository.Create(ctx, run, task); err != nil {
 		t.Fatal(err)
@@ -57,9 +57,50 @@ func TestGenerationRepositoryPersistsSnapshotAndScopesWorkspace(t *testing.T) {
 	if err != nil || stored.Writer.Model != "test-model" || !strings.Contains(string(stored.ProfileSnapshot), `"profile"`) {
 		t.Fatalf("unexpected generation: %#v, %v", stored, err)
 	}
+	queue := postgres.NewWorkQueue(pool)
+	claimed, err := queue.ClaimKind(ctx, "generation-integration-worker", task.Kind, time.Minute)
+	if err != nil || claimed.ID != task.ID {
+		t.Fatalf("claim generation: %#v, %v", claimed, err)
+	}
+	if err := repository.Complete(ctx, claimed, "\\begin{document}ready\\end{document}", "# Draft", "Approved", id.New("obj"), 0); err != nil {
+		t.Fatal(err)
+	}
+	stored.TemplateID = "tpl_reconfigured"
+	stored.Writer.Model = "updated-model"
+	stored.Renderer, stored.Reviewer = stored.Writer, stored.Writer
+	stored.UpdatedAt = time.Now().UTC()
+	reconfigured, err := repository.Reconfigure(ctx, stored)
+	if err != nil || reconfigured.State != "queued" || reconfigured.Writer.Model != "updated-model" || reconfigured.Draft != "" {
+		t.Fatalf("reconfigure generation: %#v, %v", reconfigured, err)
+	}
+	claimed, err = queue.ClaimKind(ctx, "generation-integration-worker", task.Kind, time.Minute)
+	if err != nil || claimed.ID != task.ID {
+		t.Fatalf("reclaim reconfigured generation: %#v, %v", claimed, err)
+	}
+	if err := repository.Complete(ctx, claimed, "\\begin{document}updated\\end{document}", "# Updated draft", "Approved", id.New("obj"), 0); err != nil {
+		t.Fatal(err)
+	}
+	revised, err := repository.Revise(ctx, workspaceID, run.ID, "Reduce whitespace around Experience.")
+	if err != nil || revised.State != "queued" {
+		t.Fatalf("revise generation: %#v, %v", revised, err)
+	}
+	steps, err := repository.ListSteps(ctx, workspaceID, run.ID)
+	if err != nil || len(steps) != 2 || steps[0].Kind != "configuration_change" || steps[1].Kind != "user_prompt" || !strings.Contains(steps[1].Content, "Reduce whitespace") {
+		t.Fatalf("unexpected generation steps: %#v, %v", steps, err)
+	}
 	other, err := repository.List(ctx, otherWorkspaceID)
 	if err != nil || len(other) != 0 {
 		t.Fatalf("cross-workspace generations: %#v, %v", other, err)
+	}
+	if err := repository.Delete(ctx, workspaceID, run.ID); err != nil {
+		t.Fatalf("delete generation: %v", err)
+	}
+	if _, err := repository.Get(ctx, workspaceID, run.ID); !errors.Is(err, generation.ErrNotFound) {
+		t.Fatalf("get deleted generation error = %v, want ErrNotFound", err)
+	}
+	var jobExists bool
+	if err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM durable_jobs WHERE id=$1)`, task.ID).Scan(&jobExists); err != nil || jobExists {
+		t.Fatalf("generation job still exists = %v, error = %v", jobExists, err)
 	}
 }
 

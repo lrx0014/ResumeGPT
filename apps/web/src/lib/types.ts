@@ -160,3 +160,8 @@ export interface GenerationInput {
   language: string; pageTarget: GenerationRun['pageTarget']; customInstructions: string
   pipelineMode: GenerationRun['pipelineMode']; writer: GenerationModelChoice; renderer: GenerationModelChoice; reviewer: GenerationModelChoice
 }
+export type GenerationStepKind = 'writer_draft' | 'rendered_pdf' | 'reviewer_feedback' | 'user_prompt' | 'system_warning' | 'configuration_change'
+export interface GenerationStep {
+  id: string; workspaceId: string; generationId: string; kind: GenerationStepKind; sequence: number
+  content?: string; feedback?: string; artifactObjectId?: string; repairCount: number; createdAt: string
+}

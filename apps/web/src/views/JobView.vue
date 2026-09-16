@@ -2,8 +2,10 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { api } from '../lib/api'
+import { toast } from '../lib/toast'
 import type { Job, JobInput } from '../lib/types'
 
 const route = useRoute()
@@ -14,8 +16,8 @@ const form = reactive<JobInput>({ title: '', company: '', location: '', country:
 const loading = ref(true)
 const saving = ref(false)
 const deleting = ref(false)
+const confirmDelete = ref(false)
 const error = ref('')
-const notice = ref('')
 const importing = computed(() => job.value && ['queued', 'fetching'].includes(job.value.importState))
 
 async function load() {
@@ -39,10 +41,9 @@ async function load() {
 async function save() {
   saving.value = true
   error.value = ''
-  notice.value = ''
   try {
     job.value = await api.updateJob(jobId.value, { ...form })
-    notice.value = 'Job saved.'
+    toast.success('Job saved.')
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : 'Could not save the job.'
   } finally {
@@ -51,10 +52,10 @@ async function save() {
 }
 
 async function removeJob() {
-  if (!window.confirm('Permanently delete this job?')) return
   deleting.value = true
   try {
     await api.deleteJob(jobId.value)
+    toast.success('Opportunity deleted.')
     await router.push('/jobs')
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : 'Could not delete the job.'
@@ -77,7 +78,6 @@ watch(jobId, () => void load(), { immediate: true })
     </PageHeader>
 
     <p v-if="error" class="notice error" role="alert">{{ error }}</p>
-    <p v-if="notice" class="notice" role="status">{{ notice }}</p>
     <p v-if="importing" class="notice" role="status">ResumeGPT is importing this public job page. Use Refresh to load the latest details without losing edits in progress.</p>
     <p v-if="job?.importError" class="notice error">{{ job.importError }}</p>
     <div v-if="loading" class="empty-state">Loading job…</div>
@@ -96,8 +96,9 @@ watch(jobId, () => void load(), { immediate: true })
         <label class="full"><span>Job description</span><textarea v-model="form.description" rows="18" maxlength="1048576" /></label>
         <div class="full form-actions"><button class="button primary" :disabled="saving">Save job</button></div>
       </form>
-      <section class="danger-zone"><div><h2>Delete job</h2><p>This removes the job from the active database.</p></div><button class="button" type="button" :disabled="deleting" @click="removeJob">{{ deleting ? 'Deleting…' : 'Delete job' }}</button></section>
+      <section class="danger-zone"><div><h2>Delete job</h2><p>This removes the job from the active database.</p></div><button class="button" type="button" :disabled="deleting" @click="confirmDelete = true">Delete job</button></section>
     </template>
+    <ConfirmDialog :open="confirmDelete" title="Delete opportunity?" :message="`${[job?.title, job?.company].filter(Boolean).join(' at ') || 'This opportunity'} will be removed. This action cannot be undone.`" :busy="deleting" @cancel="confirmDelete = false" @confirm="removeJob" />
   </div>
 </template>
 

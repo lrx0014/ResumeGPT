@@ -2,9 +2,11 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { api } from '../lib/api'
 import { applyTheme } from '../lib/preferences'
+import { toast } from '../lib/toast'
 import type { LLMConnection, LLMConnectionInput, SettingsPreferences } from '../lib/types'
 
 const { locale } = useI18n()
@@ -12,8 +14,9 @@ const loading = ref(true)
 const savingPreferences = ref(false)
 const savingConnection = ref(false)
 const testingId = ref('')
+const deletingId = ref('')
+const pendingDelete = ref<LLMConnection | null>(null)
 const error = ref('')
-const notice = ref('')
 const connections = ref<LLMConnection[]>([])
 const capabilities = ref<Record<string, boolean>>({})
 const editingId = ref('')
@@ -44,7 +47,6 @@ function addConnection() {
   resetConnectionForm()
   showConnectionForm.value = true
   error.value = ''
-  notice.value = ''
 }
 
 function editConnection(item: LLMConnection) {
@@ -53,7 +55,6 @@ function editConnection(item: LLMConnection) {
   Object.assign(connectionForm, { name: item.name, executionMode: item.executionMode, provider: item.provider, baseUrl: item.baseUrl, apiToken: '', clearApiToken: false })
   showConnectionForm.value = true
   error.value = ''
-  notice.value = ''
 }
 
 function closeConnectionForm() {
@@ -95,12 +96,11 @@ async function load() {
 async function savePreferences() {
   savingPreferences.value = true
   error.value = ''
-  notice.value = ''
   try {
     const saved = await api.updateSettings({ ...preferences })
     locale.value = saved.interfaceLanguage
     applyTheme(saved.theme)
-    notice.value = 'Interface settings saved.'
+    toast.success('Interface settings saved.')
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : 'Could not save interface settings.'
   } finally {
@@ -111,7 +111,6 @@ async function savePreferences() {
 async function saveConnection() {
   savingConnection.value = true
   error.value = ''
-  notice.value = ''
   try {
     const saved = editingId.value
       ? await api.updateLLMConnection(editingId.value, { ...connectionForm })
@@ -120,7 +119,7 @@ async function saveConnection() {
     if (index >= 0) connections.value[index] = saved
     else connections.value.push(saved)
     connections.value.sort((left, right) => left.name.localeCompare(right.name))
-    notice.value = 'LLM connection saved. Test it before using it for generation.'
+    toast.success('LLM connection saved. Test it before using it for generation.')
     closeConnectionForm()
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : 'Could not save the LLM connection.'
@@ -132,12 +131,11 @@ async function saveConnection() {
 async function testConnection(item: LLMConnection) {
   testingId.value = item.id
   error.value = ''
-  notice.value = ''
   try {
     const result = await api.testLLMConnection(item.id)
     connectionResults[item.id] = `Connected · ${result.models.length} model${result.models.length === 1 ? '' : 's'} available`
     discoveredModels.value = result.models
-    notice.value = result.models.length ? `Connection succeeded. Models: ${result.models.slice(0, 8).join(', ')}${result.models.length > 8 ? '…' : ''}` : 'Connection succeeded, but the endpoint reported no models.'
+    toast.success(result.models.length ? `Connection succeeded. Models: ${result.models.slice(0, 8).join(', ')}${result.models.length > 8 ? '…' : ''}` : 'Connection succeeded, but the endpoint reported no models.')
   } catch (cause) {
     connectionResults[item.id] = 'Connection failed'
     error.value = cause instanceof Error ? cause.message : 'Could not test the LLM connection.'
@@ -146,16 +144,21 @@ async function testConnection(item: LLMConnection) {
   }
 }
 
-async function deleteConnection(item: LLMConnection) {
-  if (!window.confirm(`Delete the “${item.name}” connection?`)) return
+async function deleteConnection() {
+  const item = pendingDelete.value
+  if (!item) return
+  deletingId.value = item.id
   error.value = ''
   try {
     await api.deleteLLMConnection(item.id)
     connections.value = connections.value.filter(candidate => candidate.id !== item.id)
-    notice.value = 'LLM connection deleted.'
+    pendingDelete.value = null
     if (editingId.value === item.id) closeConnectionForm()
+    toast.success('LLM connection deleted.')
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : 'Could not delete the LLM connection.'
+  } finally {
+    deletingId.value = ''
   }
 }
 
@@ -167,7 +170,6 @@ onMounted(load)
     <PageHeader title="Settings" description="Manage LLM connections and interface preferences. Generation choices remain specific to each opportunity." />
 
     <p v-if="error" class="notice error" role="alert">{{ error }}</p>
-    <p v-if="notice" class="notice" role="status">{{ notice }}</p>
     <div v-if="loading" class="empty-state">Loading settings…</div>
 
     <template v-else>
@@ -189,13 +191,13 @@ onMounted(load)
           <div class="full form-actions"><button class="button" type="button" @click="closeConnectionForm">Cancel</button><button class="button primary" :disabled="savingConnection">{{ savingConnection ? 'Saving…' : 'Save connection' }}</button></div>
         </form>
 
-        <div v-if="connections.length" class="connection-list">
+        <TransitionGroup v-if="connections.length" name="card-list" tag="div" class="connection-list">
           <article v-for="item in connections" :key="item.id" class="panel connection-card">
             <div class="connection-icon">{{ item.executionMode === 'local' ? '⌂' : '☁' }}</div>
             <div><div class="connection-title"><h3>{{ item.name }}</h3><span class="status-pill">{{ item.executionMode }}</span></div><p>{{ providerLabel(item.provider) }} · {{ item.baseUrl }}</p><small>{{ item.apiTokenConfigured ? 'API token configured' : item.provider === 'ollama' ? 'No API token required' : 'API token not configured' }}</small><small v-if="connectionResults[item.id]" class="test-result">{{ connectionResults[item.id] }}</small></div>
-            <div class="connection-actions"><button class="text-button" type="button" :disabled="testingId === item.id" @click="testConnection(item)">{{ testingId === item.id ? 'Testing…' : 'Test connection' }}</button><button class="text-button" type="button" @click="editConnection(item)">Edit</button><button class="text-button danger-text" type="button" @click="deleteConnection(item)">Delete</button></div>
+            <div class="connection-actions"><button class="text-button" type="button" :disabled="testingId === item.id" @click="testConnection(item)">{{ testingId === item.id ? 'Testing…' : 'Test connection' }}</button><button class="text-button" type="button" @click="editConnection(item)">Edit</button><button class="text-button danger-text" type="button" @click="pendingDelete=item">Delete</button></div>
           </article>
-        </div>
+        </TransitionGroup>
         <div v-else class="empty-state compact"><span class="empty-icon">✦</span><h2>No LLM connections</h2><p>Add a cloud provider or local Ollama endpoint. A connection is selected explicitly for each generation.</p></div>
       </section>
 
@@ -213,6 +215,7 @@ onMounted(load)
         <div class="status-grid"><div v-for="(label, key) in { profiles: 'Profiles', jobs: 'Opportunities', documents: 'Document extraction', jobImports: 'Job import', settings: 'Settings API' }" :key="key" class="panel status-card"><span>{{ label }}</span><strong :class="capabilities[key] ? 'available' : 'unavailable'">{{ capabilities[key] ? 'Available' : 'Unavailable' }}</strong></div><div class="panel status-card"><span>LLM connections</span><strong :class="connections.length ? 'available' : 'unavailable'">{{ connections.length ? `${connections.length} configured` : 'Not configured' }}</strong></div></div>
       </section>
     </template>
+    <ConfirmDialog :open="Boolean(pendingDelete)" title="Delete LLM connection?" :message="`“${pendingDelete?.name ?? ''}” will no longer be available for generation. This action cannot be undone.`" :busy="deletingId===pendingDelete?.id" @cancel="pendingDelete=null" @confirm="deleteConnection" />
   </div>
 </template>
 

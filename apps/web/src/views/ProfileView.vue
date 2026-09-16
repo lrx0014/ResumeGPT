@@ -2,8 +2,10 @@
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { api } from '../lib/api'
+import { toast } from '../lib/toast'
 import type { DocumentUpload, Profile } from '../lib/types'
 
 const route = useRoute()
@@ -15,8 +17,8 @@ const loading = ref(true)
 const saving = ref(false)
 const extracting = ref(false)
 const deleting = ref(false)
+const confirmDelete = ref(false)
 const error = ref('')
-const notice = ref('')
 const extraction = ref<DocumentUpload>()
 const avatarUrl = ref('')
 let localAvatarUrl = ''
@@ -24,7 +26,6 @@ let localAvatarUrl = ''
 async function load() {
   loading.value = true
   error.value = ''
-  notice.value = ''
   try {
     const selected = await api.getProfile(profileId.value)
     profile.value = selected
@@ -40,7 +41,7 @@ async function load() {
       try {
         avatarUrl.value = (await api.profileAvatar(selected.id)).url
       } catch {
-        notice.value = 'The profile loaded, but its avatar is currently unavailable.'
+        toast.warning('The profile loaded, but its avatar is currently unavailable.')
       }
     }
   } catch (cause) {
@@ -53,10 +54,9 @@ async function load() {
 async function save() {
   saving.value = true
   error.value = ''
-  notice.value = ''
   try {
     profile.value = await api.updateProfile(profileId.value, { ...form })
-    notice.value = 'Profile saved.'
+    toast.success('Profile saved.')
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : 'Could not save the profile.'
   } finally {
@@ -75,7 +75,6 @@ async function extractDocument(event: Event) {
   }
   extracting.value = true
   error.value = ''
-  notice.value = ''
   try {
     const staged = await api.stageDocument(profileId.value, file)
     extraction.value = staged.upload
@@ -89,7 +88,7 @@ async function extractDocument(event: Event) {
       throw new Error(extraction.value.errorMessage || 'Document extraction did not complete.')
     }
     form.content = extraction.value.extractedText
-    notice.value = 'Extracted text loaded into the editor. Review it and click Save profile when ready.'
+    toast.success('Extracted text loaded into the editor. Review it and click Save profile when ready.')
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : 'Could not extract the document.'
   } finally {
@@ -116,7 +115,7 @@ async function uploadAvatar(event: Event) {
     if (localAvatarUrl) URL.revokeObjectURL(localAvatarUrl)
     localAvatarUrl = URL.createObjectURL(file)
     avatarUrl.value = localAvatarUrl
-    notice.value = 'Avatar uploaded. Click Save profile to keep this change.'
+    toast.info('Avatar uploaded. Click Save profile to keep this change.')
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : 'Could not upload the avatar.'
   } finally {
@@ -128,20 +127,20 @@ async function uploadAvatar(event: Event) {
 function removeAvatar() {
   form.avatarObjectId = ''
   avatarUrl.value = ''
-  notice.value = 'Avatar removed from the editor. Click Save profile to keep this change.'
+  toast.info('Avatar removed from the editor. Click Save profile to keep this change.')
 }
 
 function handleAvatarError() {
   avatarUrl.value = ''
-  notice.value = 'The saved avatar is currently unavailable. Upload another image or remove the avatar and save.'
+  toast.warning('The saved avatar is currently unavailable. Upload another image or remove the avatar and save.')
 }
 
 async function removeProfile() {
-  if (!window.confirm('Permanently delete this profile?')) return
   deleting.value = true
   error.value = ''
   try {
     await api.deleteProfile(profileId.value)
+    toast.success('Profile deleted.')
     await router.push('/profiles')
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : 'Could not delete the profile.'
@@ -162,7 +161,6 @@ onBeforeUnmount(() => { if (localAvatarUrl) URL.revokeObjectURL(localAvatarUrl) 
     </PageHeader>
 
     <p v-if="error" class="notice error" role="alert">{{ error }}</p>
-    <p v-if="notice" class="notice" role="status">{{ notice }}</p>
     <div v-if="loading" class="empty-state">Loading profile…</div>
 
     <template v-else-if="profile">
@@ -192,9 +190,10 @@ onBeforeUnmount(() => { if (localAvatarUrl) URL.revokeObjectURL(localAvatarUrl) 
 
       <section class="danger-zone">
         <div><h2>Delete profile</h2><p>This removes the profile from the active database.</p></div>
-        <button class="button" type="button" :disabled="deleting" @click="removeProfile">{{ deleting ? 'Deleting…' : 'Delete profile' }}</button>
+        <button class="button" type="button" :disabled="deleting" @click="confirmDelete = true">Delete profile</button>
       </section>
     </template>
+    <ConfirmDialog :open="confirmDelete" title="Delete profile?" :message="`“${profile?.name ?? 'This profile'}” and its saved content will be removed. This action cannot be undone.`" :busy="deleting" @cancel="confirmDelete = false" @confirm="removeProfile" />
   </div>
 </template>
 

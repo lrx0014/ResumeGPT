@@ -1,4 +1,4 @@
-import type { APIError, Job, JobInput, ListResponse, Profile, DocumentUpload, SignedURL, StagedDocumentUpload, SettingsPreferences, LLMConnection, LLMConnectionInput, LLMConnectionTest, StagedTemplate, Template, TemplateKind, GenerationInput, GenerationRun } from './types'
+import type { APIError, Job, JobInput, ListResponse, Profile, DocumentUpload, SignedURL, StagedDocumentUpload, SettingsPreferences, LLMConnection, LLMConnectionInput, LLMConnectionTest, StagedTemplate, Template, TemplateKind, GenerationInput, GenerationRun, GenerationStep } from './types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
 
@@ -108,7 +108,20 @@ export const api = {
   listGenerations: () => request<ListResponse<GenerationRun>>('/v1/generations'),
   getGeneration: (id: string) => request<GenerationRun>(`/v1/generations/${encodeURIComponent(id)}`),
   createGeneration: (input: GenerationInput) => request<GenerationRun>('/v1/generations', { method: 'POST', body: JSON.stringify(input) }),
+  reconfigureGeneration: (id: string, input: GenerationInput) => request<GenerationRun>(`/v1/generations/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(input) }),
+  deleteGeneration: async (id: string) => {
+    const response = await fetch(`${API_BASE_URL}/v1/generations/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { 'X-Workspace-ID': 'ws_personal_dev' } })
+    if (!response.ok) { const payload = (await response.json().catch(() => null)) as APIError | null; throw new Error(payload?.error.message ?? `Request failed with status ${response.status}`) }
+  },
   retryGeneration: (id: string) => request<GenerationRun>(`/v1/generations/${encodeURIComponent(id)}/retry`, { method: 'POST' }),
+  generationSteps: (id: string) => request<ListResponse<GenerationStep>>(`/v1/generations/${encodeURIComponent(id)}/steps`),
+  reviseGeneration: (id: string, prompt: string) => request<GenerationRun>(`/v1/generations/${encodeURIComponent(id)}/revisions`, { method: 'POST', body: JSON.stringify({ prompt }) }),
+  generationPreview: async (id: string, stepId?: string) => {
+    const suffix = stepId ? `/steps/${encodeURIComponent(stepId)}/artifact` : '/artifact'
+    const response = await fetch(`${API_BASE_URL}/v1/generations/${encodeURIComponent(id)}${suffix}`, { headers: { 'X-Workspace-ID': 'ws_personal_dev' } })
+    if (!response.ok) { const payload = (await response.json().catch(() => null)) as APIError | null; throw new Error(payload?.error.message ?? `Preview failed with status ${response.status}`) }
+    return response.blob()
+  },
   downloadGeneration: async (run: GenerationRun) => {
     const response = await fetch(`${API_BASE_URL}/v1/generations/${encodeURIComponent(run.id)}/artifact`, { headers: { 'X-Workspace-ID': 'ws_personal_dev' } })
     if (!response.ok) { const payload = (await response.json().catch(() => null)) as APIError | null; throw new Error(payload?.error.message ?? `Download failed with status ${response.status}`) }

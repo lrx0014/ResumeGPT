@@ -198,9 +198,13 @@ Templates use ordinary metadata CRUD and have no review, approval, publication, 
 
 ### 6.4 Generations and Artifact Versions
 
-The initial implementation uses one `generation_runs` record and one durable job per output. A run freezes the selected Profile, Opportunity, Template, and model choices as JSON snapshots. The default single-model mode assigns one model to writing, LaTeX rendering, and visual review; advanced mode assigns those roles independently. Stage changes are persisted as writing, rendering, reviewing, repairing, ready, or failed. Ollama responses are consumed as a stream, and each role has a bounded output-token budget so local models cannot leave a worker waiting indefinitely for an unbounded response.
+The initial implementation uses one `generation_runs` record and one reusable durable job per application. A run freezes the selected Profile, Opportunity, Template, and model choices as JSON snapshots. Append-only `generation_steps` preserve configuration changes, writer drafts, each rendered PDF and LaTeX source, reviewer feedback, workflow warnings, and user follow-up prompts in display order. The default single-model mode assigns one model to writing, LaTeX rendering, and visual review; advanced mode assigns those roles independently. Stage changes are persisted as writing, rendering, reviewing, repairing, ready, or failed. Ollama responses are consumed as a stream, and each role has a bounded output-token budget so local models cannot leave a worker waiting indefinitely for an unbounded response.
 
 LaTeX generation replaces only the selected entry source in a multi-file ZIP, preserves its assets, and compiles in the isolated document worker. The generated PDF is rasterized for visual review. Exact page targets are checked deterministically, while a vision-capable reviewer checks alignment, clipping, glyphs, spacing, and composition. Reviewer or compiler feedback may trigger at most two renderer repairs. If the selected provider explicitly reports that its model cannot accept image input, the run skips model-based visual review, stores the successfully rendered PDF, and shows a persistent warning to the user. Other reviewer failures remain actionable run failures. Word generation remains deferred until a structured DOCX renderer can preserve template styling.
+
+After a run is ready, the user may submit a bounded follow-up prompt. The same run returns to the queue with its grounded draft, current LaTeX, frozen model choices, and new instruction. The previous timeline and intermediate PDF objects remain available, while the newly completed artifact becomes the current download.
+
+A completed or failed application may also be reconfigured with another Profile, compatible Template, or set of LLM model choices. Reconfiguration refreshes the input snapshots, clears the current working result, appends a configuration-change step, and queues a full run from the writer stage. Previous timeline entries and intermediate PDFs remain available. Active applications reject concurrent reconfiguration. The UI presents this append-only history in a fixed-height, independently scrollable timeline that defaults to newest-first order and exposes the active stage as an animated timeline node.
 
 - `generations`: task configuration and immutable input-snapshot references.
 - `generation_inputs`: profile-content and Job-content copies captured when generation starts, plus template, prompt, and language versions.
@@ -467,11 +471,15 @@ GET    /v1/templates/{id}/file
 GET    /v1/templates/{id}/preview
 
 POST   /v1/generations
+GET    /v1/generations
 GET    /v1/generations/{id}
-POST   /v1/artifacts/{id}/revisions
-POST   /v1/artifacts/{id}/render
-GET    /v1/artifacts/{id}/events
-GET    /v1/artifacts/{id}/downloads/{format}
+PUT    /v1/generations/{id}
+DELETE /v1/generations/{id}
+POST   /v1/generations/{id}/retry
+POST   /v1/generations/{id}/revisions
+GET    /v1/generations/{id}/steps
+GET    /v1/generations/{id}/steps/{stepId}/artifact
+GET    /v1/generations/{id}/artifact
 
 ```
 

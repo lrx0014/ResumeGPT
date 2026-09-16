@@ -136,12 +136,17 @@ This checklist is the project-level source of truth for planned delivery. An ite
 - [ ] Generate tailored one-page, two-page, and custom-length CVs.
 - [ ] Generate tailored cover letters.
 - [x] Show polled background progress across writing, rendering, visual review, and repair stages.
+- [x] Make the application list the primary Generate view and move creation into a focused modal workflow.
+- [x] Persist an inspectable timeline of writer drafts, rendered PDFs, reviewer feedback, warnings, and user prompts.
+- [x] Provide a generation detail page with intermediate PDF previews and follow-up prompt revisions.
+- [x] Allow completed or failed applications to switch Profiles, Templates, and LLM models and regenerate without losing prior timeline records.
+- [x] Keep long generation timelines in a PDF-height scroll region with newest-first sorting and animated live-stage indicators.
 - [x] Fall back to a ready PDF with a visible warning when the selected model explicitly rejects image input.
 - [x] Fall back to a safe basic LaTeX layout when a small renderer model returns an incomplete document.
 - [x] Let users retry failed generations while reusing a persisted writing draft when available.
 - [ ] Add cancellation and server-sent event progress streaming.
 - [ ] Implement artifact revisions with parent history and restoration.
-- [ ] Support conversational revision through allowlisted structured operations.
+- [x] Support bounded follow-up prompt revisions against the grounded draft and current LaTeX source.
 - [ ] Show semantic diffs and allow users to lock sections.
 - [ ] Track model version, prompt version, token usage, latency, and cost.
 
@@ -166,6 +171,7 @@ This checklist is the project-level source of truth for planned delivery. An ite
 
 ### M6 — Beta and Scale Readiness
 
+- [ ] Move Profile, Opportunity, Template, and Application search, filtering, and pagination from the current client-side implementation to server-side query APIs.
 - [ ] Add workspace invitations and multi-user collaboration.
 - [ ] Add quotas, rate limits, budget controls, and usage reporting.
 - [ ] Complete data export, deletion, retention, and consent workflows.

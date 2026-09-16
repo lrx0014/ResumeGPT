@@ -25,6 +25,7 @@ type processorRepository struct {
 	completed bool
 	objectID  string
 	review    string
+	steps     []Step
 }
 
 func (r *processorRepository) Create(context.Context, Run, workqueue.Job) (Run, error) {
@@ -32,7 +33,22 @@ func (r *processorRepository) Create(context.Context, Run, workqueue.Job) (Run, 
 }
 func (r *processorRepository) List(context.Context, string) ([]Run, error)        { panic("not used") }
 func (r *processorRepository) Get(context.Context, string, string) (Run, error)   { return r.run, nil }
+func (r *processorRepository) Delete(context.Context, string, string) error       { panic("not used") }
+func (r *processorRepository) Reconfigure(context.Context, Run) (Run, error)      { panic("not used") }
 func (r *processorRepository) Retry(context.Context, string, string) (Run, error) { panic("not used") }
+func (r *processorRepository) Revise(context.Context, string, string, string) (Run, error) {
+	panic("not used")
+}
+func (r *processorRepository) RecordStep(_ context.Context, _ workqueue.Job, step Step) error {
+	r.steps = append(r.steps, step)
+	return nil
+}
+func (r *processorRepository) ListSteps(context.Context, string, string) ([]Step, error) {
+	return r.steps, nil
+}
+func (r *processorRepository) GetStep(context.Context, string, string, string) (Step, error) {
+	panic("not used")
+}
 func (r *processorRepository) SetStage(_ context.Context, _ workqueue.Job, stage, _, _ string, _ int) error {
 	r.stages = append(r.stages, stage)
 	return nil
@@ -72,9 +88,11 @@ type processorGateway struct {
 	responses []string
 	calls     int
 	failureAt map[int]error
+	prompts   []string
 }
 
-func (g *processorGateway) Complete(context.Context, settings.RuntimeConnection, string, string, string, []string, int) (string, error) {
+func (g *processorGateway) Complete(_ context.Context, _ settings.RuntimeConnection, _, _, prompt string, _ []string, _ int) (string, error) {
+	g.prompts = append(g.prompts, prompt)
 	if err := g.failureAt[g.calls]; err != nil {
 		g.calls++
 		return "", err
@@ -82,6 +100,20 @@ func (g *processorGateway) Complete(context.Context, settings.RuntimeConnection,
 	result := g.responses[g.calls]
 	g.calls++
 	return result, nil
+}
+
+func TestProcessorAppliesFollowUpPromptToCurrentSource(t *testing.T) {
+	p, _ := json.Marshal(profile.Profile{Content: "Built reliable Go services."})
+	j, _ := json.Marshal(job.Job{Title: "Backend Engineer", Company: "Example", Description: "Build Go systems."})
+	tpl, _ := json.Marshal(resumetemplate.Template{BuiltIn: true, Format: "latex", Kind: "resume", Content: "template"})
+	repository := &processorRepository{run: Run{ID: "gen_revision", WorkspaceID: "ws_test", Draft: "# Grounded draft", RenderedSource: "\\documentclass{article}\\begin{document}Current\\end{document}", Writer: ModelChoice{ConnectionID: "writer", Model: "writer-model"}, Renderer: ModelChoice{ConnectionID: "renderer", Model: "renderer-model"}, Reviewer: ModelChoice{ConnectionID: "reviewer", Model: "vision-model"}, DocumentType: "resume", PageTarget: "one_page", ProfileSnapshot: p, OpportunitySnapshot: j, TemplateSnapshot: tpl}}
+	gateway := &processorGateway{responses: []string{"\\documentclass{article}\\begin{document}More compact\\end{document}", `{"approved":true,"feedback":"The revision is balanced."}`}}
+	processor := Processor{Repository: repository, Settings: processorSettings{}, Blobs: &processorBlobs{}, Documents: processorDocuments{}, Gateway: gateway, WorkerID: "worker", Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	payload, _ := json.Marshal(Payload{RunID: "gen_revision", RevisionPrompt: "Make the experience section more compact."})
+	processor.handle(context.Background(), workqueue.Job{ID: "task", WorkspaceID: "ws_test", Payload: payload, LeaseOwner: "worker", Attempt: 1, MaxAttempts: 3})
+	if !repository.completed || gateway.calls != 2 || !strings.Contains(gateway.prompts[0], "Make the experience section more compact.") || !strings.Contains(gateway.prompts[0], "Current") {
+		t.Fatalf("revision did not use prompt and current source: repository=%#v prompts=%#v", repository, gateway.prompts)
+	}
 }
 
 func TestProcessorCompletesPDFWhenReviewerDoesNotSupportImages(t *testing.T) {

@@ -17,6 +17,7 @@ import (
 	"github.com/lrx0014/ResumeGPT/internal/platform/workqueue"
 	"github.com/lrx0014/ResumeGPT/internal/profile"
 	"github.com/lrx0014/ResumeGPT/internal/settings"
+	"github.com/lrx0014/ResumeGPT/internal/shared/id"
 	resumetemplate "github.com/lrx0014/ResumeGPT/internal/template"
 )
 
@@ -108,6 +109,10 @@ func (p *Processor) handle(ctx context.Context, task workqueue.Job) {
 			return
 		}
 		draft = strings.TrimSpace(draft)
+		if err := p.Repository.RecordStep(ctx, task, Step{ID: id.New("step"), Kind: "writer_draft", Content: draft, CreatedAt: time.Now().UTC()}); err != nil {
+			p.fail(ctx, task, "step_store_failed", "The writing result could not be saved.", true)
+			return
+		}
 	}
 	if draft == "" || len(draft) > 1024*1024 {
 		p.fail(ctx, task, "invalid_draft", "The writer returned an empty or oversized draft.", false)
@@ -121,7 +126,22 @@ func (p *Processor) handle(ctx context.Context, task workqueue.Job) {
 	_ = p.Repository.SetStage(ctx, task, "rendering", draft, "", 0)
 	var source string
 	fallbackReason := ""
-	if payload.UseFallback {
+	if payload.RevisionPrompt != "" {
+		currentSource := run.RenderedSource
+		if strings.TrimSpace(currentSource) == "" {
+			currentSource = fallbackLatex(draft)
+		}
+		source, err = p.Gateway.Complete(ctx, renderer, run.Renderer.Model, rendererSystemPrompt(), revisionPrompt(run, draft, currentSource, payload.RevisionPrompt), nil, rendererMaxTokens)
+		if err != nil {
+			p.fail(ctx, task, "revision_failed", err.Error(), true)
+			return
+		}
+		source = cleanModelSource(source)
+		if !strings.Contains(source, "\\begin{document}") || !strings.Contains(source, "\\end{document}") {
+			source = fallbackLatex(draft)
+			fallbackReason = "the renderer model returned an incomplete document for the requested revision"
+		}
+	} else if payload.UseFallback {
 		source = fallbackLatex(draft)
 		fallbackReason = "the previous safe-layout render could not complete and this retry resumed directly from the corrected fallback"
 	} else {
@@ -139,6 +159,7 @@ func (p *Processor) handle(ctx context.Context, task workqueue.Job) {
 	var reviewText string
 	repairCount := 0
 	var pdf []byte
+	var artifactObjectID string
 	for {
 		pdf, err = p.render(ctx, task.WorkspaceID, templateValue, source)
 		if err != nil {
@@ -152,6 +173,15 @@ func (p *Processor) handle(ctx context.Context, task workqueue.Job) {
 			p.fail(ctx, task, "fallback_render_failed", "The safe basic layout could not be rendered as PDF: "+err.Error(), false)
 			return
 		}
+		artifactObjectID = blobstore.NewObjectID()
+		if err := p.Blobs.Put(ctx, task.WorkspaceID, artifactObjectID, "application/pdf", bytes.NewReader(pdf), int64(len(pdf))); err != nil {
+			p.fail(ctx, task, "artifact_store_failed", "The rendered PDF could not be stored.", true)
+			return
+		}
+		if err := p.Repository.RecordStep(ctx, task, Step{ID: id.New("step"), Kind: "rendered_pdf", Content: source, ArtifactObjectID: artifactObjectID, RepairCount: repairCount, CreatedAt: time.Now().UTC()}); err != nil {
+			p.fail(ctx, task, "step_store_failed", "The rendered PDF stage could not be saved.", true)
+			return
+		}
 		_ = p.Repository.SetStage(ctx, task, "reviewing", draft, reviewText, repairCount)
 		pages, pageErr := p.Documents.PDFPages(ctx, pdf)
 		if pageErr != nil {
@@ -160,6 +190,7 @@ func (p *Processor) handle(ctx context.Context, task workqueue.Job) {
 		}
 		if expected := expectedPages(run.PageTarget); expected > 0 && pages.PageCount != expected {
 			reviewText = fmt.Sprintf("The page target is %d page(s), but the rendered PDF has %d page(s). Adjust content density, spacing, and safe font sizing without removing important evidence.", expected, pages.PageCount)
+			_ = p.Repository.RecordStep(ctx, task, Step{ID: id.New("step"), Kind: "reviewer_feedback", Feedback: reviewText, RepairCount: repairCount, CreatedAt: time.Now().UTC()})
 			if repairCount >= maxRepairs {
 				p.fail(ctx, task, "page_target_failed", reviewText, false)
 				return
@@ -182,6 +213,7 @@ func (p *Processor) handle(ctx context.Context, task workqueue.Job) {
 		if reviewErr != nil {
 			if errors.Is(reviewErr, ErrVisionUnsupported) {
 				reviewText = "Visual QA skipped: the selected reviewer model does not support image input. The PDF was generated and deterministic page-count checks passed."
+				_ = p.Repository.RecordStep(ctx, task, Step{ID: id.New("step"), Kind: "system_warning", Feedback: reviewText, RepairCount: repairCount, CreatedAt: time.Now().UTC()})
 				break
 			}
 			p.fail(ctx, task, "visual_review_failed", reviewErr.Error(), true)
@@ -189,6 +221,7 @@ func (p *Processor) handle(ctx context.Context, task workqueue.Job) {
 		}
 		approved, feedback := parseReview(response)
 		reviewText = feedback
+		_ = p.Repository.RecordStep(ctx, task, Step{ID: id.New("step"), Kind: "reviewer_feedback", Content: response, Feedback: feedback, RepairCount: repairCount, CreatedAt: time.Now().UTC()})
 		if approved {
 			break
 		}
@@ -204,11 +237,6 @@ func (p *Processor) handle(ctx context.Context, task workqueue.Job) {
 			return
 		}
 	}
-	objectID := blobstore.NewObjectID()
-	if err := p.Blobs.Put(ctx, task.WorkspaceID, objectID, "application/pdf", bytes.NewReader(pdf), int64(len(pdf))); err != nil {
-		p.fail(ctx, task, "artifact_store_failed", "The generated PDF could not be stored.", true)
-		return
-	}
 	if fallbackReason != "" {
 		warning := "Template fallback used: " + fallbackReason + ", so ResumeGPT generated a safe basic layout instead of the selected template."
 		if reviewText != "" {
@@ -216,8 +244,9 @@ func (p *Processor) handle(ctx context.Context, task workqueue.Job) {
 		} else {
 			reviewText = warning
 		}
+		_ = p.Repository.RecordStep(ctx, task, Step{ID: id.New("step"), Kind: "system_warning", Feedback: warning, RepairCount: repairCount, CreatedAt: time.Now().UTC()})
 	}
-	if err := p.Repository.Complete(ctx, task, source, draft, reviewText, objectID, repairCount); err != nil {
+	if err := p.Repository.Complete(ctx, task, source, draft, reviewText, artifactObjectID, repairCount); err != nil {
 		p.Logger.Error("complete generation", "run_id", run.ID, "error", err)
 		return
 	}
@@ -283,6 +312,9 @@ func rendererSystemPrompt() string {
 }
 func rendererPrompt(run Run, t resumetemplate.Template, draft string) string {
 	return fmt.Sprintf("Render this %s draft into the selected LaTeX template. Target %s. The TEMPLATE SOURCES may contain File markers; return the complete entry .tex only.\n\nTEMPLATE SOURCES:\n%s\n\nDRAFT:\n%s", run.DocumentType, run.PageTarget, limit(t.Content, 80000), limit(draft, 50000))
+}
+func revisionPrompt(run Run, draft, source, instruction string) string {
+	return fmt.Sprintf("Revise the current %s LaTeX using the user's follow-up instruction. Return only the complete compilable entry .tex file. Preserve all factual claims from the grounded draft; do not invent facts. Preserve safe template structure and assets.\n\nUSER INSTRUCTION:\n%s\n\nGROUNDED DRAFT:\n%s\n\nCURRENT LATEX:\n%s", run.DocumentType, limit(instruction, 4000), limit(draft, 50000), limit(source, 70000))
 }
 func reviewerSystemPrompt() string {
 	return "You are a strict visual document QA reviewer. Inspect every supplied PDF page image for clipping, overflow, overlap, broken glyphs, encoding problems, inconsistent spacing, weak alignment, awkward page breaks, excessive whitespace, and unprofessional composition. Respond only with compact JSON: {\"approved\":true|false,\"feedback\":\"specific actionable findings\"}. Approve only a polished, readable result."

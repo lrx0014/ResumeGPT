@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 
 import { api } from './lib/api'
 import { applyTheme } from './lib/preferences'
+import ToastViewport from './components/ToastViewport.vue'
 
 const { locale, t } = useI18n()
 
@@ -74,5 +75,6 @@ onMounted(async () => {
     <main class="main-content">
       <RouterView />
     </main>
+    <ToastViewport />
   </div>
 </template>

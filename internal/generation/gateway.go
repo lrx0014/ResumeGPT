@@ -36,7 +36,7 @@ func (g *HTTPGateway) Complete(ctx context.Context, runtime settings.RuntimeConn
 		return "", ErrLLM
 	}
 	var endpoint string
-	var body any
+	var body map[string]any
 	if runtime.Connection.Provider == "ollama" {
 		endpoint = base.String() + "/api/chat"
 		message := map[string]any{"role": "user", "content": userPrompt}
@@ -58,7 +58,13 @@ func (g *HTTPGateway) Complete(ctx context.Context, runtime settings.RuntimeConn
 			}
 			userContent = parts
 		}
-		body = map[string]any{"model": model, "temperature": 0.2, "max_tokens": maxTokens, "messages": []any{map[string]any{"role": "system", "content": systemPrompt}, map[string]any{"role": "user", "content": userContent}}}
+		body = map[string]any{"model": model, "messages": []any{map[string]any{"role": "system", "content": systemPrompt}, map[string]any{"role": "user", "content": userContent}}}
+		if runtime.Connection.Provider == "openai" {
+			body["max_completion_tokens"] = maxTokens
+		} else {
+			body["temperature"] = 0.2
+			body["max_tokens"] = maxTokens
+		}
 	}
 	encoded, _ := json.Marshal(body)
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(encoded))
