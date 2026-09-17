@@ -9,13 +9,35 @@ import (
 )
 
 type SettingsRepository struct {
-	mu          sync.RWMutex
-	preferences map[string]settings.Preferences
-	connections map[string]settings.StoredConnection
+	mu            sync.RWMutex
+	preferences   map[string]settings.Preferences
+	connections   map[string]settings.StoredConnection
+	agentDefaults map[string]map[string]settings.AgentDefault
 }
 
 func NewSettingsRepository() *SettingsRepository {
-	return &SettingsRepository{preferences: make(map[string]settings.Preferences), connections: make(map[string]settings.StoredConnection)}
+	return &SettingsRepository{preferences: make(map[string]settings.Preferences), connections: make(map[string]settings.StoredConnection), agentDefaults: make(map[string]map[string]settings.AgentDefault)}
+}
+
+func (r *SettingsRepository) ListAgentDefaults(_ context.Context, workspaceID string) ([]settings.AgentDefault, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	result := make([]settings.AgentDefault, 0, len(r.agentDefaults[workspaceID]))
+	for _, value := range r.agentDefaults[workspaceID] {
+		result = append(result, value)
+	}
+	sort.Slice(result, func(left, right int) bool { return result[left].Agent < result[right].Agent })
+	return result, nil
+}
+
+func (r *SettingsRepository) SaveAgentDefaults(_ context.Context, workspaceID string, values []settings.AgentDefault) ([]settings.AgentDefault, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.agentDefaults[workspaceID] = make(map[string]settings.AgentDefault, len(values))
+	for _, value := range values {
+		r.agentDefaults[workspaceID][value.Agent] = value
+	}
+	return append([]settings.AgentDefault(nil), values...), nil
 }
 
 func (r *SettingsRepository) GetPreferences(_ context.Context, workspaceID string) (settings.Preferences, error) {
@@ -83,6 +105,13 @@ func (r *SettingsRepository) DeleteConnection(_ context.Context, workspaceID, co
 		return settings.ErrNotFound
 	}
 	delete(r.connections, connectionID)
+	for workspace, values := range r.agentDefaults {
+		for agent, value := range values {
+			if value.ConnectionID == connectionID {
+				delete(r.agentDefaults[workspace], agent)
+			}
+		}
+	}
 	return nil
 }
 

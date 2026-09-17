@@ -5,6 +5,8 @@ import GenerateView from '../views/GenerateView.vue'
 import GenerationView from '../views/GenerationView.vue'
 import JobsView from '../views/JobsView.vue'
 import JobView from '../views/JobView.vue'
+import JobHuntersView from '../views/JobHuntersView.vue'
+import JobHunterReviewView from '../views/JobHunterReviewView.vue'
 import ProfilesView from '../views/ProfilesView.vue'
 import ProfileView from '../views/ProfileView.vue'
 import SettingsView from '../views/SettingsView.vue'
@@ -20,6 +22,8 @@ export const router = createRouter({
     { path: '/profiles/:profileId', name: 'profile', component: ProfileView },
     { path: '/jobs', name: 'jobs', component: JobsView },
     { path: '/jobs/:jobId', name: 'job', component: JobView },
+    { path: '/job-hunters', name: 'job-hunters', component: JobHuntersView },
+    { path: '/job-hunters/:hunterId/review', name: 'job-hunter-review', component: JobHunterReviewView },
     { path: '/templates', name: 'templates', component: TemplatesView },
     { path: '/templates/:templateId', name: 'template', component: TemplateView },
     { path: '/generate', name: 'generate', component: GenerateView },

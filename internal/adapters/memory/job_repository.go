@@ -15,6 +15,9 @@ type JobRepository struct {
 }
 
 func (r *JobRepository) QueueImport(_ context.Context, value job.Job, _ workqueue.Job) (job.Job, error) {
+	if value.Origin == "" {
+		value.Origin = "url_import"
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, current := range r.items {
@@ -71,6 +74,24 @@ func (r *JobRepository) SetImportState(_ context.Context, task workqueue.Job, st
 	return nil
 }
 
+func (r *JobRepository) QuarantineImport(_ context.Context, task workqueue.Job, _, _ string) (bool, error) {
+	var payload job.ImportPayload
+	if err := json.Unmarshal(task.Payload, &payload); err != nil {
+		return false, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	current, ok := r.items[payload.JobID]
+	if !ok || current.WorkspaceID != task.WorkspaceID {
+		return false, job.ErrNotFound
+	}
+	if current.Origin != "hunter" || current.HunterID == "" {
+		return false, nil
+	}
+	delete(r.items, payload.JobID)
+	return true, nil
+}
+
 func NewJobRepository() *JobRepository {
 	return &JobRepository{items: make(map[string]job.Job)}
 }
@@ -98,6 +119,9 @@ func (r *JobRepository) Get(_ context.Context, workspaceID, jobID string) (job.J
 }
 
 func (r *JobRepository) Create(_ context.Context, value job.Job) (job.Job, error) {
+	if value.Origin == "" {
+		value.Origin = "manual"
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.items[value.ID] = value
@@ -112,6 +136,7 @@ func (r *JobRepository) Update(_ context.Context, value job.Job) (job.Job, error
 		return job.Job{}, job.ErrNotFound
 	}
 	value.CreatedAt = current.CreatedAt
+	value.Origin, value.HunterID = current.Origin, current.HunterID
 	r.items[value.ID] = value
 	return value, nil
 }

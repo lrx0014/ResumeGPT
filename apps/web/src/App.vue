@@ -40,6 +40,9 @@ onMounted(async () => {
           <RouterLink to="/jobs" active-class="active">
             <span class="nav-icon">◇</span>{{ t('nav.jobs') }}
           </RouterLink>
+          <RouterLink to="/job-hunters" active-class="active">
+            <span class="nav-icon">⌖</span>{{ t('nav.hunters') }}
+          </RouterLink>
         </section>
 
         <section class="nav-group workflow-nav" :aria-label="t('navGroups.workflow')">

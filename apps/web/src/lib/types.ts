@@ -25,6 +25,8 @@ export interface Job {
   status: string
   importState: 'manual' | 'queued' | 'fetching' | 'analyzing' | 'ready' | 'needs_user_action' | 'failed'
   importError?: string
+  origin: 'manual' | 'url_import' | 'hunter'
+  hunterId?: string
   createdAt: string
   updatedAt: string
 }
@@ -37,6 +39,46 @@ export interface JobImportInput {
   connectionId?: string
   model?: string
 }
+
+export interface JobHunter {
+  id: string
+  workspaceId: string
+  name: string
+  roleQuery: string
+  location?: string
+  workMode?: string
+  employmentType?: string
+  experienceYears?: number
+  keywords?: string
+  additionalPrompt?: string
+  profileId?: string
+  connectionId: string
+  model: string
+  maxResults: number
+  intervalMinutes: 360 | 720 | 1440 | 10080
+  enabled: boolean
+  nextRunAt: string
+  lastRunAt?: string
+  lastState: 'never' | 'queued' | 'running' | 'succeeded' | 'failed'
+  lastError?: string
+  lastFoundCount: number
+  reviewCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface JobHunterReviewItem {
+  id: string
+  workspaceId: string
+  hunterId: string
+  sourceUrl: string
+  failureCode: string
+  failureMessage: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type JobHunterInput = Pick<JobHunter, 'name' | 'roleQuery' | 'location' | 'workMode' | 'employmentType' | 'experienceYears' | 'keywords' | 'additionalPrompt' | 'profileId' | 'connectionId' | 'model' | 'maxResults' | 'intervalMinutes' | 'enabled'>
 
 export interface ListResponse<T> {
   items: T[]
@@ -118,6 +160,14 @@ export interface LLMConnectionInput {
 export interface LLMConnectionTest {
   status: 'connected'
   models: string[]
+}
+
+export type AgentKind = 'writer' | 'template_applier' | 'visual_reviewer' | 'job_import' | 'job_hunter'
+export interface AgentDefault {
+  agent: AgentKind
+  connectionId: string
+  model: string
+  updatedAt?: string
 }
 
 export type DocumentUploadState = 'staged' | 'queued' | 'ready' | 'needs_user_action' | 'security_quarantine' | 'failed'

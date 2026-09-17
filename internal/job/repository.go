@@ -21,4 +21,5 @@ type ImportRepository interface {
 	QueueImport(ctx context.Context, value Job, task workqueue.Job) (Job, error)
 	StoreImport(ctx context.Context, task workqueue.Job, parsed ParsedJob) (bool, error)
 	SetImportState(ctx context.Context, task workqueue.Job, state, message string) error
+	QuarantineImport(ctx context.Context, task workqueue.Job, code, message string) (bool, error)
 }

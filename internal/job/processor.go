@@ -107,8 +107,18 @@ func (p *ImportProcessor) finishFailure(ctx context.Context, task workqueue.Job,
 		state = "needs_user_action"
 		message += " Add the job manually or try again later."
 	}
-	if err := p.Repository.SetImportState(ctx, task, state, message); err != nil {
-		p.Logger.Error("record job import failure", "task_id", task.ID, "error", err)
+	quarantined := false
+	if !retryable {
+		var err error
+		quarantined, err = p.Repository.QuarantineImport(ctx, task, code, message)
+		if err != nil {
+			p.Logger.Error("quarantine hunter import", "task_id", task.ID, "error", err)
+		}
+	}
+	if !quarantined {
+		if err := p.Repository.SetImportState(ctx, task, state, message); err != nil {
+			p.Logger.Error("record job import failure", "task_id", task.ID, "error", err)
+		}
 	}
 	var err error
 	if retryable {

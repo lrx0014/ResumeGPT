@@ -34,6 +34,17 @@ func TestConnectionLifecycleProtectsToken(t *testing.T) {
 	if !created.APITokenConfigured {
 		t.Fatal("created connection did not report its configured token")
 	}
+	defaults, err := service.SaveAgentDefaults(context.Background(), "ws_test", settings.AgentDefaultsInput{Items: []settings.AgentDefaultInput{
+		{Agent: settings.AgentWriter, ConnectionID: created.ID, Model: "model-a"},
+		{Agent: settings.AgentVisualReviewer, ConnectionID: created.ID, Model: "vision-model"},
+	}})
+	if err != nil || len(defaults) != 2 {
+		t.Fatalf("save Agent defaults = %#v, error = %v", defaults, err)
+	}
+	storedDefaults, err := service.ListAgentDefaults(context.Background(), "ws_test")
+	if err != nil || len(storedDefaults) != 2 {
+		t.Fatalf("list Agent defaults = %#v, error = %v", storedDefaults, err)
+	}
 	if _, err := service.UpdateConnection(context.Background(), "ws_test", created.ID, settings.LLMConnectionInput{
 		Name: "Cloud renamed", ExecutionMode: "cloud", Provider: "openai", BaseURL: "https://api.openai.com/v1",
 	}); err != nil {
@@ -53,6 +64,19 @@ func TestConnectionLifecycleProtectsToken(t *testing.T) {
 	}
 	if updated.APITokenConfigured {
 		t.Fatal("cleared API token still reports as configured")
+	}
+}
+
+func TestAgentDefaultsRejectInvalidAgentAndConnection(t *testing.T) {
+	cipher, _ := settings.NewAESGCMTokenCipher("test-settings-encryption-key-at-least-32-characters")
+	service := settings.NewService(memory.NewSettingsRepository(), cipher, &modelDiscoverer{})
+	for _, input := range []settings.AgentDefaultInput{
+		{Agent: "unknown", ConnectionID: "llm_missing", Model: "model"},
+		{Agent: settings.AgentWriter, ConnectionID: "llm_missing", Model: "model"},
+	} {
+		if _, err := service.SaveAgentDefaults(context.Background(), "ws_test", settings.AgentDefaultsInput{Items: []settings.AgentDefaultInput{input}}); err != settings.ErrInvalid {
+			t.Fatalf("invalid Agent default error = %v, want ErrInvalid", err)
+		}
 	}
 }
 

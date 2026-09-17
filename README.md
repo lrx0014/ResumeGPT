@@ -17,7 +17,8 @@ ResumeGPT is a personal CV and cover-letter optimization application. This repos
 - Multiple editable profiles with role metadata, Markdown-friendly text, optional avatars, and full CRUD operations.
 - An isolated, malware-scanning Python extraction service for staged TXT, Markdown, TeX, DOC/DOCX, PDF, PNG, and JPEG uploads. Extracted text is loaded into the editor and is stored on the profile only after the user saves it.
 - Editable job tracking with manual entry, application status, deterministic LinkedIn/Indeed import, and optional agent-assisted import from public job pages.
-- Workspace Settings for encrypted cloud/local LLM connections, Ollama and OpenAI-compatible model discovery, interface language, theme, and deployment status.
+- Scheduled Job Hunters that prioritize established job sources, deduplicate URLs, queue the existing Job Import Agent automatically, and collect blocked or unparseable pages in a per-Hunter confirmation inbox.
+- Workspace Settings for encrypted cloud/local LLM connections, per-Agent default models with capability guidance, model discovery, interface language, theme, and deployment status.
 - A simple resume and cover-letter template library with an attributed built-in LaTeX template, single-file TeX or multi-file LaTeX ZIP uploads, Word uploads, security scanning, extracted text for generation, and cached PDF previews.
 - Durable LaTeX generation runs with single-model or specialized writer/renderer/reviewer modes, immutable input snapshots, streamed local-model responses, bounded automatic repair, safe basic-layout fallback, and stored PDF downloads.
 - English-first internationalization setup.
@@ -117,10 +118,15 @@ This checklist is the project-level source of truth for planned delivery. An ite
 - [x] Deduplicate repeated imports of the same normalized URL within a workspace.
 - [x] Link each imported job back to its source page.
 - [x] Keep the Job module free of review, approval, and version-management workflows.
+- [x] Let users create, edit, pause, resume, delete, and run scheduled Job Hunters with search criteria, an optional Profile reference, and a configurable limit of up to 10 jobs per run.
+- [x] Use a bounded Job Hunter Agent with a scoped public-web search tool, then parse candidates through the existing Job Import Agent.
+- [x] Deduplicate discovered source URLs and distinguish manual, URL-imported, and Hunter-discovered opportunities in the list filter.
+- [x] Keep Hunter discoveries hidden until parsing succeeds and collect blocked or unparseable URLs in a per-Hunter confirmation inbox.
 
 ### M4 — Tailored Content Generation
 
 - [x] Add a Settings page for reusable cloud and local LLM connections.
+- [x] Configure optional default connections and models for each Agent while preserving per-task overrides.
 - [x] Encrypt LLM API tokens at rest and never return plaintext tokens to the browser.
 - [x] Support OpenAI, OpenAI-compatible, and Ollama connection validation and model discovery.
 - [x] Persist interface language and System/Light/Dark theme preferences.

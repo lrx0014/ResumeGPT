@@ -1,4 +1,4 @@
-import type { APIError, BackgroundTask, BackgroundTaskPage, Job, JobImportInput, JobInput, ListResponse, Profile, DocumentUpload, SignedURL, StagedDocumentUpload, SettingsPreferences, LLMConnection, LLMConnectionInput, LLMConnectionTest, StagedTemplate, Template, TemplateKind, GenerationInput, GenerationRun, GenerationStep } from './types'
+import type { AgentDefault, APIError, BackgroundTask, BackgroundTaskPage, Job, JobHunter, JobHunterInput, JobHunterReviewItem, JobImportInput, JobInput, ListResponse, Profile, DocumentUpload, SignedURL, StagedDocumentUpload, SettingsPreferences, LLMConnection, LLMConnectionInput, LLMConnectionTest, StagedTemplate, Template, TemplateKind, GenerationInput, GenerationRun, GenerationStep } from './types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
 
@@ -68,9 +68,25 @@ export const api = {
       throw new Error(payload?.error.message ?? `Request failed with status ${response.status}`)
     }
   },
+  listJobHunters: () => request<ListResponse<JobHunter>>('/v1/job-hunters'),
+  getJobHunter: (id: string) => request<JobHunter>(`/v1/job-hunters/${encodeURIComponent(id)}`),
+  createJobHunter: (input: JobHunterInput) => request<JobHunter>('/v1/job-hunters', { method: 'POST', body: JSON.stringify(input) }),
+  updateJobHunter: (id: string, input: JobHunterInput) => request<JobHunter>(`/v1/job-hunters/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(input) }),
+  runJobHunter: (id: string) => request<{ status: string }>(`/v1/job-hunters/${encodeURIComponent(id)}/run`, { method: 'POST' }),
+  listJobHunterReviewItems: (id: string) => request<ListResponse<JobHunterReviewItem>>(`/v1/job-hunters/${encodeURIComponent(id)}/review-items`),
+  dismissJobHunterReviewItem: async (hunterId: string, reviewId: string) => {
+    const response = await fetch(`${API_BASE_URL}/v1/job-hunters/${encodeURIComponent(hunterId)}/review-items/${encodeURIComponent(reviewId)}`, { method: 'DELETE', headers: { 'X-Workspace-ID': 'ws_personal_dev' } })
+    if (!response.ok) { const payload = (await response.json().catch(() => null)) as APIError | null; throw new Error(payload?.error.message ?? `Request failed with status ${response.status}`) }
+  },
+  deleteJobHunter: async (id: string) => {
+    const response = await fetch(`${API_BASE_URL}/v1/job-hunters/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { 'X-Workspace-ID': 'ws_personal_dev' } })
+    if (!response.ok) { const payload = (await response.json().catch(() => null)) as APIError | null; throw new Error(payload?.error.message ?? `Request failed with status ${response.status}`) }
+  },
   getSettings: () => request<SettingsPreferences>('/v1/settings'),
   updateSettings: (input: Pick<SettingsPreferences, 'interfaceLanguage' | 'theme'>) =>
     request<SettingsPreferences>('/v1/settings', { method: 'PUT', body: JSON.stringify(input) }),
+  getAgentDefaults: () => request<ListResponse<AgentDefault>>('/v1/settings/agent-defaults'),
+  updateAgentDefaults: (items: AgentDefault[]) => request<ListResponse<AgentDefault>>('/v1/settings/agent-defaults', { method: 'PUT', body: JSON.stringify({ items }) }),
   listLLMConnections: () => request<ListResponse<LLMConnection>>('/v1/settings/llm-connections'),
   createLLMConnection: (input: LLMConnectionInput) =>
     request<LLMConnection>('/v1/settings/llm-connections', { method: 'POST', body: JSON.stringify(input) }),

@@ -11,6 +11,7 @@ import (
 	s3adapter "github.com/lrx0014/ResumeGPT/internal/adapters/s3"
 	"github.com/lrx0014/ResumeGPT/internal/document"
 	"github.com/lrx0014/ResumeGPT/internal/generation"
+	"github.com/lrx0014/ResumeGPT/internal/hunter"
 	"github.com/lrx0014/ResumeGPT/internal/job"
 	"github.com/lrx0014/ResumeGPT/internal/platform/config"
 	"github.com/lrx0014/ResumeGPT/internal/platform/database"
@@ -77,6 +78,8 @@ func main() {
 
 	queue := postgresadapter.NewWorkQueue(pool)
 	jobRepository := postgresadapter.NewJobRepository(pool)
+	hunterRepository := postgresadapter.NewHunterRepository(pool)
+	profileRepository := postgresadapter.NewProfileRepository(pool)
 
 	blobs, err := s3adapter.NewBlobSigner(s3adapter.Config{
 		Endpoint: cfg.ObjectStorageEndpoint, PublicEndpoint: cfg.ObjectStoragePublicEndpoint,
@@ -130,6 +133,24 @@ func main() {
 	go func() {
 		if err := jobProcessor.Run(ctx); err != nil {
 			logger.Error("run job import processor", "error", err)
+			stop()
+		}
+	}()
+	hunterScheduler := hunter.Scheduler{Repository: hunterRepository, Logger: logger}
+	go func() {
+		if err := hunterScheduler.Run(ctx); err != nil {
+			logger.Error("run Job Hunter scheduler", "error", err)
+			stop()
+		}
+	}()
+	hunterProcessor := hunter.Processor{
+		Queue: queue, Repository: hunterRepository,
+		Agent:    hunter.NewJobHunterAgent(settingsService, gateway, hunter.NewDuckDuckGoSearch(), profileRepository),
+		WorkerID: id.New("job_hunter_worker"), Logger: logger,
+	}
+	go func() {
+		if err := hunterProcessor.Run(ctx); err != nil {
+			logger.Error("run Job Hunter processor", "error", err)
 			stop()
 		}
 	}()

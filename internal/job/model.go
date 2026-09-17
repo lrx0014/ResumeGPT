@@ -17,6 +17,8 @@ type Job struct {
 	Status         string    `json:"status"`
 	ImportState    string    `json:"importState"`
 	ImportError    string    `json:"importError,omitempty"`
+	Origin         string    `json:"origin"`
+	HunterID       string    `json:"hunterId,omitempty"`
 	CreatedAt      time.Time `json:"createdAt"`
 	UpdatedAt      time.Time `json:"updatedAt"`
 }

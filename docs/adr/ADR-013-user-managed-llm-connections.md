@@ -1,4 +1,4 @@
-# ADR-013: User-Managed LLM Connections with Per-Generation Model Choice
+# ADR-013: User-Managed LLM Connections with Per-Agent Defaults
 
 - Status: Accepted
 - Date: 2026-09-14
@@ -7,9 +7,9 @@
 
 ## Context
 
-ResumeGPT is a personal application. The previous proposal introduced an administrator-approved provider capability registry, logical aliases, automatic policy routing, fallback groups, and regional governance before the generation workflow existed. Users currently need a smaller capability: configure reusable cloud or local endpoints safely, verify them, and choose the connection and model explicitly for each Opportunity-specific generation.
+ResumeGPT is a personal application. The previous proposal introduced an administrator-approved provider capability registry, logical aliases, automatic policy routing, fallback groups, and regional governance before the generation workflow existed. Users currently need a smaller capability: configure reusable cloud or local endpoints safely, verify them, and choose the connection and model for each Agent role.
 
-Global generation defaults are undesirable because profile, Opportunity, document type, language, page target, template, connection, and model are decisions for one generation run.
+Global document defaults are undesirable because Profile, Opportunity, document type, language, page target, and template remain decisions for one generation run. Repeating the same model choices for every task is also unnecessary, so role-specific model defaults are useful as editable form presets.
 
 ## Decision
 
@@ -20,7 +20,7 @@ Add a workspace Settings page that manages multiple named LLM connections. A con
 - Base URL; and
 - an optional encrypted API token.
 
-The Settings page can test a saved connection and discover its available models. It does not select a default connection or model. The generation workflow will require an explicit connection and model for every run and will capture those selections in its immutable input record.
+The Settings page can test a saved connection, discover its available models, and store an optional default connection/model pair for the Writer, Template Applying, Visual Reviewer, Job Import, and Job Hunter Agents. Each default includes capability guidance. Defaults prefill new task forms but never prevent a per-task override. Every queued task still captures its resolved connection and model explicitly in its immutable input.
 
 Interface language and theme are workspace preferences. Document type, output language, page target, paper size, template, Profile, and Opportunity remain generation-specific choices.
 
@@ -41,14 +41,14 @@ Interface language and theme are workspace preferences. Document type, output la
 
 ## Consequences
 
-Users can keep an OpenAI connection and a local Ollama connection without re-entering secrets. Generation behavior remains explicit and reproducible. The implementation avoids automatic provider routing and fallback complexity.
+Users can keep an OpenAI connection and a local Ollama connection without re-entering secrets or repeatedly selecting the same models. Task behavior remains explicit and reproducible because defaults are resolved before submission. The implementation avoids automatic provider routing and fallback complexity.
 
 The deployment encryption key becomes required secret material. Losing or changing it makes stored API tokens unreadable, so it must be backed up and rotated through a separately designed migration. Model discovery proves reachability and authentication but does not guarantee that a model supports every future structured-generation capability.
 
 ## Alternatives
 
 - **One global provider and model:** simpler storage, but forces repeated replacement and creates hidden generation behavior.
-- **Store generation defaults in Settings:** rejected because each Opportunity may require different inputs, language, format, and model.
+- **One default for the entire workflow:** rejected because Agent roles require different capabilities. Role-specific defaults remain optional and overridable.
 - **Store plaintext tokens:** rejected because database reads and backups would expose provider credentials.
 - **Automatic capability routing and fallback:** deferred until measured usage demonstrates that explicit selection is inadequate.
 

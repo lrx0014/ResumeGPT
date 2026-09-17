@@ -49,6 +49,50 @@ func (r *SettingsRepository) SavePreferences(ctx context.Context, value settings
 	return value, err
 }
 
+func (r *SettingsRepository) ListAgentDefaults(ctx context.Context, workspaceID string) ([]settings.AgentDefault, error) {
+	result := make([]settings.AgentDefault, 0)
+	err := withWorkspaceTx(ctx, r.pool, workspaceID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT agent,connection_id,model,updated_at
+			FROM agent_llm_defaults WHERE workspace_id=$1 ORDER BY agent`, workspaceID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var value settings.AgentDefault
+			if err := rows.Scan(&value.Agent, &value.ConnectionID, &value.Model, &value.UpdatedAt); err != nil {
+				return err
+			}
+			result = append(result, value)
+		}
+		return rows.Err()
+	})
+	return result, err
+}
+
+func (r *SettingsRepository) SaveAgentDefaults(ctx context.Context, workspaceID string, values []settings.AgentDefault) ([]settings.AgentDefault, error) {
+	err := withWorkspaceTx(ctx, r.pool, workspaceID, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `DELETE FROM agent_llm_defaults WHERE workspace_id=$1`, workspaceID); err != nil {
+			return err
+		}
+		for _, value := range values {
+			if _, err := tx.Exec(ctx, `INSERT INTO agent_llm_defaults (workspace_id,agent,connection_id,model,updated_at)
+				VALUES ($1,$2,$3,$4,$5)`, workspaceID, value.Agent, value.ConnectionID, value.Model, value.UpdatedAt); err != nil {
+				if isSettingsConstraintError(err) {
+					return settings.ErrInvalid
+				}
+				return err
+			}
+		}
+		if err := appendEvent(ctx, tx, workspaceID, "settings.agent_defaults.updated.v1", "workspace", workspaceID,
+			map[string]string{"workspaceId": workspaceID}); err != nil {
+			return err
+		}
+		return appendAudit(ctx, tx, workspaceID, "settings.agent_defaults.update", "workspace", workspaceID)
+	})
+	return values, err
+}
+
 func (r *SettingsRepository) ListConnections(ctx context.Context, workspaceID string) ([]settings.StoredConnection, error) {
 	result := make([]settings.StoredConnection, 0)
 	err := withWorkspaceTx(ctx, r.pool, workspaceID, func(tx pgx.Tx) error {
@@ -161,5 +205,5 @@ func nullableBytes(value []byte) any {
 
 func isSettingsConstraintError(err error) bool {
 	var databaseError *pgconn.PgError
-	return errors.As(err, &databaseError) && (databaseError.Code == "23505" || databaseError.Code == "23514")
+	return errors.As(err, &databaseError) && (databaseError.Code == "23503" || databaseError.Code == "23505" || databaseError.Code == "23514")
 }

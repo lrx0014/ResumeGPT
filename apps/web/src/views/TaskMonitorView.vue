@@ -24,6 +24,7 @@ let searchTimer: number | undefined
 
 const kinds = [
   { value: 'job.page.import.v1', label: 'Job imports' },
+  { value: 'job.hunt.v1', label: 'Job Hunter runs' },
   { value: 'profile.document.extract.v1', label: 'Profile documents' },
   { value: 'template.extract.v1', label: 'Templates' },
   { value: 'generation.run.v1', label: 'Generations' },

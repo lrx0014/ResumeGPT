@@ -9,6 +9,7 @@ import (
 
 	"github.com/lrx0014/ResumeGPT/internal/document"
 	"github.com/lrx0014/ResumeGPT/internal/generation"
+	"github.com/lrx0014/ResumeGPT/internal/hunter"
 	"github.com/lrx0014/ResumeGPT/internal/identity"
 	"github.com/lrx0014/ResumeGPT/internal/job"
 	"github.com/lrx0014/ResumeGPT/internal/platform/blobstore"
@@ -37,6 +38,7 @@ type Dependencies struct {
 	Templates          *resumetemplate.Service
 	Generations        *generation.Service
 	Tasks              *taskmonitor.Service
+	Hunters            *hunter.Service
 }
 
 type API struct {
@@ -54,6 +56,7 @@ type API struct {
 	templates          *resumetemplate.Service
 	generations        *generation.Service
 	tasks              *taskmonitor.Service
+	hunters            *hunter.Service
 }
 
 func New(deps Dependencies) http.Handler {
@@ -72,6 +75,7 @@ func New(deps Dependencies) http.Handler {
 		templates:          deps.Templates,
 		generations:        deps.Generations,
 		tasks:              deps.Tasks,
+		hunters:            deps.Hunters,
 	}
 
 	protected := http.NewServeMux()
@@ -80,6 +84,7 @@ func New(deps Dependencies) http.Handler {
 	api.registerTemplates(protected)
 	api.registerGenerations(protected)
 	api.registerTaskMonitor(protected)
+	api.registerHunters(protected)
 	protected.Handle("GET /v1/system/capabilities", api.requireRole(identity.RoleViewer, api.capabilities))
 	protected.Handle("GET /v1/profiles", api.requireRole(identity.RoleViewer, api.listProfiles))
 	protected.Handle("POST /v1/profiles", api.requireRole(identity.RoleEditor, api.createProfile))
@@ -124,6 +129,7 @@ func (a *API) capabilities(w http.ResponseWriter, _ *http.Request) {
 			"templates":        a.templates != nil,
 			"templateUploads":  a.templates != nil && a.templates.UploadsEnabled(),
 			"taskMonitor":      a.tasks != nil,
+			"jobHunters":       a.hunters != nil,
 			"templatePreviews": a.templates != nil && a.templates.PreviewsEnabled(),
 		},
 	})

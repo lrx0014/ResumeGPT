@@ -2,6 +2,7 @@ package settings
 
 import (
 	"context"
+	"errors"
 	"net/url"
 	"strings"
 	"time"
@@ -33,6 +34,37 @@ func (s *Service) SavePreferences(ctx context.Context, workspaceID string, input
 	}
 	return s.repository.SavePreferences(ctx, Preferences{WorkspaceID: workspaceID, InterfaceLanguage: language,
 		Theme: theme, UpdatedAt: s.now().UTC()})
+}
+
+func (s *Service) ListAgentDefaults(ctx context.Context, workspaceID string) ([]AgentDefault, error) {
+	return s.repository.ListAgentDefaults(ctx, workspaceID)
+}
+
+func (s *Service) SaveAgentDefaults(ctx context.Context, workspaceID string, input AgentDefaultsInput) ([]AgentDefault, error) {
+	validAgents := map[string]bool{
+		AgentWriter: true, AgentTemplateApplier: true, AgentVisualReviewer: true,
+		AgentJobImport: true, AgentJobHunter: true,
+	}
+	seen := make(map[string]bool)
+	values := make([]AgentDefault, 0, len(input.Items))
+	now := s.now().UTC()
+	for _, item := range input.Items {
+		item.Agent = strings.TrimSpace(item.Agent)
+		item.ConnectionID = strings.TrimSpace(item.ConnectionID)
+		item.Model = strings.TrimSpace(item.Model)
+		if !validAgents[item.Agent] || seen[item.Agent] || !validSettingText(item.ConnectionID, 200, true) || !validSettingText(item.Model, 200, true) {
+			return nil, ErrInvalid
+		}
+		if _, err := s.repository.GetConnection(ctx, workspaceID, item.ConnectionID); err != nil {
+			if errors.Is(err, ErrNotFound) {
+				return nil, ErrInvalid
+			}
+			return nil, err
+		}
+		seen[item.Agent] = true
+		values = append(values, AgentDefault{Agent: item.Agent, ConnectionID: item.ConnectionID, Model: item.Model, UpdatedAt: now})
+	}
+	return s.repository.SaveAgentDefaults(ctx, workspaceID, values)
 }
 
 func (s *Service) ListConnections(ctx context.Context, workspaceID string) ([]LLMConnection, error) {

@@ -14,6 +14,7 @@ import (
 	s3adapter "github.com/lrx0014/ResumeGPT/internal/adapters/s3"
 	"github.com/lrx0014/ResumeGPT/internal/document"
 	"github.com/lrx0014/ResumeGPT/internal/generation"
+	"github.com/lrx0014/ResumeGPT/internal/hunter"
 	"github.com/lrx0014/ResumeGPT/internal/identity"
 	"github.com/lrx0014/ResumeGPT/internal/job"
 	"github.com/lrx0014/ResumeGPT/internal/platform/blobstore"
@@ -57,6 +58,7 @@ func main() {
 	var templateRepository resumetemplate.Repository
 	var generationRepository generation.Repository
 	var taskMonitorService *taskmonitor.Service
+	var hunterService *hunter.Service
 	switch cfg.PersistenceMode {
 	case "memory":
 		profileRepository = memory.NewProfileRepository()
@@ -64,6 +66,7 @@ func main() {
 		settingsRepository = memory.NewSettingsRepository()
 		templateRepository = memory.NewTemplateRepository()
 		taskMonitorService = taskmonitor.NewService(memory.NewTaskMonitorRepository())
+		hunterService = hunter.NewService(memory.NewHunterRepository(), profileRepository)
 		accessRepository = memory.AccessRepository{
 			Subject: identity.Subject{Issuer: "development", Subject: "developer", Email: "developer@localhost"},
 			Principal: identity.Principal{
@@ -87,6 +90,7 @@ func main() {
 		templateRepository = postgresadapter.NewTemplateRepository(pool)
 		generationRepository = postgresadapter.NewGenerationRepository(pool)
 		taskMonitorService = taskmonitor.NewService(postgresadapter.NewTaskMonitorRepository(pool))
+		hunterService = hunter.NewService(postgresadapter.NewHunterRepository(pool), profileRepository)
 	default:
 		logger.Error("unsupported persistence mode", "mode", cfg.PersistenceMode)
 		os.Exit(1)
@@ -180,6 +184,7 @@ func main() {
 		Templates:          templateService,
 		Generations:        generationService,
 		Tasks:              taskMonitorService,
+		Hunters:            hunterService,
 	})
 
 	server := &http.Server{

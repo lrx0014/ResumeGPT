@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/lrx0014/ResumeGPT/internal/adapters/memory"
+	"github.com/lrx0014/ResumeGPT/internal/hunter"
 	"github.com/lrx0014/ResumeGPT/internal/identity"
 	"github.com/lrx0014/ResumeGPT/internal/job"
 	"github.com/lrx0014/ResumeGPT/internal/platform/blobstore"
@@ -155,6 +156,25 @@ func TestAcceptsPublicHTTPSURLForAIAssistedImport(t *testing.T) {
 	}
 }
 
+func TestCreatesAndListsJobHunters(t *testing.T) {
+	handler := newHandler()
+	create := httptest.NewRecorder()
+	handler.ServeHTTP(create, httptest.NewRequest(http.MethodPost, "/v1/job-hunters", bytes.NewBufferString(`{
+		"name":"Berlin backend roles","roleQuery":"Backend Engineer","location":"Berlin",
+		"workMode":"Hybrid","employmentType":"Full-time","experienceYears":4,
+		"keywords":"Go, PostgreSQL","connectionId":"llm_test","model":"test-model",
+		"intervalMinutes":1440,"enabled":true
+	}`)))
+	if create.Code != http.StatusCreated {
+		t.Fatalf("create hunter status = %d: %s", create.Code, create.Body.String())
+	}
+	list := httptest.NewRecorder()
+	handler.ServeHTTP(list, httptest.NewRequest(http.MethodGet, "/v1/job-hunters", nil))
+	if list.Code != http.StatusOK || !strings.Contains(list.Body.String(), "Berlin backend roles") {
+		t.Fatalf("unexpected hunter list: status=%d body=%s", list.Code, list.Body.String())
+	}
+}
+
 func TestHealthAddsRequestID(t *testing.T) {
 	handler := newHandler()
 	request := httptest.NewRequest(http.MethodGet, "/healthz", nil)
@@ -182,6 +202,20 @@ func TestManagesSettingsWithoutReturningAPIToken(t *testing.T) {
 	}
 	if strings.Contains(create.Body.String(), "must-not-leak") || !strings.Contains(create.Body.String(), `"apiTokenConfigured":true`) {
 		t.Fatalf("unsafe connection response: %s", create.Body.String())
+	}
+	var connection settings.LLMConnection
+	if err := json.Unmarshal(create.Body.Bytes(), &connection); err != nil {
+		t.Fatal(err)
+	}
+	defaults := httptest.NewRecorder()
+	handler.ServeHTTP(defaults, httptest.NewRequest(http.MethodPut, "/v1/settings/agent-defaults", bytes.NewBufferString(`{"items":[{"agent":"writer","connectionId":"`+connection.ID+`","model":"model-a"}]}`)))
+	if defaults.Code != http.StatusOK || !strings.Contains(defaults.Body.String(), `"agent":"writer"`) {
+		t.Fatalf("Agent defaults update status = %d: %s", defaults.Code, defaults.Body.String())
+	}
+	listedDefaults := httptest.NewRecorder()
+	handler.ServeHTTP(listedDefaults, httptest.NewRequest(http.MethodGet, "/v1/settings/agent-defaults", nil))
+	if listedDefaults.Code != http.StatusOK || !strings.Contains(listedDefaults.Body.String(), `"model":"model-a"`) {
+		t.Fatalf("Agent defaults list status = %d: %s", listedDefaults.Code, listedDefaults.Body.String())
 	}
 }
 
@@ -252,5 +286,6 @@ func newHandlerWithRole(role identity.Role) http.Handler {
 		DefaultWorkspaceID: "ws_personal_dev",
 		Blobs:              memory.BlobSigner{},
 		Settings:           settings.NewService(memory.NewSettingsRepository(), settingsCipher, settings.NewHTTPModelDiscoverer()),
+		Hunters:            hunter.NewService(memory.NewHunterRepository()),
 	})
 }

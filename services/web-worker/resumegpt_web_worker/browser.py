@@ -59,6 +59,11 @@ def render_page(source_url: str, actions: list[dict[str, Any]]) -> dict[str, Any
         try:
             response = page.goto(source_url, wait_until="domcontentloaded", timeout=25_000)
             if response is not None and response.status >= 400:
+                if response.status in {401, 403}:
+                    raise BrowserError(
+                        "page_access_denied",
+                        f"This site blocks automated access (HTTP {response.status}). Open the source page or enter the job details manually.",
+                    )
                 raise BrowserError("page_access_denied", f"The page returned HTTP status {response.status}.")
             page.wait_for_timeout(1_200)
             landing_host = urlsplit(page.url).hostname

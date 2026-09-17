@@ -13,6 +13,7 @@ import (
 	"github.com/lrx0014/ResumeGPT/internal/adapters/postgres"
 	"github.com/lrx0014/ResumeGPT/internal/document"
 	"github.com/lrx0014/ResumeGPT/internal/generation"
+	"github.com/lrx0014/ResumeGPT/internal/hunter"
 	"github.com/lrx0014/ResumeGPT/internal/job"
 	"github.com/lrx0014/ResumeGPT/internal/platform/database"
 	"github.com/lrx0014/ResumeGPT/internal/platform/requestcontext"
@@ -102,6 +103,126 @@ func TestGenerationRepositoryPersistsSnapshotAndScopesWorkspace(t *testing.T) {
 	var jobExists bool
 	if err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM durable_jobs WHERE id=$1)`, task.ID).Scan(&jobExists); err != nil || jobExists {
 		t.Fatalf("generation job still exists = %v, error = %v", jobExists, err)
+	}
+}
+
+func TestHunterRepositoryQueuesAndStoresDeduplicatedOpportunities(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is not configured")
+	}
+	ctx := context.Background()
+	pool, err := database.Open(ctx, databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	if err := database.Migrate(ctx, pool); err != nil {
+		t.Fatal(err)
+	}
+	workspaceID := id.New("ws")
+	if _, err := pool.Exec(ctx, `INSERT INTO workspaces (id,name,kind) VALUES ($1,'Hunter integration','personal')`, workspaceID); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = pool.Exec(context.Background(), `DELETE FROM workspaces WHERE id=$1`, workspaceID) })
+
+	now := time.Now().UTC()
+	profileRepository := postgres.NewProfileRepository(pool)
+	selectedProfile, err := profile.NewService(profileRepository).Create(ctx, workspaceID, profile.CreateInput{
+		Name: "Hunter matching profile", TargetRole: "Backend Engineer", Content: "Experienced Go engineer.",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	value := hunter.Hunter{ID: id.New("hunt"), WorkspaceID: workspaceID, Name: "Backend roles", RoleQuery: "Backend Engineer",
+		ProfileID: selectedProfile.ID, ConnectionID: "llm_test", Model: "test-model", MaxResults: 4, IntervalMinutes: 1440, Enabled: true,
+		NextRunAt: now, LastState: "never", CreatedAt: now, UpdatedAt: now}
+	repository := postgres.NewHunterRepository(pool)
+	createdHunter, err := repository.Create(ctx, value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	storedHunter, err := repository.Get(ctx, workspaceID, createdHunter.ID)
+	if err != nil || storedHunter.ProfileID != selectedProfile.ID || storedHunter.MaxResults != 4 {
+		t.Fatalf("unexpected stored hunter: %#v, error: %v", storedHunter, err)
+	}
+	payload, _ := json.Marshal(hunter.Payload{HunterID: value.ID})
+	task := workqueue.Job{ID: id.New("task"), WorkspaceID: workspaceID, Kind: hunter.JobKind,
+		IdempotencyKey: id.New("run"), Payload: payload, MaxAttempts: 3, AvailableAt: now}
+	if err := repository.RunNow(ctx, value, task); err != nil {
+		t.Fatal(err)
+	}
+	claimed, err := postgres.NewWorkQueue(pool).ClaimKind(ctx, "hunter-integration-worker", hunter.JobKind, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.MarkRunning(ctx, claimed, value.ID); err != nil {
+		t.Fatal(err)
+	}
+	sourceURL := "https://careers.example.com/jobs/backend-123"
+	firstJobID, secondJobID := id.New("job"), id.New("job")
+	firstPayload, _ := json.Marshal(job.ImportPayload{JobID: firstJobID, SourceURL: sourceURL, Mode: "agent", ConnectionID: value.ConnectionID, Model: value.Model})
+	secondPayload, _ := json.Marshal(job.ImportPayload{JobID: secondJobID, SourceURL: sourceURL, Mode: "agent", ConnectionID: value.ConnectionID, Model: value.Model})
+	created, err := repository.Complete(ctx, claimed, value, []hunter.DiscoveredJob{
+		{JobID: firstJobID, TaskID: id.New("task"), SourceURL: sourceURL, Payload: firstPayload},
+		{JobID: secondJobID, TaskID: id.New("task"), SourceURL: sourceURL, Payload: secondPayload},
+	})
+	if err != nil || created != 1 {
+		t.Fatalf("complete hunt created=%d error=%v", created, err)
+	}
+	stored, err := postgres.NewJobRepository(pool).Get(ctx, workspaceID, firstJobID)
+	if err != nil || stored.Origin != "hunter" || stored.HunterID != value.ID || stored.ImportState != "queued" {
+		t.Fatalf("unexpected discovered job: %#v, error: %v", stored, err)
+	}
+	reviewURL := "https://www.linkedin.com/jobs/view/blocked-456"
+	reviewJob := job.Job{ID: id.New("job"), WorkspaceID: workspaceID, SourceURL: reviewURL, Status: "interested",
+		ImportState: "queued", Origin: "hunter", HunterID: value.ID, CreatedAt: now, UpdatedAt: now}
+	reviewTask := workqueue.Job{ID: id.New("task"), WorkspaceID: workspaceID, Kind: id.New("hunter_review_import"),
+		IdempotencyKey: reviewJob.ID, MaxAttempts: 2, AvailableAt: now}
+	jobRepository := postgres.NewJobRepository(pool)
+	if _, err := jobRepository.QueueImport(ctx, reviewJob, reviewTask); err != nil {
+		t.Fatal(err)
+	}
+	claimedReview, err := postgres.NewWorkQueue(pool).ClaimKind(ctx, "hunter-review-integration-worker", reviewTask.Kind, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	quarantined, err := jobRepository.QuarantineImport(ctx, claimedReview, "page_access_denied", "This site blocks automated access.")
+	if err != nil || !quarantined {
+		t.Fatalf("quarantine result=%v error=%v", quarantined, err)
+	}
+	if _, err := jobRepository.Get(ctx, workspaceID, reviewJob.ID); !errors.Is(err, job.ErrNotFound) {
+		t.Fatalf("quarantined job remained in opportunities: %v", err)
+	}
+	reviewItems, err := repository.ListReviewItems(ctx, workspaceID, value.ID)
+	if err != nil || len(reviewItems) != 1 || reviewItems[0].SourceURL != reviewURL {
+		t.Fatalf("unexpected review items: %#v, error=%v", reviewItems, err)
+	}
+	storedHunter, err = repository.Get(ctx, workspaceID, value.ID)
+	if err != nil || storedHunter.ReviewCount != 1 {
+		t.Fatalf("unexpected hunter review count: %#v, error=%v", storedHunter, err)
+	}
+	if err := repository.Delete(ctx, workspaceID, value.ID); err != nil {
+		t.Fatal(err)
+	}
+	stored, err = postgres.NewJobRepository(pool).Get(ctx, workspaceID, firstJobID)
+	if err != nil || stored.Origin != "hunter" || stored.HunterID != "" {
+		t.Fatalf("discovered job was not preserved after deleting hunter: %#v, error: %v", stored, err)
+	}
+	scheduled := value
+	scheduled.ID, scheduled.Name = id.New("hunt"), "Scheduled backend roles"
+	scheduled.NextRunAt, scheduled.CreatedAt, scheduled.UpdatedAt = time.Now().UTC().Add(-time.Minute), time.Now().UTC(), time.Now().UTC()
+	if _, err := repository.Create(ctx, scheduled); err != nil {
+		t.Fatal(err)
+	}
+	scheduledCount, err := repository.ScheduleDue(ctx, 20)
+	if err != nil || scheduledCount < 1 {
+		t.Fatalf("schedule due hunters count=%d error=%v", scheduledCount, err)
+	}
+	var scheduledTask bool
+	if err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM durable_jobs WHERE workspace_id=$1 AND kind=$2 AND payload->>'hunterId'=$3)`,
+		workspaceID, hunter.JobKind, scheduled.ID).Scan(&scheduledTask); err != nil || !scheduledTask {
+		t.Fatalf("scheduled task exists=%v error=%v", scheduledTask, err)
 	}
 }
 
@@ -574,7 +695,21 @@ func TestSettingsRepositoryPersistsPreferencesAndEncryptedConnections(t *testing
 	if _, err := repository.GetConnection(ctx, otherWorkspaceID, connection.Connection.ID); !errors.Is(err, settings.ErrNotFound) {
 		t.Fatalf("cross-workspace connection error = %v, want not found", err)
 	}
+	defaults, err := repository.SaveAgentDefaults(ctx, workspaceID, []settings.AgentDefault{{
+		Agent: settings.AgentWriter, ConnectionID: connection.Connection.ID, Model: "writer-model", UpdatedAt: now,
+	}})
+	if err != nil || len(defaults) != 1 {
+		t.Fatalf("save Agent defaults = %#v, error = %v", defaults, err)
+	}
+	storedDefaults, err := repository.ListAgentDefaults(ctx, workspaceID)
+	if err != nil || len(storedDefaults) != 1 || storedDefaults[0].Model != "writer-model" {
+		t.Fatalf("stored Agent defaults = %#v, error = %v", storedDefaults, err)
+	}
 	if err := repository.DeleteConnection(ctx, workspaceID, connection.Connection.ID); err != nil {
 		t.Fatal(err)
+	}
+	storedDefaults, err = repository.ListAgentDefaults(ctx, workspaceID)
+	if err != nil || len(storedDefaults) != 0 {
+		t.Fatalf("Agent defaults remained after deleting connection: %#v, error = %v", storedDefaults, err)
 	}
 }

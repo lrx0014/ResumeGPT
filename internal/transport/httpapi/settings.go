@@ -14,11 +14,40 @@ func (a *API) registerSettings(mux *http.ServeMux) {
 	}
 	mux.Handle("GET /v1/settings", a.requireRole(identity.RoleViewer, a.getSettings))
 	mux.Handle("PUT /v1/settings", a.requireRole(identity.RoleOwner, a.updateSettings))
+	mux.Handle("GET /v1/settings/agent-defaults", a.requireRole(identity.RoleViewer, a.listAgentDefaults))
+	mux.Handle("PUT /v1/settings/agent-defaults", a.requireRole(identity.RoleOwner, a.updateAgentDefaults))
 	mux.Handle("GET /v1/settings/llm-connections", a.requireRole(identity.RoleViewer, a.listLLMConnections))
 	mux.Handle("POST /v1/settings/llm-connections", a.requireRole(identity.RoleOwner, a.createLLMConnection))
 	mux.Handle("PUT /v1/settings/llm-connections/{connectionID}", a.requireRole(identity.RoleOwner, a.updateLLMConnection))
 	mux.Handle("DELETE /v1/settings/llm-connections/{connectionID}", a.requireRole(identity.RoleOwner, a.deleteLLMConnection))
 	mux.Handle("POST /v1/settings/llm-connections/{connectionID}/test", a.requireRole(identity.RoleOwner, a.testLLMConnection))
+}
+
+func (a *API) listAgentDefaults(w http.ResponseWriter, r *http.Request) {
+	items, err := a.settings.ListAgentDefaults(r.Context(), workspaceID(r))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "agent_defaults_read_failed", "Could not load Agent defaults.")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (a *API) updateAgentDefaults(w http.ResponseWriter, r *http.Request) {
+	var input settings.AgentDefaultsInput
+	if err := decodeJSON(w, r, &input); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", "The request body is not valid JSON.")
+		return
+	}
+	items, err := a.settings.SaveAgentDefaults(r.Context(), workspaceID(r), input)
+	if errors.Is(err, settings.ErrInvalid) {
+		writeError(w, http.StatusUnprocessableEntity, "invalid_agent_defaults", "Choose a valid LLM connection and model for each configured Agent.")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "agent_defaults_update_failed", "Could not save Agent defaults.")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
 func (a *API) getSettings(w http.ResponseWriter, r *http.Request) {

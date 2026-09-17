@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { api } from '../lib/api'
+import { jobStatuses } from '../lib/jobStatus'
 import { toast } from '../lib/toast'
 import type { Job, JobInput } from '../lib/types'
 
@@ -86,7 +87,7 @@ watch(jobId, () => void load(), { immediate: true })
       <form class="panel form-grid" @submit.prevent="save">
         <label><span>Job title</span><input v-model="form.title" required maxlength="300" /></label>
         <label><span>Company</span><input v-model="form.company" required maxlength="300" /></label>
-        <label><span>Application status</span><select v-model="form.status"><option value="interested">Interested</option><option value="preparing">Preparing</option><option value="applied">Applied</option><option value="screening">Screening</option><option value="interview">Interview</option><option value="offer">Offer</option><option value="accepted">Accepted</option><option value="rejected">Rejected</option><option value="withdrawn">Withdrawn</option></select></label>
+        <label><span>Application status</span><select v-model="form.status"><option v-for="status in jobStatuses" :key="status.value" :value="status.value">{{ status.label }}</option></select></label>
         <label><span>Location</span><input v-model="form.location" maxlength="300" /></label>
         <label><span>City</span><input v-model="form.city" maxlength="150" /></label>
         <label><span>Country</span><input v-model="form.country" maxlength="100" /></label>

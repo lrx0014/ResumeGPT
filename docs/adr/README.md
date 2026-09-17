@@ -25,9 +25,11 @@ This directory records significant ResumeGPT architecture decisions. Once accept
 | [ADR-010](./ADR-010-workspace-tenancy-and-authorization.md) | Workspace tenant boundary and defense-in-depth authorization from day one | Proposed |
 | [ADR-011](./ADR-011-simple-editable-profiles.md) | One editable text body per profile with review-before-save document extraction | Accepted |
 | [ADR-012](./ADR-012-simple-job-tracking-and-import.md) | One editable Job record with safe background import and manual fallback | Accepted |
-| [ADR-013](./ADR-013-user-managed-llm-connections.md) | User-managed encrypted LLM connections with per-generation model choice | Accepted |
+| [ADR-013](./ADR-013-user-managed-llm-connections.md) | User-managed encrypted LLM connections with per-Agent defaults | Accepted |
 | [ADR-014](./ADR-014-simple-template-library.md) | Simple user-managed TeX and Word template library | Accepted |
 | [ADR-015](./ADR-015-bounded-agent-generation.md) | Bounded single- or multi-model generation with visual repair | Accepted |
+| [ADR-016](./ADR-016-agent-assisted-job-import.md) | Agent-first extraction for arbitrary public job pages | Accepted |
+| [ADR-017](./ADR-017-scheduled-agent-job-hunting.md) | Scheduled agent search feeding the existing job-import pipeline | Accepted |
 
 ## Maintenance Rules
 

@@ -32,8 +32,9 @@ func (q *processorTestQueue) Fail(context.Context, string, string, string, strin
 }
 
 type processorTestRepository struct {
-	states []string
-	stored ParsedJob
+	states      []string
+	stored      ParsedJob
+	quarantined bool
 }
 
 func (*processorTestRepository) QueueImport(context.Context, Job, workqueue.Job) (Job, error) {
@@ -48,6 +49,10 @@ func (r *processorTestRepository) StoreImport(_ context.Context, _ workqueue.Job
 func (r *processorTestRepository) SetImportState(_ context.Context, _ workqueue.Job, state, _ string) error {
 	r.states = append(r.states, state)
 	return nil
+}
+
+func (r *processorTestRepository) QuarantineImport(context.Context, workqueue.Job, string, string) (bool, error) {
+	return r.quarantined, nil
 }
 
 type processorTestFetcher struct {
@@ -107,6 +112,21 @@ func TestImportProcessorRecordsActionableFailure(t *testing.T) {
 	processor.handle(context.Background(), importProcessorTask(t))
 	if len(repository.states) != 2 || repository.states[0] != "fetching" || repository.states[1] != "needs_user_action" {
 		t.Fatalf("unexpected failure states: %v", repository.states)
+	}
+	if !queue.failed || queue.retried {
+		t.Fatalf("unexpected queue result: failed=%v retried=%v", queue.failed, queue.retried)
+	}
+}
+
+func TestImportProcessorMovesBlockedHunterJobToConfirmation(t *testing.T) {
+	repository := &processorTestRepository{quarantined: true}
+	queue := &processorTestQueue{}
+	processor := ImportProcessor{Queue: queue, Repository: repository, Fetcher: processorTestFetcher{err: &FetchError{
+		Code: "page_access_denied", Message: "The site blocks automated access.",
+	}}, WorkerID: "worker", Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	processor.handle(context.Background(), importProcessorTask(t))
+	if len(repository.states) != 1 || repository.states[0] != "fetching" {
+		t.Fatalf("quarantined job should not remain in an attention state: %v", repository.states)
 	}
 	if !queue.failed || queue.retried {
 		t.Fatalf("unexpected queue result: failed=%v retried=%v", queue.failed, queue.retried)

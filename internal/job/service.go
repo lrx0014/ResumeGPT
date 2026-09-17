@@ -51,7 +51,7 @@ func (s *Service) Create(ctx context.Context, workspaceID string, input CreateIn
 		return Job{}, err
 	}
 	now := s.now().UTC()
-	value.ID, value.WorkspaceID, value.ImportState = id.New("job"), workspaceID, "manual"
+	value.ID, value.WorkspaceID, value.ImportState, value.Origin = id.New("job"), workspaceID, "manual", "manual"
 	value.CreatedAt, value.UpdatedAt = now, now
 	return s.repository.Create(ctx, value)
 }
@@ -66,6 +66,7 @@ func (s *Service) Update(ctx context.Context, workspaceID, jobID string, input U
 		return Job{}, err
 	}
 	value.ID, value.WorkspaceID, value.CreatedAt, value.UpdatedAt = jobID, workspaceID, current.CreatedAt, s.now().UTC()
+	value.Origin, value.HunterID = current.Origin, current.HunterID
 	value.ImportState = "ready"
 	if value.SourceURL == "" {
 		value.ImportState = "manual"
@@ -161,6 +162,14 @@ func normalizeSourceURL(raw string) (string, error) {
 		return "", ErrInvalidInput
 	}
 	parsed.Fragment = ""
+	query := parsed.Query()
+	for key := range query {
+		lower := strings.ToLower(key)
+		if strings.HasPrefix(lower, "utm_") || lower == "gclid" || lower == "fbclid" || lower == "mc_cid" || lower == "mc_eid" {
+			query.Del(key)
+		}
+	}
+	parsed.RawQuery = query.Encode()
 	return parsed.String(), nil
 }
 
@@ -209,7 +218,7 @@ func (s *ImportService) Create(ctx context.Context, workspaceID string, input Im
 	result := make([]Job, 0, len(normalizedURLs))
 	for _, sourceURL := range normalizedURLs {
 		now := s.now().UTC()
-		value := Job{ID: id.New("job"), WorkspaceID: workspaceID, SourceURL: sourceURL, Status: "interested",
+		value := Job{ID: id.New("job"), WorkspaceID: workspaceID, SourceURL: sourceURL, Status: "interested", Origin: "url_import",
 			ImportState: "queued", CreatedAt: now, UpdatedAt: now}
 		mode := "standard"
 		if input.AIAssisted {

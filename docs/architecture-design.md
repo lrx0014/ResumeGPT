@@ -157,7 +157,7 @@ Define ports for:
 - `TemplateRenderer`, `VisualInspector`, and `MalwareScanner`.
 - `IdentityProvider`, `SecretStore`, and `TelemetrySink`.
 
-Generation inputs reference the explicitly selected LLM connection ID and model name. Provider-specific request details stay behind adapters.
+Generation inputs reference the resolved LLM connection ID and model name. Settings may prefill a role-specific default for the Writer, Template Applying, Visual Reviewer, Job Import, and Job Hunter Agents, while every task form still permits an explicit override. Provider-specific request details stay behind adapters.
 
 ## 6. Core Data Model
 
@@ -176,6 +176,8 @@ The saved profile text is the authoritative input for generation. Direct edits u
 - `durable_jobs`: background URL acquisition with leases, bounded retries, and idempotency by normalized source URL.
 
 The Job row is the authoritative record. Manual creation writes it immediately. URL import creates a placeholder Job and a durable task in the same transaction, then fills the same editable record after extraction. There is no review, approval, source-version, or Job-snapshot lifecycle in this personal-project module.
+
+Job Hunter stores lightweight scheduled searches containing a role, location, work mode, employment type, minimum experience, keywords, additional instructions, cadence, explicit LLM connection/model, an optional Profile reference, and a per-run result limit from 1 to 10. The limit defaults to 10. A database scheduler creates `job.hunt.v1` durable tasks only when no run for that Hunter is already active. The bounded Hunter Agent starts with a scoped public-web search tool, prioritizes individual Indeed and LinkedIn postings, may use services such as Google Jobs for discovery, and returns evidence-backed candidate URLs. The selected Profile is background-matching context when present. Each new normalized URL becomes an ordinary `job.page.import.v1` task, so the existing Job Import Agent remains responsible for opening dynamic pages and extracting editable metadata. Hunter placeholders remain hidden until extraction succeeds. Restricted or unparseable pages are removed from Jobs and stored in `job_hunter_review_items`; the Hunter card links to a small confirmation inbox where the user can inspect the source, enter the role manually, or dismiss it. Opportunities record an origin of `manual`, `url_import`, or `hunter`; deleting a Hunter keeps successfully imported opportunities but removes its confirmation inbox. URL normalization removes common tracking parameters, and workspace-level URL checks provide best-effort deduplication across Opportunities and pending confirmations.
 
 Supported application statuses are intentionally lightweight:
 
@@ -246,7 +248,7 @@ On failure, retain an actionable processing state. The user can retry with anoth
 
 1. Accept up to 50 URLs from the Import via URLs form and let the user explicitly enable AI assistance.
 2. In standard mode, normalize and deduplicate public HTTPS LinkedIn and Indeed URLs. Fetch bounded HTML and prefer schema.org `JobPosting` JSON-LD with limited page-metadata fallbacks.
-3. In AI-assisted mode, accept public HTTPS job pages and require an explicit saved LLM connection and model for the batch.
+3. In AI-assisted mode, accept public HTTPS job pages and require a saved LLM connection and model for the batch, prefilled from the Job Import Agent default when configured.
 4. Create a placeholder Job and durable acquisition task atomically, then return the Job immediately for polling.
 5. Start the Job Import Agent with an initial rendered-page snapshot. The agent analyzes the page from the beginning and may use only scoped tools for page inspection, structured metadata, heuristic candidates, visible text, bounded expansion, bounded scrolling, and final structured extraction.
 6. Execute browser rendering in the separate Playwright web worker. Revalidate public-network destinations, bound actions and content, and do not give the service database credentials or LLM secrets.
@@ -305,7 +307,7 @@ Providers differ in JSON Schema, vision, and tool support. The user explicitly s
 
 ### 8.3 Explicit Selection and Degradation
 
-There is no automatic provider router or fallback group in the personal-project scope. A generation request names one saved connection and model. Persist each generation step under an idempotency key. Missing required writing or rendering capabilities produce an actionable failure. Model-based visual review is best-effort: an explicit image-capability rejection degrades to the deterministic checks and a user-visible warning so a valid PDF remains available.
+There is no automatic provider router or fallback group in the personal-project scope. Role-specific defaults only prefill task forms; the persisted request still names one saved connection and model for every Agent. Persist each generation step under an idempotency key. Missing required writing or rendering capabilities produce an actionable failure. Model-based visual review is best-effort: an explicit image-capability rejection degrades to the deterministic checks and a user-visible warning so a valid PDF remains available.
 
 ## 9. Templates, Rendering, and Visual Validation
 
@@ -703,6 +705,9 @@ The ADR index records proposed, accepted, and superseded decisions. Proposed dec
 12. [ADR-012: Simple Job Tracking and Background URL Import](./adr/ADR-012-simple-job-tracking-and-import.md)
 13. [ADR-013: User-Managed LLM Connections](./adr/ADR-013-user-managed-llm-connections.md)
 14. [ADR-014: Simple User-Managed Template Library](./adr/ADR-014-simple-template-library.md)
+15. [ADR-015: Bounded Agent Generation](./adr/ADR-015-bounded-agent-generation.md)
+16. [ADR-016: Agent-Assisted Job Import](./adr/ADR-016-agent-assisted-job-import.md)
+17. [ADR-017: Scheduled Agent Job Hunting](./adr/ADR-017-scheduled-agent-job-hunting.md)
 
 See the [ADR index](./adr/README.md) for status definitions and maintenance rules.
 

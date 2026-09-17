@@ -14,6 +14,8 @@ var (
 type Repository interface {
 	GetPreferences(context.Context, string) (Preferences, error)
 	SavePreferences(context.Context, Preferences) (Preferences, error)
+	ListAgentDefaults(context.Context, string) ([]AgentDefault, error)
+	SaveAgentDefaults(context.Context, string, []AgentDefault) ([]AgentDefault, error)
 	ListConnections(context.Context, string) ([]StoredConnection, error)
 	GetConnection(context.Context, string, string) (StoredConnection, error)
 	CreateConnection(context.Context, StoredConnection) (StoredConnection, error)

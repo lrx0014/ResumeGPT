@@ -49,3 +49,28 @@ type RuntimeConnection struct {
 	Connection LLMConnection
 	APIToken   string
 }
+
+const (
+	AgentWriter          = "writer"
+	AgentTemplateApplier = "template_applier"
+	AgentVisualReviewer  = "visual_reviewer"
+	AgentJobImport       = "job_import"
+	AgentJobHunter       = "job_hunter"
+)
+
+type AgentDefault struct {
+	Agent        string    `json:"agent"`
+	ConnectionID string    `json:"connectionId"`
+	Model        string    `json:"model"`
+	UpdatedAt    time.Time `json:"updatedAt"`
+}
+
+type AgentDefaultInput struct {
+	Agent        string `json:"agent"`
+	ConnectionID string `json:"connectionId"`
+	Model        string `json:"model"`
+}
+
+type AgentDefaultsInput struct {
+	Items []AgentDefaultInput `json:"items"`
+}

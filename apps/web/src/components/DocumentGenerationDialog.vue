@@ -2,7 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 
 import { api } from '../lib/api'
-import type { GenerationInput, GenerationModelChoice, Job, LLMConnection, Profile, Template, TemplateKind } from '../lib/types'
+import type { AgentDefault, GenerationInput, GenerationModelChoice, Job, LLMConnection, Profile, Template, TemplateKind } from '../lib/types'
 
 const props = defineProps<{
   open: boolean
@@ -52,16 +52,20 @@ async function prepare() {
   form.documentType = props.initialDocumentType
   form.pageTarget = 'one_page'
   try {
-    const [profileList, templateList, connectionList] = await Promise.all([api.listProfiles(), api.listTemplates(), api.listLLMConnections()])
+    const [profileList, templateList, connectionList, storedDefaults] = await Promise.all([api.listProfiles(), api.listTemplates(), api.listLLMConnections(), api.getAgentDefaults()])
     profiles.value = profileList.items.filter(item => item.content.trim())
     templates.value = templateList.items
     connections.value = connectionList.items
     if (!profiles.value.some(item => item.id === form.profileId)) form.profileId = profiles.value[0]?.id ?? ''
     if (!matchingTemplates.value.some(item => item.id === form.templateId)) form.templateId = matchingTemplates.value[0]?.id ?? ''
     if (!connections.value.some(item => item.id === form.writer.connectionId)) {
-      form.writer = { connectionId: connections.value[0]?.id ?? '', model: '' }
+      const defaults = Object.fromEntries(storedDefaults.items.map((item: AgentDefault) => [item.agent, item])) as Partial<Record<AgentDefault['agent'], AgentDefault>>
+      const valid = (choice?: AgentDefault) => choice && connections.value.some(item => item.id === choice.connectionId) ? { connectionId: choice.connectionId, model: choice.model } : undefined
+      form.writer = valid(defaults.writer) ?? { connectionId: connections.value[0]?.id ?? '', model: '' }
+      form.renderer = valid(defaults.template_applier) ?? { ...form.writer }
+      form.reviewer = valid(defaults.visual_reviewer) ?? { ...form.writer }
     }
-    await discover(form.writer)
+    await Promise.all([discover(form.writer), discover(form.renderer), discover(form.reviewer)])
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : 'Could not load generation options.'
   } finally {

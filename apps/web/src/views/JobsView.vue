@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import AttentionNotice from '../components/AttentionNotice.vue'
@@ -9,14 +10,17 @@ import ListFilters from '../components/ListFilters.vue'
 import ListPagination from '../components/ListPagination.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { api } from '../lib/api'
+import { jobStatuses, jobStatusLabel } from '../lib/jobStatus'
 import { useListSelection } from '../lib/listSelection'
 import { toast } from '../lib/toast'
-import type { Job, JobInput, LLMConnection, TemplateKind } from '../lib/types'
+import type { AgentDefault, Job, JobInput, LLMConnection, TemplateKind } from '../lib/types'
 
 const jobs = ref<Job[]>([])
+const route = useRoute()
 const loading = ref(true)
 const busy = ref(false)
 const deletingId = ref('')
+const updatingStatusId = ref('')
 const pendingDelete = ref<Job | null>(null)
 const error = ref('')
 const batchText = ref('')
@@ -31,6 +35,7 @@ const loadingImportModels = ref(false)
 const importsAvailable = ref(true)
 const search = ref('')
 const statusFilter = ref('all')
+const originFilter = ref('all')
 const page = ref(1)
 const pageSize = ref(10)
 const showGeneration = ref(false)
@@ -41,21 +46,23 @@ const manual = reactive<JobInput>({
   title: '', company: '', location: '', country: '', city: '', workMode: '', employmentType: '',
   sourceUrl: '', description: '', status: 'interested',
 })
+const manualReviewHunterId = ref('')
+const manualReviewId = ref('')
 let pollTimer: number | undefined
 
 const pending = computed(() => jobs.value.some(item => ['queued', 'fetching', 'analyzing'].includes(item.importState)))
-const statusOptions = computed(() => [...new Set(jobs.value.map(item => item.status).filter(Boolean))].sort())
+const statusOptions = jobStatuses
 const filteredJobs = computed(() => {
   const query = search.value.trim().toLocaleLowerCase()
   return jobs.value.filter(item => {
     const matchesSearch = !query || [item.title, item.company, item.location, item.city, item.country, item.description].some(value => value?.toLocaleLowerCase().includes(query))
-    return matchesSearch && (statusFilter.value === 'all' || item.status === statusFilter.value)
+    return matchesSearch && (statusFilter.value === 'all' || item.status === statusFilter.value) && (originFilter.value === 'all' || item.origin === originFilter.value)
   })
 })
 const visibleJobs = computed(() => filteredJobs.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
 const selectableFilteredJobs = computed(() => filteredJobs.value.filter(canGenerate))
 const allFilteredSelected = computed(() => Boolean(selectableFilteredJobs.value.length) && selectableFilteredJobs.value.every(item => selection.isSelected(item.id)))
-watch([search, statusFilter, pageSize], () => { page.value = 1 })
+watch([search, statusFilter, originFilter, pageSize], () => { page.value = 1 })
 watch(() => filteredJobs.value.length, total => { page.value = Math.min(page.value, Math.max(1, Math.ceil(total / pageSize.value))) })
 watch(() => jobs.value.map(item => item.id).join(','), () => selection.retain(jobs.value.filter(canGenerate).map(item => item.id)))
 
@@ -147,10 +154,19 @@ async function discoverImportModels() {
 async function openBatchImport() {
   showBatch.value = !showBatch.value
   showManual.value = false
-  if (!showBatch.value || connections.value.length) return
+  if (!showBatch.value) return
   try {
-    connections.value = (await api.listLLMConnections()).items
-    importConnectionId.value = connections.value[0]?.id ?? ''
+    const [connectionList, storedDefaults] = await Promise.all([api.listLLMConnections(), api.getAgentDefaults()])
+    connections.value = connectionList.items
+    const configured = storedDefaults.items.find((item: AgentDefault) => item.agent === 'job_import')
+    if (configured && connections.value.some(item => item.id === configured.connectionId)) {
+      importConnectionId.value = configured.connectionId
+      importModel.value = configured.model
+      importModels[configured.connectionId] = [configured.model]
+    } else if (!connections.value.some(item => item.id === importConnectionId.value)) {
+      importConnectionId.value = connections.value[0]?.id ?? ''
+      importModel.value = ''
+    }
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : 'Could not load LLM connections.'
   }
@@ -171,6 +187,15 @@ async function createManual() {
   try {
     const created = await api.createJob({ ...manual })
     mergeJobs([created])
+    if (manualReviewHunterId.value && manualReviewId.value) {
+      try {
+        await api.dismissJobHunterReviewItem(manualReviewHunterId.value, manualReviewId.value)
+      } catch {
+        toast.warning('The opportunity was added, but its confirmation reminder could not be dismissed.')
+      }
+      manualReviewHunterId.value = ''
+      manualReviewId.value = ''
+    }
     Object.assign(manual, { title: '', company: '', location: '', country: '', city: '', workMode: '', employmentType: '', sourceUrl: '', description: '', status: 'interested' })
     showManual.value = false
     toast.success('Job opportunity added manually.')
@@ -205,7 +230,38 @@ async function removeJob() {
   }
 }
 
+async function updateStatus(item: Job, event: Event) {
+  const select = event.currentTarget as HTMLSelectElement
+  const nextStatus = select.value
+  const previousStatus = item.status
+  if (!nextStatus || nextStatus === previousStatus) return
+  updatingStatusId.value = item.id
+  item.status = nextStatus
+  try {
+    const updated = await api.updateJob(item.id, {
+      title: item.title, company: item.company, location: item.location ?? '', country: item.country ?? '',
+      city: item.city ?? '', workMode: item.workMode ?? '', employmentType: item.employmentType ?? '',
+      sourceUrl: item.sourceUrl ?? '', description: item.description ?? '', status: nextStatus,
+    })
+    Object.assign(item, updated)
+    toast.success(`Status updated to ${jobStatusLabel(nextStatus)}.`)
+  } catch (cause) {
+    item.status = previousStatus
+    select.value = previousStatus
+    toast.warning(cause instanceof Error ? cause.message : 'Could not update the job status.')
+  } finally {
+    updatingStatusId.value = ''
+  }
+}
+
 onMounted(async () => {
+  const manualURL = typeof route.query.manualUrl === 'string' ? route.query.manualUrl : ''
+  if (manualURL) {
+    manual.sourceUrl = manualURL
+    manualReviewHunterId.value = typeof route.query.hunterId === 'string' ? route.query.hunterId : ''
+    manualReviewId.value = typeof route.query.reviewId === 'string' ? route.query.reviewId : ''
+    showManual.value = true
+  }
   const [, capabilities] = await Promise.all([load(), api.capabilities().catch(() => undefined)])
   importsAvailable.value = capabilities?.features.jobImports ?? true
   pollTimer = window.setInterval(() => { if (pending.value) void load(false) }, 2000)
@@ -253,7 +309,8 @@ onBeforeUnmount(() => { if (pollTimer) window.clearInterval(pollTimer) })
     <div v-if="loading" class="empty-state">Loading job opportunities…</div>
     <template v-else-if="jobs.length">
       <ListFilters v-model:search="search" :total="filteredJobs.length" search-placeholder="Search roles, companies, or locations…">
-        <label>Status <select v-model="statusFilter"><option value="all">All statuses</option><option v-for="status in statusOptions" :key="status" :value="status">{{ status }}</option></select></label>
+        <label>Status <select v-model="statusFilter"><option value="all">All statuses</option><option v-for="status in statusOptions" :key="status.value" :value="status.value">{{ status.label }}</option></select></label>
+        <label>Source <select v-model="originFilter"><option value="all">All sources</option><option value="manual">Added manually</option><option value="url_import">Imported via URL</option><option value="hunter">Found by Job Hunter</option></select></label>
       </ListFilters>
     <BulkSelectionBar :selected-count="selection.selectedCount.value" :all-count="selectableFilteredJobs.length" :all-selected="allFilteredSelected" @select-all="selectAllFiltered" @clear="selection.clear">
       <button class="button primary" type="button" @click="openSelectedGeneration('resume')">Create CVs</button>
@@ -267,10 +324,11 @@ onBeforeUnmount(() => { if (pollTimer) window.clearInterval(pollTimer) })
           <h2>{{ item.title || 'Importing job details…' }}</h2>
           <p>{{ item.company || 'Company pending' }}<span v-if="item.location"> · {{ item.location }}</span><span v-else-if="item.city || item.country"> · {{ [item.city, item.country].filter(Boolean).join(', ') }}</span></p>
           <small v-if="importLabel(item)" :class="{ 'import-warning': item.importState === 'needs_user_action' || item.importState === 'failed' }">{{ importLabel(item) }}</small>
+          <small v-if="item.origin === 'hunter'" class="hunter-source">Found by Job Hunter</small>
           <AttentionNotice v-if="item.importState === 'needs_user_action' || item.importState === 'failed'" compact :message="item.importError || 'ResumeGPT could not extract complete job details from this page. Open the job opportunity to enter or correct the missing information.'" />
         </div>
-        <span class="status-pill">{{ item.status }}</span>
-        <div class="row-actions"><button class="text-button" type="button" :disabled="!canGenerate(item)" @click="openGeneration([item], 'resume')">Create CV</button><button class="text-button" type="button" :disabled="!canGenerate(item)" @click="openGeneration([item], 'cover_letter')">Create cover letter</button><RouterLink class="text-button" :to="`/jobs/${item.id}`">View →</RouterLink><a v-if="item.sourceUrl" class="source-link" :href="item.sourceUrl" target="_blank" rel="noopener noreferrer">Source ↗</a><button class="text-button danger-text" type="button" @click="pendingDelete = item">Delete</button></div>
+        <label class="status-control" :class="item.status" :aria-label="`Change status for ${item.title}`"><select :value="item.status" :disabled="updatingStatusId === item.id" @change="updateStatus(item, $event)"><option v-for="status in jobStatuses" :key="status.value" :value="status.value">{{ status.label }}</option></select><span aria-hidden="true">⌄</span></label>
+        <div class="row-actions"><button class="text-button" type="button" :disabled="!canGenerate(item)" @click="openGeneration([item], 'resume')">Create CV</button><button class="text-button" type="button" :disabled="!canGenerate(item)" @click="openGeneration([item], 'cover_letter')">Create cover letter</button><RouterLink class="text-button" :to="`/jobs/${item.id}`">View</RouterLink><a v-if="item.sourceUrl" class="source-link" :href="item.sourceUrl" target="_blank" rel="noopener noreferrer">Source ↗</a><button class="text-button danger-text" type="button" @click="pendingDelete = item">Delete</button></div>
       </article>
     </TransitionGroup>
     <div v-else class="empty-state compact"><h2>No matching job opportunities</h2><p>Try another keyword or status.</p></div>
@@ -294,8 +352,17 @@ onBeforeUnmount(() => { if (pollTimer) window.clearInterval(pollTimer) })
 .row-selector:disabled { cursor: not-allowed; opacity: .35; }
 .row-actions { flex-wrap: wrap; justify-content: flex-end; }
 .row-actions .text-button:disabled { cursor: not-allowed; opacity: .4; }
+.status-control { position: relative; display: inline-flex; align-items: center; width: fit-content; border-radius: 999px; background: var(--surface-soft); color: var(--accent-dark); }
+.status-control select { width: auto; min-width: 0; padding: 5px 25px 5px 10px; appearance: none; border: 0; border-radius: inherit; outline: 0; background: transparent; color: inherit; cursor: pointer; font: inherit; font-size: 11px; font-weight: 700; text-transform: capitalize; }
+.status-control > span { position: absolute; right: 9px; line-height: 1; pointer-events: none; transform: translateY(-1px); }
+.status-control:focus-within { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+.status-control:has(select:disabled) { cursor: wait; opacity: .58; }
+.status-control.accepted { background: var(--accent-pale); color: var(--accent-dark); }
+.status-control.rejected, .status-control.withdrawn { background: #f8e6e6; color: var(--danger); }
+.status-control.interview, .status-control.offer { background: #fff2cf; color: #795b16; }
 .job-main small { display: inline-block; margin-top: .4rem; color: var(--accent); font-weight: 700; }
 .job-main small.import-warning { color: var(--danger); }
+.job-main small.hunter-source { margin-left: .55rem; color: var(--muted); }
 .source-link { color: var(--muted); font-size: .82rem; font-weight: 600; }
 .ai-import-toggle { display: flex; align-items: center; gap: 9px; }
 .switch-row { display: flex !important; grid-template-columns: auto auto auto; align-items: center; gap: 9px !important; cursor: pointer; }
@@ -309,6 +376,6 @@ onBeforeUnmount(() => { if (pollTimer) window.clearInterval(pollTimer) })
 .help-tooltip > span { position: absolute; z-index: 10; top: calc(100% + 9px); left: 50%; width: min(340px, 75vw); padding: 11px 13px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); box-shadow: 0 14px 36px rgba(25,34,30,.16); color: var(--ink); font-size: 11px; font-weight: 500; line-height: 1.55; opacity: 0; pointer-events: none; transform: translate(-50%, -4px); visibility: hidden; transition: .18s ease; }
 .help-tooltip:hover > span, .help-tooltip:focus > span { opacity: 1; transform: translate(-50%, 0); visibility: visible; }
 .import-mode-help { margin: -9px 0 0; color: var(--muted); font-size: 12px; }
-@media (max-width: 980px) { .job-row { grid-template-columns: auto auto minmax(0, 1fr); } .job-row .status-pill, .job-row .row-actions { grid-column: 3; } .row-actions { justify-content: flex-start; } }
-@media (max-width: 760px) { .header-actions, .row-actions { align-items: stretch; flex-direction: column; } }
+@media (max-width: 980px) { .job-row { grid-template-columns: auto auto minmax(0, 1fr); } .job-row .status-control, .job-row .row-actions { grid-column: 3; } .row-actions { justify-content: flex-start; } }
+@media (max-width: 760px) { .header-actions, .row-actions { align-items: stretch; flex-direction: column; } .job-row .status-control { grid-column: 2; } }
 </style>

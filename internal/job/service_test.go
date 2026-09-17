@@ -91,6 +91,10 @@ func (*captureImportRepository) SetImportState(context.Context, workqueue.Job, s
 	return nil
 }
 
+func (*captureImportRepository) QuarantineImport(context.Context, workqueue.Job, string, string) (bool, error) {
+	return false, nil
+}
+
 func TestAIAssistedImportAcceptsAnyPublicHTTPSHostAndQueuesModelChoice(t *testing.T) {
 	repository := &captureImportRepository{}
 	service := job.NewImportService(repository)
