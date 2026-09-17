@@ -1,344 +1,214 @@
 # ResumeGPT
 
-ResumeGPT is a personal CV and cover-letter optimization application. This repository contains the product architecture and a runnable application skeleton.
+ResumeGPT is a self-hosted workspace for tailoring CVs and cover letters to specific job opportunities. It combines profile management, job tracking, scheduled job discovery, reusable templates, configurable LLM agents, PDF generation, visual review, and background-task monitoring in one application.
 
-## Current Skeleton
+## TL;DR
 
-- Vue 3 and TypeScript web application.
-- Go API built as a modular monolith.
-- Independent Go worker entry point.
-- Profile and job domain modules with repository ports.
-- PostgreSQL adapters with embedded migrations, workspace RLS, audit events, and transactional outbox writes.
-- Development and OIDC authentication modes with workspace RBAC.
-- S3-compatible signed upload and download URLs, with MinIO for local development.
-- PostgreSQL-backed durable jobs, persisted lifecycle events, a workspace-scoped Task Monitor, and a leased outbox dispatcher.
-- Optional in-memory adapters for zero-dependency local development.
-- OpenTelemetry HTTP tracing and W3C trace-context propagation.
-- Multiple editable profiles with role metadata, Markdown-friendly text, optional avatars, and full CRUD operations.
-- An isolated, malware-scanning Python extraction service for staged TXT, Markdown, TeX, DOC/DOCX, PDF, PNG, and JPEG uploads. Extracted text is loaded into the editor and is stored on the profile only after the user saves it.
-- Editable job tracking with manual entry, application status, deterministic LinkedIn/Indeed import, and optional agent-assisted import from public job pages.
-- Scheduled Job Hunters that prioritize established job sources, deduplicate URLs, queue the existing Job Import Agent automatically, and collect blocked or unparseable pages in a per-Hunter confirmation inbox.
-- Workspace Settings for encrypted cloud/local LLM connections, per-Agent default models with capability guidance, model discovery, interface language, theme, and deployment status.
-- A simple resume and cover-letter template library with an attributed built-in LaTeX template, single-file TeX or multi-file LaTeX ZIP uploads, Word uploads, security scanning, extracted text for generation, and cached PDF previews.
-- Durable generation runs with optional LaTeX templates or AI-designed HTML/CSS layouts, single-model or specialized Agent modes, immutable input snapshots, bounded automatic repair, safe basic-layout fallback, and stored PDF downloads.
-- English-first internationalization setup.
+With Docker Compose installed, start the complete application with one command:
 
-Infrastructure integrations remain behind application ports and adapters so that storage, identity, and messaging choices can change without rewriting domain services.
+```bash
+docker compose up -d --build
+```
 
-## Delivery Roadmap and Feature Checklist
+Then open [http://localhost:5173](http://localhost:5173). The Compose stack supplies development defaults, creates its storage volumes, applies database migrations, and waits for dependencies to become healthy.
 
-This checklist is the project-level source of truth for planned delivery. An item is marked complete only when it is implemented, tested, and usable through its intended interface.
+## Features
 
-### Milestones
+### Profiles
 
-| Milestone | Outcome | Status |
+- Create and manage multiple profiles with a name, target role, default language, and Markdown-friendly content.
+- Enter profile content directly or import text from TXT, Markdown, TeX, DOC, DOCX, PDF, PNG, and JPEG files.
+- Review and edit extracted text before saving it to a profile.
+- Attach an optional JPEG or PNG avatar for CV layouts that support a photo.
+- Search, filter, paginate, edit, and delete profiles from the web interface.
+
+### Job Opportunities
+
+- Track job title, company, location, country, city, work mode, employment type, source URL, description, and application status.
+- Create opportunities manually or import up to 50 public job URLs at once.
+- Use fast deterministic extraction for supported LinkedIn and Indeed pages.
+- Enable the Job Import Agent for AI-assisted extraction from other public HTTPS job pages.
+- Edit imported information and update application status directly from the opportunity list.
+- Filter opportunities by origin so manual, URL-imported, and Job Hunter results remain distinguishable.
+- Select multiple opportunities and create CV or cover-letter tasks in a batch.
+
+### Job Hunter
+
+- Schedule recurring searches by occupation, location, work mode, contract type, experience, keywords, and an additional prompt.
+- Optionally use a saved profile as matching context.
+- Limit each run to at most 10 new opportunities.
+- Run, pause, resume, edit, or delete a Hunter from the web interface.
+- Deduplicate discovered URLs before creating opportunities.
+- Keep blocked or unparseable results out of the opportunity list and collect them in a confirmation inbox for manual review.
+
+### Templates
+
+- Manage separate CV and cover-letter templates.
+- Upload DOC, DOCX, single-file TeX, or multi-file LaTeX ZIP projects.
+- Specify a LaTeX entry file when a ZIP does not use an unambiguous `main.tex`.
+- Scan uploaded sources, extract LLM-readable content, and generate a cached PDF preview.
+- View, update, download, and delete custom templates.
+- Use the included read-only Rezume LaTeX template, with attribution to its original [Overleaf source](https://www.overleaf.com/latex/templates/rezume/kfrvqywfkwjs).
+
+### CV and Cover-Letter Generation
+
+- Generate a tailored CV or cover letter from a saved profile and job opportunity.
+- Use an optional LaTeX template, or leave the template empty and let the Document Designer Agent create a print-ready HTML/CSS layout.
+- Configure a different default LLM for each Agent, or override a generation with one model for the entire workflow.
+- Run Writer, Template Applying or Document Designer, and Visual Reviewer roles through bounded LangChainGo agent executors.
+- Generate LaTeX and HTML/CSS artifacts, plus Word template previews, through isolated rendering tools.
+- Rasterize PDF pages for visual review and perform up to two automatic layout-repair rounds.
+- Preserve a valid PDF with a visible warning when the selected model cannot perform visual inspection.
+- Fall back to a safe basic layout if an AI-generated document cannot be rendered reliably.
+- Follow generation progress, inspect drafts, intermediate PDFs, review feedback, warnings, and user prompts in a timeline.
+- Edit a completed or failed application's inputs and regenerate it without discarding earlier timeline records.
+- Send a follow-up instruction to revise a completed artifact.
+
+### LLM Connections and Settings
+
+- Configure OpenAI, OpenAI-compatible, and local Ollama connections.
+- Store API tokens encrypted at rest and never return plaintext tokens to the browser.
+- Discover available models automatically from `/models` or Ollama's `/api/tags` endpoint.
+- Assign default connections and models independently to the Writer, Template Applying, Document Designer, Visual Reviewer, Job Import, and Job Hunter Agents.
+- Override the default routing with a single model for an individual generation.
+- Configure the interface language and System, Light, or Dark theme.
+
+### Background Processing and Operations
+
+- Execute document extraction, template preparation, job import, job hunting, and document generation through a PostgreSQL-backed durable work queue.
+- Recover leased jobs, retry transient failures, and persist task lifecycle events.
+- Inspect task state, attempts, sanitized inputs, errors, and logs in the Task Monitor.
+- Store source files, avatars, previews, and generated PDFs in S3-compatible object storage.
+- Persist transactional outbox and audit records for core mutations.
+- Emit structured logs and OpenTelemetry traces with W3C trace-context propagation.
+- Create PostgreSQL backups and run an automated restore check with the supplied scripts.
+
+## Local Stack
+
+The default Compose deployment runs:
+
+| Service | Purpose | Local access |
 |---|---|---|
-| M0 — Foundation Skeleton | Runnable web application, API, worker, domain boundaries, and local development setup | Complete |
-| M1 — Durable Core | PostgreSQL persistence, workspace security, object storage, and recoverable background jobs | Complete |
-| M2 — Editable Profiles and Document Import | Simple profile CRUD, optional avatars, and review-before-save document extraction | Complete |
-| M3 — Job and Application Tracking | Simple Job CRUD, background URL import, and application-status tracking | Complete |
-| M3b — Template Library | Built-in and user-uploaded resume and cover-letter templates ready for generation | Complete |
-| M4 — Tailored Content Generation | Provider-independent LLM orchestration, CVs, cover letters, and iterative revision | In progress |
-| M5 — Rendering, Validation, and Trust | Managed templates, DOCX/PDF output, visual QA, and unsupported-claim controls | Planned |
-| M6 — Beta and Scale Readiness | Collaboration, quotas, observability, deployment automation, and scale-out adapters | Planned |
+| `web` | Vue 3 application served by Nginx | `http://localhost:5173` |
+| `api` | Go HTTP API | `http://localhost:8080` |
+| `worker` | Durable background processors and schedulers | Internal |
+| `document-worker` | Malware scanning, extraction, OCR, preview, and PDF rendering | Internal |
+| `web-worker` | Isolated Playwright page rendering for AI-assisted imports | Internal |
+| `postgres` | Application data, queue, events, and settings | `localhost:5432` |
+| `minio` | S3-compatible object storage | API `localhost:9000`, console `localhost:9001` |
+| `migrate` | One-shot database migration process | Internal |
 
-### M0 — Foundation Skeleton
+Check status or follow logs with:
 
-- [x] Record the system architecture and initial ADRs.
-- [x] Establish the Go module and modular backend layout.
-- [x] Provide separate API and worker entry points.
-- [x] Define Profile and Job domain models, services, and repository ports.
-- [x] Provide in-memory repositories for zero-dependency development.
-- [x] Expose health, capability, Profile, and Job HTTP endpoints.
-- [x] Add request IDs, structured logging, CORS, timeouts, and graceful shutdown.
-- [x] Create the Vue 3, TypeScript, Router, Pinia, and i18n application shell.
-- [x] Create Overview, Profiles, Jobs, and Generate views.
-- [x] Connect Profile and Job forms to the development API.
-- [x] Add a complete local Compose stack with web, API, worker, automatic migrations, PostgreSQL, and MinIO.
-- [x] Add Go tests, static analysis, frontend type checking, production builds, and dependency auditing.
-- [x] Add continuous integration for tests, builds, audits, formatting, and PostgreSQL integration.
+```bash
+docker compose ps
+docker compose logs -f
+```
 
-### M1 — Durable Core
+Stop the stack without deleting data:
 
-- [x] Define versioned, embedded database migrations.
-- [x] Implement PostgreSQL Profile and Job repository adapters.
-- [x] Add workspace and membership records and remove the implicit production workspace fallback.
-- [x] Integrate OIDC Bearer-token verification for production API authentication.
-- [x] Implement workspace membership and Owner/Admin/Editor/Viewer RBAC.
-- [x] Add application-level workspace scoping and PostgreSQL Row-Level Security.
-- [x] Implement S3-compatible object storage and signed upload/download URLs.
-- [x] Implement durable PostgreSQL jobs, leases, heartbeats, retries, cancellation, and terminal failure handling.
-- [x] Add a System Task Monitor with server-side filtering, pagination, sanitized inputs, errors, attempts, and persisted lifecycle logs.
-- [x] Write transactional outbox events with Profile and Job mutations.
-- [x] Implement leased outbox publication with stable event IDs and retry backoff.
-- [x] Persist audit events with Profile and Job mutations.
-- [x] Add baseline OpenTelemetry HTTP tracing and W3C context propagation.
-- [x] Add automated backup and restore checks for local/test environments.
+```bash
+docker compose down
+```
 
-### M2a — Editable Profiles
+PostgreSQL and MinIO data remain in named volumes. Use `docker compose down --volumes` only when you intentionally want to erase local application data.
 
-- [x] Support multiple profiles within a workspace.
-- [x] Store a name, target role, primary language, and one Markdown-friendly text body per profile.
-- [x] Let users create, view, edit, and delete profiles through the web UI and REST API.
-- [x] Validate profile text as UTF-8 and limit it to 1 MiB.
-- [x] Store profile text in PostgreSQL as the authoritative input for later LLM workflows.
-- [x] Support an optional JPEG or PNG avatar through workspace-scoped signed object uploads.
-- [x] Remove the source, fact, review, and version lifecycle from the Profile module.
+## First Use
 
-### M2b — Review-Before-Save Document Import
+1. Open `http://localhost:5173/settings`.
+2. Add an OpenAI, OpenAI-compatible, or Ollama connection and test it.
+3. Choose default models for the Agents you plan to use.
+4. Create a Profile and save your source content.
+5. Add or import a Job Opportunity.
+6. Create a CV or cover letter, optionally selecting a template.
 
-- [x] Accept PDF, DOC/DOCX, TeX, Markdown, TXT, PNG, and JPG/JPEG documents through staged object storage.
-- [x] Build a signature-driven Python extraction engine for TXT, Markdown, TeX, DOC/DOCX, PDF, PNG, and JPG/JPEG.
-- [x] Validate binary signatures, extension agreement, expanded DOCX size, total size, and SHA-256 content hash.
-- [x] Fail closed with actionable states when malware scanning, conversion, PDF rendering, or OCR is unavailable.
-- [x] Build and verify the non-root extraction container locally.
-- [x] Provision current malware definitions and scan before releasing quarantined content.
-- [x] Connect staged object uploads to the durable document-processing job consumer.
-- [x] Add transactional inbox deduplication with the first asynchronous document consumer.
-- [x] Extract text with page, paragraph, confidence, and optional image bounding-box metadata.
-- [x] Add Tesseract OCR for images and image-only PDF pages with confidence and actionable failure states.
-- [x] Store extracted text on the upload record without mutating the profile.
-- [x] Load successful extraction results into the profile editor for user review and editing.
-- [x] Persist extracted text as profile content only when the user explicitly saves the profile.
+For Ollama running on the Docker host, use `http://host.docker.internal:11434` as the Base URL.
 
-### M3 — Job and Application Tracking
+## Configuration
 
-- [x] Support multiple jobs with manual creation, viewing, editing, and deletion.
-- [x] Capture title, company, location, country, city, work mode, employment type, source URL, and description.
-- [x] Track the current application status directly on each job.
-- [x] Provide a focused Import via URLs form for batches of up to 50 job pages.
-- [x] Keep fast deterministic import for public LinkedIn and Indeed URLs.
-- [x] Queue URL imports as durable background jobs with retries and actionable failure states.
-- [x] Restrict acquisition to public HTTPS LinkedIn and Indeed pages and enforce DNS, redirect, response-size, content-type, and timeout protections.
-- [x] Extract common metadata from JobPosting JSON-LD with safe page-metadata fallbacks.
-- [x] Add opt-in AI-assisted import for arbitrary public HTTPS job pages with an explicitly selected LLM connection and model.
-- [x] Run AI-assisted acquisition through a LangChainGo Job Import Agent with scoped inspection, metadata, heuristic parsing, expansion, scrolling, and structured-result tools.
-- [x] Render dynamic pages in a separate Playwright worker with bounded actions, public-network validation, and no database or LLM credentials.
-- [x] Let users correct every imported field and fall back to manual creation when a page is unavailable.
-- [x] Deduplicate repeated imports of the same normalized URL within a workspace.
-- [x] Link each imported job back to its source page.
-- [x] Keep the Job module free of review, approval, and version-management workflows.
-- [x] Let users create, edit, pause, resume, delete, and run scheduled Job Hunters with search criteria, an optional Profile reference, and a configurable limit of up to 10 jobs per run.
-- [x] Use a bounded Job Hunter Agent with a scoped public-web search tool, then parse candidates through the existing Job Import Agent.
-- [x] Deduplicate discovered source URLs and distinguish manual, URL-imported, and Hunter-discovered opportunities in the list filter.
-- [x] Keep Hunter discoveries hidden until parsing succeeds and collect blocked or unparseable URLs in a per-Hunter confirmation inbox.
-
-### M4 — Tailored Content Generation
-
-- [x] Add a Settings page for reusable cloud and local LLM connections.
-- [x] Configure optional default connections and models for each Agent while preserving per-task overrides.
-- [x] Encrypt LLM API tokens at rest and never return plaintext tokens to the browser.
-- [x] Support OpenAI, OpenAI-compatible, and Ollama connection validation and model discovery.
-- [x] Persist interface language and System/Light/Dark theme preferences.
-- [x] Add a simple Template library for resume and cover-letter TeX, LaTeX ZIP, DOC, and DOCX files.
-- [x] Embed the attributed Rezume LaTeX template as the read-only default.
-- [x] Scan and extract LLM-readable text from custom templates with durable background processing.
-- [x] Let users list, view, download, edit metadata, and delete custom templates.
-- [x] Generate and store a unified PDF preview when a template source is uploaded or replaced.
-- [x] Support safe multi-file LaTeX ZIP archives with automatic or user-selected `.tex` entry files.
-- [ ] Define and version the ResumeDocument and CoverLetterDocument JSON Schemas.
-- [x] Implement the provider-independent OpenAI, OpenAI-compatible, and Ollama chat gateway.
-- [x] Run generation roles through LangChainGo agents and expose PDF operations as scoped LangChainGo tools.
-- [x] Require the Template Applying Agent to study the complete template project before rendering and inject an optional Profile avatar through the template's existing photo mechanism.
-- [x] Make templates optional and use a dedicated Document Designer Agent with sandboxed HTML/CSS-to-PDF tools when no template is selected.
-- [x] Select one shared model or specialized writer, renderer, and visual-reviewer models for each Opportunity generation.
-- [ ] Generate successfully through at least one cloud connection and one local Ollama or OpenAI-compatible connection.
-- [x] Freeze Profile, Opportunity, optional template, and model input snapshots when a generation is queued.
-- [ ] Build the job-requirement-to-profile-content matching plan.
-- [x] Generate a profile-grounded draft and apply it to a selected LaTeX template.
-- [ ] Generate tailored one-page, two-page, and custom-length CVs.
-- [ ] Generate tailored cover letters.
-- [x] Show polled background progress across writing, rendering, visual review, and repair stages.
-- [x] Make the application list the primary Generate view and move creation into a focused modal workflow.
-- [x] Add reusable list multi-selection and create CV or cover-letter generation tasks directly from one or many Job Opportunities with shared settings.
-- [x] Persist an inspectable timeline of writer drafts, rendered PDFs, reviewer feedback, warnings, and user prompts.
-- [x] Provide a generation detail page with intermediate PDF previews and follow-up prompt revisions.
-- [x] Allow completed or failed applications to switch Profiles, Templates, and LLM models and regenerate without losing prior timeline records.
-- [x] Keep long generation timelines in a PDF-height scroll region with newest-first sorting and animated live-stage indicators.
-- [x] Fall back to a ready PDF with a visible warning when the selected model explicitly rejects image input.
-- [x] Fall back to a safe basic LaTeX layout when a small renderer model returns an incomplete document.
-- [x] Let users retry failed generations while reusing a persisted writing draft when available.
-- [ ] Add cancellation and server-sent event progress streaming.
-- [ ] Implement artifact revisions with parent history and restoration.
-- [x] Support bounded follow-up prompt revisions against the grounded draft and current LaTeX or HTML/CSS source.
-- [ ] Show semantic diffs and allow users to lock sections.
-- [ ] Track model version, prompt version, token usage, latency, and cost.
-
-### M5 — Rendering, Validation, and Trust
-
-- [ ] Define the supported DOCX and TeX rendering capability model.
-- [ ] Add generation-time template preflight and fixture-render compatibility checks.
-- [ ] Build a network-isolated, resource-limited render worker.
-- [ ] Generate DOCX from the document intermediate representation.
-- [ ] Generate PDF through pinned LibreOffice and TeX toolchains.
-- [x] Produce bounded per-page images for visual LLM review.
-- [ ] Detect page-count violations, overflow, clipping, overlap, blank pages, and missing fonts.
-- [ ] Compare normalized PDF text with the structured draft.
-- [x] Add a maximum of two automatic LaTeX layout-repair attempts.
-- [ ] Split generated text into atomic claims.
-- [ ] Validate names, dates, organizations, titles, and metrics deterministically.
-- [ ] Add profile-grounded semantic-expansion checks.
-- [ ] Implement blocking, warning, and style finding levels.
-- [ ] Implement Verified and explicitly acknowledged Unverified export policies.
-- [ ] Revalidate after every AI or manual revision.
-- [ ] Add prompt-injection and malicious-template regression suites.
-
-### M6 — Beta and Scale Readiness
-
-- [ ] Move Profile, Opportunity, Template, and Application search, filtering, and pagination from the current client-side implementation to server-side query APIs.
-- [ ] Add workspace invitations and multi-user collaboration.
-- [ ] Add quotas, rate limits, budget controls, and usage reporting.
-- [ ] Complete data export, deletion, retention, and consent workflows.
-- [ ] Add notification delivery and user-configurable reminders.
-- [ ] Add multilingual document generation and template validation beyond English.
-- [ ] Build de-identified golden datasets and quality release gates.
-- [ ] Add model shadowing, canary rollout, and fallback monitoring.
-- [ ] Add production container images, Kubernetes manifests, health probes, and autoscaling.
-- [ ] Add production dashboards, alerts, SLOs, and recovery runbooks.
-- [ ] Add CI/CD with backward-compatible migration gates and rollback support.
-- [ ] Evaluate Kafka only when event throughput or consumer count justifies it.
-- [ ] Introduce pgvector only if direct profile input misses measured context, latency, or generation-quality targets.
-- [ ] Evaluate Qdrant only if an active pgvector implementation misses measured latency, recall, or isolation targets.
-- [ ] Evaluate a durable workflow engine when long-running workflow complexity exceeds the PostgreSQL job model.
-- [ ] Complete the target-market privacy, security, and compliance review.
-
-### Checklist Maintenance
-
-- When scope is superseded, replace obsolete checklist items and record the migration and rationale in an ADR.
-- Add links to the relevant ADR, issue, or pull request when a task becomes active.
-- Split an item when only part of its acceptance criteria is implemented.
-- Update milestone status only when its outcome is demonstrably usable end to end.
-
-## Prerequisites
-
-- Go 1.26.8 or later.
-- Node.js 22.12 or later and npm.
-- Python 3.10 or later and uv.
-- Docker with Compose for the complete local stack or optional infrastructure-only development.
-- GNU Make is optional; the underlying commands can be run directly.
-
-## Quick Start
-
-Start the complete application stack:
+Compose provides development defaults, so an `.env` file is optional. Copy `.env.example` when you want to customize ports, credentials, storage, authentication, or tracing:
 
 ```bash
 cp .env.example .env
-make compose-up
 ```
 
-Open `http://localhost:5173`. Compose builds and starts the Vue application, Go API, Go worker, PostgreSQL, and MinIO, and applies database migrations before the API becomes ready.
+Important settings include:
 
-Useful local endpoints are:
+| Variable | Purpose |
+|---|---|
+| `WEB_PORT` | Browser-facing web port; default `5173` |
+| `API_PORT` | Browser-facing API port; default `8080` |
+| `POSTGRES_*` | Local PostgreSQL database and credentials |
+| `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD` | Local object-storage credentials |
+| `SETTINGS_ENCRYPTION_KEY` | Encrypts stored LLM API tokens |
+| `AUTH_MODE` | `development` or `oidc` |
+| `OIDC_ISSUER`, `OIDC_CLIENT_ID` | Required when `AUTH_MODE=oidc` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Optional OpenTelemetry collector endpoint |
 
-- Web application: `http://localhost:5173`
-- API health: `http://localhost:8080/healthz`
-- MinIO console: `http://localhost:9001`
+The built-in encryption key and storage credentials are development-only defaults. Set private values before using the application outside a local machine.
 
-Inspect service status or follow logs with:
+## Development
 
-```bash
-make compose-ps
-make compose-logs
-```
+Host development requires Go 1.26.8 or later, Node.js 22 or later, Python 3.12, `uv`, and GNU Make.
 
-Development authentication maps requests to the seeded `ws_personal_dev` workspace. Production deployments must use `AUTH_MODE=oidc`, configure the issuer and client ID, and send an explicit `X-Workspace-ID` header.
-
-## Host Development
-
-Install web and document-worker dependencies:
+Install frontend and Python dependencies:
 
 ```bash
 npm --prefix apps/web install
-cd services/document-worker
-uv sync --dev --locked
-cd ../..
+cd services/document-worker && uv sync --dev --locked && cd ../..
+cd services/web-worker && uv sync --dev --locked && cd ../..
 ```
 
-Start only PostgreSQL and MinIO, then apply migrations:
+Start PostgreSQL and MinIO, apply migrations, and run the main processes in separate terminals:
 
 ```bash
 cp .env.example .env
 make compose-infra
 make migrate
-```
-
-Run the API and web application in separate terminals:
-
-```bash
 make dev-api
+make dev-worker
 make dev-web
 ```
 
-Open `http://localhost:5173`. Vite proxies `/api` requests to the API at `http://localhost:8080`.
+The full worker also expects the document and web workers. For end-to-end development, the complete Compose stack is the simplest option.
 
-## Local Infrastructure
-
-PostgreSQL and MinIO can be started with:
-
-```bash
-cp .env.example .env
-make compose-infra
-```
-
-The example environment selects PostgreSQL and MinIO. Compose overrides service-to-service endpoints while preserving the localhost endpoints used by host processes and browser-facing signed object URLs. Set `PERSISTENCE_MODE=memory` and `OBJECT_STORAGE_MODE=memory` for a zero-dependency host development session.
-
-`make compose-down` stops the stack but retains PostgreSQL and MinIO volumes. Use `docker compose down --volumes` only when you intentionally want to delete local application data.
-
-Create a local database backup or verify a complete backup-and-restore cycle:
-
-```bash
-make backup
-make restore-check
-```
-
-Set `OTEL_EXPORTER_OTLP_ENDPOINT` to send API and worker traces to an OpenTelemetry-compatible collector. When it is empty, trace propagation remains enabled without exporting spans.
-
-Set `SETTINGS_ENCRYPTION_KEY` to a private value of at least 32 characters before storing LLM API tokens. The Compose development default is intentionally local-only and must not be used in production.
-
-Run the extraction engine directly against a quarantined document:
-
-```bash
-cd services/document-worker
-uv run python -m resumegpt_document_worker /absolute/path/to/document.pdf
-```
-
-The command intentionally fails when ClamAV or current malware definitions are unavailable. The hidden `--skip-malware-scan` switch exists for automated parser tests only and must not be used for user documents.
-
-The profile editor uses the staged document workflow in PostgreSQL and S3 modes. It requests a short-lived upload URL, uploads directly to quarantine storage, submits the upload for durable processing, and polls its status. The Go worker retrieves only `profile.document.extract.v1` jobs and sends document bytes to the network-internal Python service. The Python service has no database credentials. A successful result atomically records inbox deduplication, extracted text, upload state, and job completion. The browser then loads that text into the editor; the profile remains unchanged until the user clicks **Save profile**.
-
-The document-worker image downloads ClamAV definitions during its build and rejects scanning when definitions are older than seven days. Rebuild the image at least weekly and as part of each deployment:
-
-```bash
-docker compose build --pull --no-cache document-worker
-docker compose up -d document-worker worker
-```
-
-## Validation
+Run validation:
 
 ```bash
 make test
 make build
 ```
 
+Useful commands:
+
+```bash
+make compose-up
+make compose-ps
+make compose-logs
+make compose-down
+make backup
+make restore-check
+```
+
 ## Repository Layout
 
 ```text
-apps/web/                   Vue application
+apps/web/                   Vue 3 and TypeScript frontend
 cmd/api/                    Go API entry point
-cmd/worker/                 Go worker entry point
-internal/profile/           Profile domain and application service
-internal/job/               Job domain and application service
-internal/adapters/          Infrastructure adapters
-internal/platform/          Database, queue, storage, and telemetry abstractions
-internal/transport/httpapi/ HTTP transport
-migrations/                 Versioned embedded PostgreSQL migrations
-schemas/                    Versioned JSON Schemas
-services/document-worker/   Isolated Python document extraction
-scripts/                    Local backup and restore verification
-docs/                       Architecture and ADRs
+cmd/worker/                 Go background worker entry point
+cmd/migrate/                Embedded migration runner
+internal/                   Domain modules, services, ports, and adapters
+migrations/                 Versioned PostgreSQL migrations
+services/document-worker/   Isolated document processing and rendering service
+services/web-worker/        Isolated Playwright browser service
+scripts/                    Backup and restore-check utilities
+docs/                       Current architecture documentation
 ```
 
 ## Architecture
 
-- [System architecture](./docs/architecture-design.md)
-- [Architecture decision records](./docs/adr/README.md)
+See [Architecture](./docs/architecture-design.md) for the implemented component model, persistence layout, workflows, and security boundaries.
+
+## License
+
+ResumeGPT is distributed under the terms in [LICENSE](./LICENSE). The bundled Rezume template retains its own attribution and license metadata in the application.

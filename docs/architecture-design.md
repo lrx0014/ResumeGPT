@@ -1,730 +1,319 @@
-# ResumeGPT Architecture Design
+# ResumeGPT Architecture
 
-> Status: Draft  
-> Target stage: Prototype / MVP, with a path to cloud-native distributed deployment  
-> Primary product language: English, with support for additional locales  
-> Last updated: 2026-09-14
+This document explains the architecture currently implemented in ResumeGPT. It describes the running components, module boundaries, persistence model, background workflows, Agent execution, and security controls represented in the repository today.
 
-## 1. Goals and Design Principles
+## 1. System Overview
 
-ResumeGPT uses user-maintained profile content and job postings to generate, optimize, and manage tailored CVs and cover letters. In addition to producing high-quality content, the system must keep the user's saved profile authoritative, minimize fabricated claims, and reliably execute long pipelines involving file parsing, web crawling, LLM calls, template rendering, and visual validation.
-
-Core principles:
-
-1. **Saved profile first:** Models generate from the profile text explicitly saved by the user. Imported text is only a draft until the user saves it.
-2. **Business logic is infrastructure-independent:** LLMs, object storage, relational/vector databases, message systems, parsers, and renderers are accessed through ports and adapters.
-3. **Start as a modular monolith, split on measured need:** The MVP uses a modular API plus independently deployable workers. Extract services only where scaling, security, ownership, or reliability requires it.
-4. **Asynchronous and recoverable:** Long-running work uses durable jobs with idempotency, retries, deadlines, cancellation, and recovery.
-5. **Structured generation first:** LLMs produce schema-constrained content; deterministic template engines produce DOCX, TeX, and PDF.
-6. **Privacy by default:** Minimize collection and design tenant isolation, encryption, audit, export, and deletion from the outset.
-7. **Observable, replaceable, and testable:** Record model, prompt, input snapshot, cost, latency, and quality signals so provider changes and regressions are measurable.
-
-## 2. Scope and Non-Goals
-
-### 2.1 MVP Scope
-
-- Multiple editable profiles with role metadata, optional avatars, and direct text entry.
-- Review-before-save text extraction from PDF, DOC/DOCX, TeX, Markdown, TXT, PNG, and JPG/JPEG files.
-- Single or batch job URL import plus manual job entry.
-- Job details, tags, application-state tracking, and basic reporting.
-- CV generation and revision by profile, job, template, and page constraint.
-- Cover-letter generation and revision by profile and job.
-- DOCX/PDF output, plus TeX template input and PDF output.
-- Profile-grounding validation, layout validation, visual checks, version comparison, and download.
-- Multiple cloud providers and local models exposed through compatible adapters.
-- English-first UI with independent UI and document-language selection.
-
-### 2.2 MVP Non-Goals
-
-- Automated application submission, automatic login to job sites, or bypassing access restrictions.
-- Sending email, applying, or mutating an external ATS without explicit user action.
-- Training or fine-tuning a foundation model.
-- Universal pixel-perfect support for arbitrary PDF, DOCX, or TeX templates. The MVP supports a validated subset.
-
-## 3. Recommended Architecture
-
-### 3.1 Prototype Deployment Shape
-
-Use a **modular-monolith API, asynchronous workers, and an isolated rendering sandbox**:
-
-- `web-app`: TypeScript and Vue 3.
-- `api`: Go domain logic, REST/JSON API, authorization, and workflow entry points.
-- `worker-go`: crawling, orchestration, notifications, and reporting aggregation.
-- `document-worker`: Python OCR, document parsing, selected NLP utilities, and PDF image analysis.
-- `render-worker`: isolated LibreOffice, LaTeX, Chromium, and font toolchain.
-- PostgreSQL: system of record.
-- Object storage: uploads, artifacts, previews, and diagnostic attachments; MinIO is suitable locally.
-- Optional Redis: caching, rate limits, ephemeral state, and distributed locks when measured load requires it; never the sole record of user content.
-- Messaging: begin with PostgreSQL Outbox and lightweight workers; add Kafka when multiple consumers or throughput justify it.
-- Vector search: do not deploy it for the simple Profile model. Add a PostgreSQL/pgvector adapter only if measured generation quality or input size justifies retrieval, and evaluate Qdrant only at scale.
+ResumeGPT is a self-hosted web application built around a Go modular monolith and a small set of isolated worker services. The browser communicates with one HTTP API. Long-running work is persisted in PostgreSQL and executed by a separate Go worker. File processing and browser automation run in restricted Python containers.
 
 ```mermaid
 flowchart LR
-    U[Web / Mobile Browser] --> G[API / BFF<br/>Go]
-    G --> AUTH[Identity & Access]
-    G --> APP[Application Core<br/>Profiles / Jobs / Documents / Reports]
-    APP --> PG[(PostgreSQL)]
-    APP --> OBJ[(Object Storage)]
-    APP -. optional .-> CACHE[(Redis)]
-    APP --> OUTBOX[(Outbox / Message Bus)]
-
-    OUTBOX --> INGEST[Ingestion Worker<br/>Python]
-    OUTBOX --> CRAWL[Crawler Worker<br/>Go]
-    OUTBOX --> AI[AI Orchestrator Worker<br/>Go]
-    OUTBOX --> RENDER[Sandboxed Render Worker]
-
-    INGEST --> OCR[Parser / OCR Adapters]
-    CRAWL --> WEB[External Job Sites]
-    AI --> LLM[LLM Gateway<br/>Cloud / Local]
-    AI --> PG
-    RENDER --> OBJ
-    RENDER --> QA[Visual & Structural QA]
+    B[Vue web application] -->|REST /api/v1| A[Go API]
+    A --> P[(PostgreSQL)]
+    A --> S[(S3 / MinIO)]
+    W[Go background worker] --> P
+    W --> S
+    W --> D[Document worker]
+    W --> R[Web worker]
+    W --> L[OpenAI, compatible API, or Ollama]
+    D -->|Extract, OCR, render| W
+    R -->|Bounded page snapshot| W
 ```
 
-### 3.2 Why Not Start with Full Microservices
+The default Docker Compose deployment includes the web application, API, background worker, migration process, PostgreSQL, MinIO, document worker, and web worker.
 
-Before domain boundaries and workload profiles stabilize, full microservices add service discovery, distributed transactions, event compatibility, integration testing, observability, and operations overhead. A modular monolith preserves code boundaries while allowing high-risk and compute-heavy workers to deploy separately.
+## 2. Runtime Components
 
-Extract a service when:
+### 2.1 Web application
 
-- URL acquisition, OCR, or rendering needs a distinct resource or isolation policy.
-- Generation and interactive API traffic require different SLOs.
-- A domain needs an independent team, release cadence, or governance boundary.
-- Profiling shows a module is a bottleneck and vertical scaling is uneconomical.
+`apps/web` is a Vue 3 and TypeScript single-page application built with Vite and served by an unprivileged Nginx container. It contains the following user-facing areas:
 
-## 4. Domains and Module Boundaries
+- Overview
+- Job Opportunities
+- Job Hunter
+- Profiles
+- Templates
+- Create CVs
+- Task Monitor
+- Settings
 
-| Module | Responsibilities | Core entities |
-|---|---|---|
-| Identity & Tenant | Authentication, sessions, workspaces, membership, RBAC, quotas | User, Workspace, Membership |
-| Profile | Editable profile metadata, text, avatar reference, and document import | Profile, DocumentUpload |
-| Job | Editable Job records, current application status, manual entry, and safe background URL import | Job, JobImportTask |
-| Template | Simple resume/cover-letter TeX and Word library, original files, and extracted text | Template |
-| Content Generation | Planning, profile selection, generation, conversational revision | Generation, ArtifactDraft, Revision, Conversation |
-| Validation | Profile grounding, content rules, ATS, layout, and visual validation | ValidationRun, Finding, ProfileReference |
-| Artifact | Rendering, preview, conversion, download, retention | Artifact, FileVariant, RenderRun |
-| Platform | Providers, jobs, audit, configuration, notification, throttling | ProviderConfig, JobRun, AuditEvent |
+The frontend uses Vue Router for navigation, Pinia and Vue state for client state, and polling for background workflow progress. List pages currently perform their search, filtering, and pagination in the browser, except the Task Monitor, which uses server-side filtering and pagination.
 
-Modules communicate through application interfaces and domain events. They must not directly read another module's private tables. Initially they may share a PostgreSQL instance, but table ownership must be separated by schema or explicit naming.
+### 2.2 Go API
 
-## 5. Layers and Adapter Design
+`cmd/api` starts the public HTTP API. It is responsible for:
 
-Use hexagonal architecture:
+- Authentication and workspace authorization.
+- Request validation and domain-service invocation.
+- Profile, opportunity, template, generation, Hunter, settings, and task-monitor endpoints.
+- Issuing short-lived object upload and download URLs.
+- Returning generated and intermediate PDFs.
+- Structured request logging, request IDs, CORS, panic recovery, and OpenTelemetry HTTP instrumentation.
+
+The API performs short synchronous operations only. Document processing, page import, scheduled searches, and document generation are submitted to the durable queue.
+
+### 2.3 Go background worker
+
+`cmd/worker` runs several processors in one process:
+
+- Profile document extraction.
+- Template scanning, extraction, and preview generation.
+- Job-page import.
+- Job Hunter scheduling and execution.
+- CV and cover-letter generation.
+- Transactional outbox dispatch.
+
+Each processor claims only its own job kind from PostgreSQL. The generation processor remains on the main worker goroutine, while the other processors and scheduler run concurrently.
+
+### 2.4 Document worker
+
+`services/document-worker` is a Python HTTP service with no database credentials. It provides bounded operations for:
+
+- Malware scanning with ClamAV.
+- Text extraction from TXT, Markdown, TeX, DOC, DOCX, PDF, PNG, and JPEG.
+- OCR with Tesseract when needed.
+- Safe LaTeX ZIP inspection and entry-file handling.
+- DOC/DOCX and LaTeX PDF previews.
+- PDF page rasterization for visual review.
+- Self-contained HTML/CSS rendering to PDF with WeasyPrint.
+
+The container runs read-only with a temporary filesystem. The HTML renderer blocks network and local-file loading; only embedded `data:` resources are accepted.
+
+### 2.5 Web worker
+
+`services/web-worker` is an isolated Playwright service used by the Job Import Agent. It opens public HTTPS pages, captures visible text, metadata, JSON-LD, and a bounded list of interactive controls, and supports a maximum of six scroll or expand actions.
+
+The service blocks private and non-global network destinations, non-HTTPS URLs, non-standard ports, downloads, service workers, images, media, and fonts. It does not receive database credentials or LLM API tokens.
+
+### 2.6 PostgreSQL and object storage
+
+PostgreSQL stores domain records, encrypted LLM connection metadata, durable jobs, task events, audit records, outbox records, and generation timelines. Row-level security and application-level workspace filters isolate workspace data.
+
+S3-compatible object storage contains uploaded documents, profile avatars, template sources, cached previews, intermediate generation PDFs, and final artifacts. MinIO supplies this interface in the local Compose stack.
+
+## 3. Backend Structure
+
+The backend follows ports-and-adapters boundaries inside one Go module:
 
 ```text
-Transport (HTTP / Event Consumer / CLI)
-                 |
-Application Use Cases + Workflow Orchestration
-                 |
-Domain Model + Policies + Interfaces (Ports)
-                 |
-Infrastructure Adapters
-(Postgres / Qdrant / Kafka / LLM / S3 / OCR / Renderer)
+cmd/                         Process entry points
+internal/profile/            Profile domain and service
+internal/job/                Opportunity and import domain
+internal/hunter/             Scheduled job discovery
+internal/template/           Template library and preparation
+internal/generation/         Agent workflow and artifact generation
+internal/document/           Upload and document-worker integration
+internal/settings/           Preferences and LLM connections
+internal/taskmonitor/        Read model for durable tasks
+internal/identity/           Development and OIDC authentication
+internal/adapters/postgres/  PostgreSQL repositories and work queue
+internal/adapters/s3/        S3-compatible object storage
+internal/adapters/memory/    Lightweight development adapters
+internal/platform/           Configuration, database, telemetry, and outbox
+internal/transport/httpapi/  HTTP routing and request handling
 ```
 
-The business layer depends only on interfaces it owns:
+Domain services depend on repository and infrastructure interfaces. The executable entry points select PostgreSQL/S3 or in-memory adapters and connect the concrete implementations.
 
-```go
-type TextGenerator interface {
-    Generate(ctx context.Context, req GenerateRequest) (GenerateResult, error)
-    Stream(ctx context.Context, req GenerateRequest) (TokenStream, error)
-    Capabilities(ctx context.Context) ModelCapabilities
-}
+## 4. Data and Persistence
 
-type EmbeddingProvider interface {
-    Embed(ctx context.Context, texts []string) ([]Vector, error)
-}
+The active product data is centered on these PostgreSQL records:
 
-type VectorIndex interface {
-    Upsert(ctx context.Context, entries []VectorEntry) error
-    Search(ctx context.Context, query VectorQuery) ([]VectorMatch, error)
-    DeleteNamespace(ctx context.Context, namespace string) error
-}
-
-type BlobStore interface {
-    Put(ctx context.Context, object BlobObject) (BlobRef, error)
-    Open(ctx context.Context, ref BlobRef) (io.ReadCloser, error)
-    SignedDownloadURL(ctx context.Context, ref BlobRef, ttl time.Duration) (string, error)
-}
-```
-
-Define ports for:
-
-- `LLMProvider`, `EmbeddingProvider`, and `Reranker`.
-- Profile, Job, and Artifact repositories.
-- `VectorIndex`, `BlobStore`, `Cache`, and `EventBus`.
-- `DocumentParser`, `OCRProvider`, and `JobPageFetcher`.
-- `TemplateRenderer`, `VisualInspector`, and `MalwareScanner`.
-- `IdentityProvider`, `SecretStore`, and `TelemetrySink`.
-
-Generation inputs reference the resolved LLM connection ID and model name. Settings may prefill a role-specific default for the Writer, Template Applying, Document Designer, Visual Reviewer, Job Import, and Job Hunter Agents, while every task form still permits an explicit override. Provider-specific request details stay behind adapters.
-
-## 6. Core Data Model
-
-Primary tables include an ID (UUID/ULID), `workspace_id`, and timestamps. Profiles use straightforward CRUD and are hard-deleted from the active database; object and backup cleanup follows the retention policy. Immutable snapshots and versions are introduced only for workflows, such as generation, that require reproducibility.
-
-### 6.1 Profiles
-
-- `profiles`: name, target role, default language, one Markdown-friendly text body, and an optional avatar object identifier.
-- `document_uploads`: quarantined object reference, declared media type, processing state, durable job reference, extracted text, and actionable error details.
-
-The saved profile text is the authoritative input for generation. Direct edits update it through an explicit save operation. Document extraction writes only to `document_uploads.extracted_text`; the browser loads that result into the editor and the user decides whether to save it. PostgreSQL remains authoritative if embeddings are added later as a rebuildable optimization.
-
-### 6.2 Jobs and Application Tracking
-
-- `jobs`: editable title, company, location, country, city, work mode, employment type, source URL, description, application status, import state, and actionable import error.
-- `durable_jobs`: background URL acquisition with leases, bounded retries, and idempotency by normalized source URL.
-
-The Job row is the authoritative record. Manual creation writes it immediately. URL import creates a placeholder Job and a durable task in the same transaction, then fills the same editable record after extraction. There is no review, approval, source-version, or Job-snapshot lifecycle in this personal-project module.
-
-Job Hunter stores lightweight scheduled searches containing a role, location, work mode, employment type, minimum experience, keywords, additional instructions, cadence, explicit LLM connection/model, an optional Profile reference, and a per-run result limit from 1 to 10. The limit defaults to 10. A database scheduler creates `job.hunt.v1` durable tasks only when no run for that Hunter is already active. The bounded Hunter Agent starts with a scoped public-web search tool, prioritizes individual Indeed and LinkedIn postings, may use services such as Google Jobs for discovery, and returns evidence-backed candidate URLs. The selected Profile is background-matching context when present. Each new normalized URL becomes an ordinary `job.page.import.v1` task, so the existing Job Import Agent remains responsible for opening dynamic pages and extracting editable metadata. Hunter placeholders remain hidden until extraction succeeds. Restricted or unparseable pages are removed from Jobs and stored in `job_hunter_review_items`; the Hunter card links to a small confirmation inbox where the user can inspect the source, enter the role manually, or dismiss it. Opportunities record an origin of `manual`, `url_import`, or `hunter`; deleting a Hunter keeps successfully imported opportunities but removes its confirmation inbox. URL normalization removes common tracking parameters, and workspace-level URL checks provide best-effort deduplication across Opportunities and pending confirmations.
-
-Supported application statuses are intentionally lightweight:
-
-```text
-interested -> preparing -> applied -> screening -> interview -> offer -> accepted
-                              |            |          |
-                              +----------> rejected <-+
-interested/preparing/applied -> withdrawn
-```
-
-Users may change the current status freely. Status history, custom workflow configuration, reporting, notes, reminders, and separate application records are outside the current scope.
-
-### 6.3 Templates
-
-- `templates`: name, description, resume/cover-letter type, TeX/LaTeX ZIP/DOC/DOCX source, optional LaTeX entry file, original and PDF-preview object references, extracted text, and processing state.
-- A read-only Rezume default is embedded in the API with its author, MIT license, and Overleaf source attribution.
-- Custom uploads use durable malware scanning, text extraction, and PDF preview generation before becoming ready.
-
-Templates use ordinary metadata CRUD and have no review, approval, publication, or version lifecycle. A LaTeX source may be one `.tex` file or a ZIP archive containing related `.tex`, style, image, and font assets. ZIP archives default to an unambiguous `main.tex`; users can provide a relative entry path when another file is the compilation root. Archive extraction rejects traversal, symbolic links, encryption, and excessive file counts or expanded sizes. Extracted text is available to later LLM workflows; a generation can copy the selected content into its own immutable input snapshot. The source preview is generated once on upload or source replacement and then loaded directly from object storage. Metadata-only edits do not regenerate it. This preview confirms that the source can be converted, but generation-time rendering and output validation remain separate isolated operations.
-
-### 6.4 Generations and Artifact Versions
-
-The initial implementation uses one `generation_runs` record and one reusable durable job per application. A run freezes the selected Profile, Opportunity, optional Template, and model choices as JSON snapshots. Append-only `generation_steps` preserve configuration changes, writer drafts, each rendered PDF and LaTeX or HTML/CSS source, reviewer feedback, workflow warnings, and user follow-up prompts in display order. The default single-model mode assigns one model to writing, document rendering, and visual review; advanced mode assigns those roles independently. Stage changes are persisted as writing, rendering, reviewing, repairing, ready, or failed. Ollama responses are consumed as a stream, and each role has a bounded output-token budget so local models cannot leave a worker waiting indefinitely for an unbounded response.
-
-The writer, template applier, document designer, visual reviewer, and layout polishers use LangChainGo's standard agent executor with a bounded ReAct tool loop. A provider-neutral `llms.Model` adapter preserves ResumeGPT's encrypted OpenAI, OpenAI-compatible, and Ollama connection runtime. Each role receives a least-privilege tool set: immutable generation context, complete template-source reading, a template-free document design brief, sandboxed LaTeX or HTML/CSS PDF rendering, or bounded PDF-to-image conversion. Artifact storage uses the same tool contract but remains processor-controlled. Agents cannot access infrastructure adapters directly, and the durable processor retains deterministic stage ordering and repair bounds.
-
-With a selected LaTeX template, generation replaces only the selected entry source in a multi-file ZIP, preserves its assets, and compiles in the isolated document worker. Without a template, the Document Designer produces self-contained semantic HTML and embedded print CSS, then calls an isolated WeasyPrint renderer that blocks external and local resource access. A saved PNG or JPEG Profile avatar is made available through a controlled data-URL placeholder in this mode. The generated PDF follows the same page-count checks, PDF rasterization, visual review, and maximum of two repair rounds in both modes. If the selected provider explicitly reports that its model cannot accept image input, the run skips model-based visual review, stores the successfully rendered PDF, and shows a persistent warning to the user. Word generation remains deferred until a structured DOCX renderer can preserve template styling.
-
-After a run is ready, the user may submit a bounded follow-up prompt. The same run returns to the queue with its grounded draft, current LaTeX or HTML/CSS source, frozen model choices, and new instruction. The previous timeline and intermediate PDF objects remain available, while the newly completed artifact becomes the current download.
-
-A completed or failed application may also be reconfigured with another Profile, compatible Template, or set of LLM model choices. Reconfiguration refreshes the input snapshots, clears the current working result, appends a configuration-change step, and queues a full run from the writer stage. Previous timeline entries and intermediate PDFs remain available. Active applications reject concurrent reconfiguration. The UI presents this append-only history in a fixed-height, independently scrollable timeline that defaults to newest-first order and exposes the active stage as an animated timeline node.
-
-The Job Opportunities list supports reusable item selection and a shared bulk-action bar. A user can create a CV or cover letter directly from one card or select up to 50 ready opportunities and choose one Profile, compatible Template, and model configuration for the batch. The browser submits one ordinary generation command per opportunity, so every result retains an independent run, snapshot, durable task, timeline, retry path, and failure state. Partial submission failures keep only the failed opportunities in the dialog for a focused retry. The selection primitive is UI-generic so later list modules can add actions such as bulk deletion without rebuilding selection behavior.
-
-- `generations`: task configuration and immutable input-snapshot references.
-- `generation_inputs`: profile-content and Job-content copies captured when generation starts, plus template, prompt, and language versions.
-- `artifact_drafts`: structured CV/cover-letter content conforming to versioned JSON Schema.
-- `artifact_revisions`: parent revision, instruction, diff, and author type.
-- `profile_claims`: final claims, supporting profile excerpts, and validation result.
-- `render_runs`: renderer/template versions, logs, state, and duration.
-- `file_variants`: PDF, DOCX, TeX, and preview-object references.
-- `validation_runs/findings`: content, profile-grounding, layout, and security findings.
-
-Record provider, model version, prompt-template version, sampling parameters, and input hash. Raw sensitive prompts follow privacy retention policy.
-
-### 6.5 Settings and LLM Connections
-
-- `workspace_settings`: interface language and System/Light/Dark theme only.
-- `llm_connections`: named cloud/local connection mode, provider adapter, Base URL, and encrypted API token.
-
-Settings may contain optional per-Agent connection and model defaults, including separate Template Applying and Document Designer defaults. Each generation still explicitly captures its Profile, Opportunity, connection, model, document type, output language, page target, paper size, and optional template without copying the API token.
-
-## 7. Core Workflows
-
-### 7.1 Profile Editing and Document Import
-
-1. Let the user create a profile and enter or paste text directly in the editor.
-2. For file import, validate the declared type, filename, and size, then upload to workspace-scoped quarantine storage.
-3. Create a durable extraction job and return a pollable upload record.
-4. Scan malware, validate the real file type, and extract text with parsers or OCR.
-5. Store extracted text on the upload record without changing the profile.
-6. Load the result into the browser editor so the user can review and correct it.
-7. Update `profiles.content` only after the user explicitly saves.
-
-On failure, retain an actionable processing state. The user can retry with another file or enter text directly.
-
-### 7.2 Job Acquisition
-
-1. Accept up to 50 URLs from the Import via URLs form and let the user explicitly enable AI assistance.
-2. In standard mode, normalize and deduplicate public HTTPS LinkedIn and Indeed URLs. Fetch bounded HTML and prefer schema.org `JobPosting` JSON-LD with limited page-metadata fallbacks.
-3. In AI-assisted mode, accept public HTTPS job pages and require a saved LLM connection and model for the batch, prefilled from the Job Import Agent default when configured.
-4. Create a placeholder Job and durable acquisition task atomically, then return the Job immediately for polling.
-5. Start the Job Import Agent with an initial rendered-page snapshot. The agent analyzes the page from the beginning and may use only scoped tools for page inspection, structured metadata, heuristic candidates, visible text, bounded expansion, bounded scrolling, and final structured extraction.
-6. Execute browser rendering in the separate Playwright web worker. Revalidate public-network destinations, bound actions and content, and do not give the service database credentials or LLM secrets.
-7. Do not authenticate, reuse user sessions, bypass CAPTCHA or access controls, download files, fill forms, or submit applications.
-8. Validate and sanitize the Agent's schema-bound result, then update the same editable Job. Mark incomplete or inaccessible pages with an actionable state so the user can correct fields manually.
-
-Web content is untrusted data. Text telling the model to ignore policy, reveal information, or invoke unrelated tools never becomes an instruction. The Agent does not receive arbitrary network, filesystem, database, or secret access.
-
-### 7.3 CV and Cover-Letter Generation
-
-```mermaid
-flowchart LR
-    S[Freeze input snapshots] --> R[Read saved profile content]
-    R --> M[Match profile content to requirements]
-    M --> P[Create content plan]
-    P --> D[Generate schema-bound draft]
-    D --> F[Profile-grounding verification]
-    F --> T[Deterministic template render]
-    T --> V[Structural + visual QA]
-    V -->|pass| A[Downloadable artifact]
-    V -->|repairable| X[Bounded repair loop]
-    X --> T
-    V -->|needs user| H[Human review]
-```
-
-- Profile reads always filter by workspace and selected profile.
-- Build a requirement-to-profile-content matching plan before writing. Missing qualifications cannot be invented.
-- Output must conform to the CV/cover-letter IR schema.
-- Every experience, number, date, organization, institution, and certificate must be supported by the saved profile snapshot.
-- Stronger wording may improve presentation but cannot invent metrics; use non-quantified language when no number is supported.
-- User prompts may change style and emphasis, but cannot override truthfulness, security, or tenant isolation.
-
-### 7.4 Conversation and Revision
-
-- Bind a conversation to an artifact revision.
-- Every AI change creates a new revision; previous versions remain restorable.
-- Use constrained operations such as `replace_bullet`, `reorder_section`, and `shorten_summary`.
-- Show semantic, layout, and claim-level diffs.
-- Record manual edits as revisions and allow users to lock sections.
-- Rerun profile-grounding and render validation before every final download.
-
-## 8. LLM Gateway and Model Policy
-
-### 8.1 Unified Request Model
-
-Normalize chat/responses, streaming, structured JSON, tool calls, context limits, languages, vision, residency, timeouts, retries, concurrency, cost budgets, safety settings, retention, telemetry, and provider error classes.
-
-Providers differ in JSON Schema, vision, and tool support. The user explicitly selects a saved connection and one of its discovered models for each generation.
-
-### 8.2 Provider Adapters
-
-- Implement native cloud adapters and an OpenAI-compatible adapter where appropriate.
-- Connect local models through Ollama, vLLM, or another controlled endpoint.
-- If semantic retrieval is introduced, configure its embedding provider independently from generation providers.
-- Encrypt provider tokens with a deployment-owned key, never return plaintext tokens to clients, and exclude them from logs, traces, audit metadata, and events.
-
-### 8.3 Explicit Selection and Degradation
-
-There is no automatic provider router or fallback group in the personal-project scope. Role-specific defaults only prefill task forms; the persisted request still names one saved connection and model for every Agent. Persist each generation step under an idempotency key. Missing required writing or rendering capabilities produce an actionable failure. Model-based visual review is best-effort: an explicit image-capability rejection degrades to the deterministic checks and a user-visible warning so a valid PDF remains available.
-
-## 9. Templates, Rendering, and Visual Validation
-
-The Template library described in Section 6.3 stores user-selected source files without an admission or approval workflow. The controls below apply when a generation attempts to render a template, not to everyday library management.
-
-### 9.1 Intermediate Representation
-
-Use format-independent `ResumeDocument` and `CoverLetterDocument` JSON Schemas containing sections, blocks, style tokens, supporting-profile references, and pagination hints. Templates map the IR to DOCX or TeX.
-
-Generation-time template preflight validates:
-
-- File format and macro safety.
-- Placeholders and schema compatibility.
-- Font availability and licensing.
-- Rendering with deterministic fixture data.
-- Capabilities such as photo, columns, project count, and headers.
-
-### 9.2 Rendering
-
-- DOCX: populate a controlled template, then convert with isolated LibreOffice.
-- TeX: compile an allowlisted template/package set in a networkless, resource-limited container.
-- PDF: authoritative delivery/preview format; rasterize each page for visual analysis.
-- Templates cannot use shell escape, arbitrary macros, external downloads, or host filesystem access.
-
-### 9.3 Validation Dimensions
-
-Prefer deterministic checks; use vision models as a supplement:
-
-- Target pages, blank pages, overflow, clipping, overlap, and margins.
-- Missing fonts, corrupt glyphs, anomalous type size, and contrast.
-- Section completeness, links, and date consistency.
-- Widows/orphans, headings at page bottoms, excess whitespace, and bullet alignment.
-- Text density, hierarchy, and ATS compatibility.
-- Normalized PDF text versus IR content to detect lost text.
-
-Limit automatic repairs to two attempts. If constraints still fail, present findings and let the user shorten content, switch templates, or accept the result.
-
-## 10. AI Security and Fabrication Prevention
-
-### 10.1 Threat Model
-
-- Prompt injection in uploads, job pages, and user prompts.
-- Fabricated experience, education, skill, metrics, dates, or contact information.
-- Cross-user or cross-profile retrieval leakage.
-- Malicious DOCX/TeX, parser vulnerabilities, SSRF, and browser escapes.
-- Third-party retention or training on personal data.
-- PII leakage through logs, traces, and errors.
-- Bias, discriminatory inference, or inappropriate use of sensitive traits.
-
-### 10.2 Anti-Fabrication Controls
-
-1. Freeze the exact saved profile content used by each generation.
-2. Retrieve profiles only within the active workspace and require an explicit profile selection.
-3. Require generated claims to cite supporting profile excerpts; unsupported high-risk claims fail by default.
-4. Deterministically compare names, dates, numbers, and enumerated values.
-5. Use an independent semantic check for unsupported expansion, but never an LLM as the sole judge.
-6. Treat identity, organization, title, dates, education, certification, and metrics as blocking-risk claims.
-7. Ask the user to add or correct profile text when required information is missing or ambiguous.
-8. Block `Verified` export with unresolved claims; explicit unverified export is audited and policy-controlled.
-
-```json
-{
-  "text": "Reduced report preparation time by 30% through automation.",
-  "profile_id": "prof_01...",
-  "supporting_excerpt": "Automated the monthly reporting workflow...",
-  "verification": "verified",
-  "risk": "high"
-}
-```
-
-### 10.3 Prompt-Injection Isolation
-
-- Separate system policy, user instructions, profile content, and job text into explicit trust boundaries.
-- Uploaded and crawled text is always untrusted and cannot invoke tools.
-- Tools use an allowlist, typed arguments, and server-side authorization. Models cannot choose arbitrary URLs, SQL, paths, or workspace IDs.
-- Enforce retrieval scope in storage/repository code, not through model instructions.
-- Persist official revisions only after schema, content-policy, and profile-grounding validation.
-
-## 11. Security, Privacy, and Compliance Baseline
-
-- OIDC/OAuth 2.1 authentication; short-lived workload identity for service-to-service access.
-- Workspace scoping in repositories plus PostgreSQL RLS as defense in depth.
-- TLS in transit and encryption for databases, object storage, backups, and sensitive fields at rest.
-- Short-lived signed upload/download URLs and unguessable object IDs.
-- Audit upload, download, generation, export, deletion, and provider changes.
-- Redact logs; never log full CVs, JDs, prompts, model responses, or signed URLs.
-- Support export and deletion across database, object store, vector index, caches, and backups according to retention.
-- Show provider processing/residency settings; allow a sensitive profile to require local models.
-- Disable public sharing by default; make any link revocable, expiring, and auditable.
-- Perform a formal GDPR/UK GDPR assessment for target markets; retain consent, purpose, and retention fields even in the prototype.
-
-## 12. Asynchronous Work, Errors, and Fault Tolerance
-
-### 12.1 Job State
-
-```text
-queued -> running -> succeeded
-             |  \-> retry_wait -> running
-             +---> failed
-             +---> cancelled
-```
-
-Each job records type, idempotency key, input references, attempt count, maximum retries, deadline, heartbeat, error class, and trace ID. Store large payloads in object storage.
-
-`durable_job_events` records user-readable lifecycle transitions for every durable job. The System Task Monitor provides a workspace-scoped, read-only view across job imports, profile document extraction, template processing, and generation. Its list API owns filtering and pagination, while its detail API returns attempts, actionable errors, sanitized input metadata, and the persisted event log. Secrets are redacted before task payloads leave the service. Operational container logs and transactional outbox delivery remain separate concerns and are not exposed through this UI.
-
-### 12.2 Consistency
-
-- Write business data and outbox events in one PostgreSQL transaction.
-- Publish the outbox to messaging; consumers use inbox/deduplication records.
-- Use at-least-once delivery and idempotent effects.
-- Artifact versions are immutable; state transitions use optimistic locking.
-- Any vector index is rebuildable derived data; saved profile content remains authoritative in PostgreSQL.
-
-### 12.3 Error Policy
-
-| Error | Handling |
+| Area | Records |
 |---|---|
-| Invalid schema or unsupported file | No retry; return an actionable message |
-| Provider 429 or transient 5xx | Exponential backoff with jitter; honor Retry-After |
-| Timeout/network interruption | Bounded retry with idempotency |
-| Authentication, balance, or policy rejection | Fail fast and notify the appropriate party |
-| Parser crash or malicious input | Quarantine and record a security event |
-| Page constraint failure | Bounded repair, then human decision |
-| Optional Kafka/vector service unavailable | Retain outbox work; PostgreSQL remains authoritative |
+| Identity | `users`, `workspaces`, `workspace_memberships` |
+| Profiles | `profiles`, `document_uploads` |
+| Opportunities | `jobs` |
+| Job Hunter | `job_hunters`, `job_hunter_review_items` |
+| Templates | `templates` |
+| Generation | `generation_runs`, `generation_steps` |
+| Settings | `workspace_settings`, `llm_connections`, `agent_llm_defaults` |
+| Background work | `durable_jobs`, `durable_job_events`, `inbox_messages` |
+| Integration and audit | `outbox_events`, `audit_events` |
+| Database lifecycle | `schema_migrations` |
 
-Also use circuit breakers, bulkheads, provider concurrency limits, leases/heartbeats, dead-letter handling, audited replay, and graceful shutdown.
+Versioned SQL migrations are embedded into the migration binary. The Compose `migrate` service applies them before the API starts.
 
-## 13. API and Events
+### 4.1 Workspace isolation
 
-### 13.1 External API
+Every user-owned domain record carries a workspace identifier. The API resolves a principal, verifies workspace membership and role, and passes the selected workspace into service and repository calls. PostgreSQL repositories apply workspace-scoped queries, and protected tables use row-level security policies.
 
-Use versioned REST for the MVP, SSE for generation progress, and signed URLs for uploads:
+Development authentication maps requests to the seeded `ws_personal_dev` workspace. OIDC mode validates bearer tokens against a configured issuer and client ID and requires an explicit workspace selection.
 
-```text
-POST   /v1/profiles
-GET    /v1/profiles
-GET    /v1/profiles/{id}
-PUT    /v1/profiles/{id}
-DELETE /v1/profiles/{id}
-POST   /v1/profiles/{id}/avatar-upload
-GET    /v1/profiles/{id}/avatar
-POST   /v1/profiles/{id}/document-uploads
-POST   /v1/profiles/{id}/document-uploads/{upload_id}/complete
-GET    /v1/profiles/{id}/document-uploads/{upload_id}
+### 4.2 LLM credentials
 
-POST   /v1/jobs/imports
-POST   /v1/jobs
-GET    /v1/jobs
-GET    /v1/jobs/{id}
-PUT    /v1/jobs/{id}
-DELETE /v1/jobs/{id}
+LLM connection records contain provider type, local or cloud execution mode, Base URL, and encrypted API-token ciphertext. AES-GCM encryption uses `SETTINGS_ENCRYPTION_KEY`. API responses expose only whether a token exists; plaintext tokens are decrypted only when a backend Agent needs the connection.
 
-GET    /v1/settings
-PUT    /v1/settings
-GET    /v1/settings/llm-connections
-POST   /v1/settings/llm-connections
-PUT    /v1/settings/llm-connections/{id}
-DELETE /v1/settings/llm-connections/{id}
-POST   /v1/settings/llm-connections/{id}/test
+## 5. Durable Background Work
 
-GET    /v1/templates
-POST   /v1/templates/uploads
-POST   /v1/templates/{id}/complete
-POST   /v1/templates/{id}/source-upload
-GET    /v1/templates/{id}
-PUT    /v1/templates/{id}
-DELETE /v1/templates/{id}
-GET    /v1/templates/{id}/file
-GET    /v1/templates/{id}/preview
+The PostgreSQL work queue currently uses these job kinds:
 
-POST   /v1/generations
-GET    /v1/generations
-GET    /v1/generations/{id}
-PUT    /v1/generations/{id}
-DELETE /v1/generations/{id}
-POST   /v1/generations/{id}/retry
-POST   /v1/generations/{id}/revisions
-GET    /v1/generations/{id}/steps
-GET    /v1/generations/{id}/steps/{stepId}/artifact
-GET    /v1/generations/{id}/artifact
+| Job kind | Processor |
+|---|---|
+| `profile.document.extract.v1` | Profile document extraction |
+| `template.extract.v1` | Template preparation and preview generation |
+| `job.page.import.v1` | Deterministic or Agent-assisted job import |
+| `job.hunt.v1` | Scheduled job discovery |
+| `generation.run.v1` | CV and cover-letter generation |
 
+A durable job records its payload, state, availability time, attempt count, maximum attempts, lease owner, lease expiry, error details, and idempotency key. Workers claim jobs with a lease, record lifecycle events, retry retryable failures with backoff, and recover work after an expired lease.
+
+The Task Monitor reads the same records and their persisted events. Its API supports workspace-scoped search, kind and state filters, and server-side pagination. Inputs displayed in the monitor are sanitized before they reach the browser.
+
+## 6. Core Workflows
+
+### 6.1 Profile editing and import
+
+1. The user creates or opens a profile.
+2. Text may be entered directly, or a source document is uploaded through a signed object-storage URL.
+3. The API creates a `profile.document.extract.v1` job.
+4. The Go worker reads the quarantined object and sends it to the document worker.
+5. The document worker scans, validates, and extracts text or OCR output.
+6. Extracted text is stored on the upload record and loaded into the editor.
+7. The profile content changes only when the user explicitly saves it.
+
+A profile stores one authoritative text body plus lightweight metadata and an optional avatar object reference. There is no profile review, approval, or version-management workflow.
+
+### 6.2 Opportunity creation and URL import
+
+Opportunities can be entered manually or imported from URLs.
+
+Standard import accepts public LinkedIn and Indeed URLs, downloads bounded HTML, and extracts `JobPosting` JSON-LD and safe metadata fallbacks. AI-assisted import accepts public HTTPS pages and starts the Job Import Agent with the first rendered snapshot from the web worker. The Agent can inspect metadata, structured data, visible text, expandable controls, and bounded scroll results before returning structured job fields.
+
+URLs are normalized for deduplication. Imported records remain editable, and their source link is retained. Application tracking is a single status field that can be changed directly from the opportunity list or detail page.
+
+### 6.3 Scheduled Job Hunter
+
+The scheduler periodically finds enabled Hunters whose next run is due and queues `job.hunt.v1` work when no run is already active. A Hunter contains search criteria, cadence, result limit, selected LLM connection and model, and an optional profile reference.
+
+The Job Hunter Agent uses a bounded DuckDuckGo search tool and returns candidate job URLs. New normalized URLs are passed into the ordinary job-import workflow. Successfully parsed results appear as Hunter-originated opportunities. Blocked or unparseable pages are stored as review items instead of incomplete opportunities, allowing the user to inspect, manually add, or dismiss them.
+
+### 6.4 Template preparation
+
+1. The browser stages a DOC, DOCX, TeX, or ZIP source through object storage.
+2. The API creates a template record and `template.extract.v1` job.
+3. The document worker scans and validates the source.
+4. Text is extracted for later Agent context.
+5. A PDF preview is generated and stored once for the uploaded source.
+6. Replacing the source repeats preparation; metadata-only edits do not.
+
+LaTeX ZIP validation rejects traversal, symbolic links, encrypted archives, excessive entries, and excessive expanded size. The user may provide a relative `.tex` entry path; otherwise an unambiguous `main.tex` is used.
+
+The built-in resume template is stored in the Go binary and exposed as a read-only template with its original attribution and license metadata.
+
+### 6.5 CV and cover-letter generation
+
+A generation request names a Profile, Opportunity, document type, language, page target, optional custom instructions, optional LaTeX template, and a model choice for each Agent. New forms normally use the per-Agent defaults from Settings; the user can instead select one model for the whole workflow.
+
+The API validates the inputs, freezes Profile, Opportunity, optional Template, and model snapshots, creates a `generation_runs` record, and queues `generation.run.v1`.
+
+```mermaid
+flowchart LR
+    Q[Queued] --> W[Writer]
+    W --> C{Template selected?}
+    C -->|Yes| T[Template Applying Agent]
+    C -->|No| D[Document Designer Agent]
+    T --> P[PDF]
+    D --> P
+    P --> V[Visual Reviewer]
+    V -->|Pass or unavailable| F[Final PDF]
+    V -->|Repair requested| R[Layout repair]
+    R --> P
 ```
 
-Long-running workflow submissions are idempotent and return `202 Accepted`, a resource ID, and a pollable job or upload URL. Simple CRUD operations return ordinary synchronous status codes. Errors return a stable code, message, retryable flag, field errors, and trace ID.
+The Writer produces a profile-grounded draft for the selected opportunity. The document path then branches:
 
-### 13.2 Domain Events
+- With a template, the Template Applying Agent reads the complete LaTeX project, updates the selected entry source, preserves archive assets, and compiles it in the document worker.
+- Without a template, the Document Designer Agent creates a complete, self-contained HTML document with embedded print CSS. The document worker renders it with WeasyPrint. A controlled placeholder can embed the saved profile avatar as a data URL.
 
-- `profile.created.v1`
-- `profile.updated.v1`
-- `profile.deleted.v1`
-- `profile.document.uploaded.v1`
-- `profile.document.extracted.v1`
-- `job.created.v1`
-- `job.updated.v1`
-- `job.deleted.v1`
-- `job.import.queued.v1`
-- `job.import.completed.v1`
-- `settings.updated.v1`
-- `llm.connection.created.v1`
-- `llm.connection.updated.v1`
-- `llm.connection.deleted.v1`
-- `generation.requested.v1`
-- `artifact.draft.created.v1`
-- `artifact.render.completed.v1`
-- `validation.completed.v1`
+The processor validates page count, stores each rendered PDF, rasterizes bounded page images, and asks the Visual Reviewer for structured feedback. The renderer Agent can perform up to two repair rounds. If the model explicitly cannot accept images, visual review is skipped and the valid PDF is retained with a warning. If Agent-generated source remains invalid, the processor uses a safe basic LaTeX or HTML layout.
 
-Events contain only necessary IDs, versions, and non-sensitive metadata. Do not broadcast full CVs or PII through Kafka. Event schemas require compatibility policy and a registry.
+Every writer draft, rendered PDF, review, warning, configuration change, and user prompt is appended to `generation_steps`. The detail page uses this history for its timeline and intermediate PDF previews. A ready artifact can receive a follow-up revision prompt. A ready or failed run can also be reconfigured and restarted while its previous timeline remains available.
 
-## 14. Technology Choices
+## 7. Agent Runtime
 
-| Layer | MVP recommendation | Evolution | Notes |
-|---|---|---|---|
-| Web | TypeScript, Vue 3, Vite, Pinia, Vue Router | Nuxt if SSR is needed | SSE fits generation progress; use i18n keys from day one |
-| API/domain | Go | Continue with Go | Strong typing, concurrency, and simple deployment |
-| Document/OCR | Python worker | Dedicated service | Better document/OCR ecosystem without contaminating the Go domain |
-| Workflow | PostgreSQL jobs + Outbox | Temporal or equivalent | Add durable workflow infrastructure only when complexity warrants it |
-| OLTP | PostgreSQL | Managed PostgreSQL | System of record; JSONB for evolving typed payloads |
-| Vector | Not deployed initially | pgvector, then Qdrant if measured scale requires it | Keep optional and behind `VectorIndex` |
-| Cache | Redis when needed | Managed compatible service | Cache, rate limiting, and short locks only |
-| Events | Outbox polling | Kafka | Add when event volume/consumer count requires it |
-| Objects | MinIO / S3-compatible | Cloud object storage | One `BlobStore` contract |
-| Rendering | Sandboxed LibreOffice + TeX + PDF tools | Dedicated render fleet | Pin tools, fonts, and image versions |
-| LLM | Provider adapters + local compatible adapter | Policy routing and multi-region | Provider SDK types stay out of business code |
-| Auth | Established OIDC provider | Enterprise SSO/SCIM | Do not build a password system |
-| Observability | OpenTelemetry, Prometheus/Grafana, structured logs | Managed platform | Trace API, queue, LLM, and rendering end to end |
+ResumeGPT uses LangChainGo's Agent executor and a provider-neutral model adapter. The adapter connects to:
 
-### 14.1 Go/Python Boundary
+- OpenAI.
+- OpenAI-compatible chat and model-list endpoints.
+- Ollama chat and model-list endpoints.
 
-Go owns business policy, authorization, orchestration, state machines, APIs, and consistency. Python handles isolated tasks where its ecosystem has a clear advantage, such as OCR, document-structure extraction, and image analysis. Communication uses versioned events or gRPC/HTTP contracts; Python workers do not directly mutate Go-owned business tables.
+The Settings service discovers models with `GET /models` for OpenAI-style providers and `/api/tags` for Ollama. Each Agent can have its own default connection and model:
 
-## 15. Frontend and Internationalization
+- Writer
+- Template Applying
+- Document Designer
+- Visual Reviewer
+- Job Import
+- Job Hunter
 
-- English is the default UI locale; use BCP 47 tags such as `en-US`, `de-DE`, and `zh-CN`.
-- Store UI locale, profile-content language, job-source language, and target-document language separately.
-- Localize dates, numbers, addresses, A4/Letter, and name order.
-- Document language is an explicit generation parameter and does not implicitly follow UI locale.
-- Templates declare supported languages, fonts, and line-breaking capabilities; test CJK fonts separately.
-- Backends return stable error codes; clients localize them. Server-side mail and reports use locale-aware catalogs.
-- Preserve source text and locale; do not translate automatically in the storage layer.
+Agents receive role-specific prompts and least-privilege tools. Tool loops, output sizes, browser actions, rendering attempts, and repair rounds are bounded. Database writes, artifact storage, workflow transitions, and final validation remain controlled by deterministic application code rather than by an Agent.
 
-## 16. Observability and Quality Evaluation
+## 8. Security Boundaries
 
-### 16.1 Runtime Metrics
+### 8.1 File processing
 
-- API p50/p95/p99 latency, error rate, and active users.
-- Queue depth, wait time, retries, and dead-letter count.
-- Parsing success, OCR confidence, and Job-import success.
-- LLM latency, tokens, cost, schema failures, and fallback rate.
-- Generation success, unsupported-claim rate, and human-edit rate.
-- Rendering success, page compliance, and visual defects.
-- Download conversion and current Job-status distribution.
+- Uploaded content enters quarantine storage through a short-lived signed URL.
+- File type checks use signatures as well as filenames and declared media types.
+- ClamAV must succeed before extraction or preview generation continues.
+- DOCX and ZIP expansion limits protect against oversized archives.
+- LaTeX archives reject path traversal, symbolic links, and encryption.
+- The document-worker container is read-only and receives no database credentials.
 
-### 16.2 Offline Evaluation
+### 8.2 Network access
 
-Maintain a de-identified golden dataset to test:
+- Job import accepts HTTPS source URLs only.
+- DNS results are checked before network access.
+- Private, loopback, link-local, reserved, and non-global addresses are rejected for public browsing.
+- Redirects, response size, content type, timeouts, and browser actions are bounded.
+- The web worker cannot authenticate to sites, reuse a user's browser session, bypass CAPTCHA, download files, or submit applications.
+- Generated HTML cannot fetch remote or local resources.
 
-- Factual consistency and unsupported-claim precision/recall.
-- Requirement coverage and keyword-stuffing detection.
-- Relevance, concision, grammar, and language quality.
-- JSON Schema compliance.
-- DOCX/PDF text equivalence, page count, and visual rules.
-- Multilingual, long-input, ambiguous-profile, empty-profile, and malicious-prompt cases.
+### 8.3 Authorization and secrets
 
-Use evaluation as a release gate. Roll out model changes through shadowing/canaries before broad adoption.
+- HTTP endpoints require Viewer, Editor, or Owner roles according to the operation.
+- Workspace IDs scope repository access and signed object operations.
+- LLM tokens are encrypted at rest and omitted from API responses, logs, task inputs, events, and traces.
+- Container services run without added Linux capabilities and use `no-new-privileges`.
 
-## 17. Deployment and Cloud-Native Compatibility
+## 9. Reliability and Observability
 
-Local development runs PostgreSQL and object storage in containers; optional Redis or vector services are added only when their owning feature is introduced. Production OCI images must support:
+- API and service containers expose health checks used by Docker Compose dependencies.
+- Database migrations run as a one-shot service before API startup.
+- Queue leases and retries recover interrupted background work.
+- Inbox records prevent duplicate asynchronous side effects.
+- Transactional outbox records are dispatched with stable event IDs and retry backoff.
+- Core mutations persist audit events.
+- API and worker logs use structured JSON.
+- OpenTelemetry instruments HTTP requests and propagates W3C trace context. Spans are exported when `OTEL_EXPORTER_OTLP_ENDPOINT` is configured.
+- Backup and restore-check scripts operate on the local PostgreSQL deployment.
 
-- Twelve-factor configuration with secrets separated from ordinary configuration.
-- Stateless APIs, health probes, and graceful shutdown.
-- Queue-specific worker scaling and dedicated resources/node pools for rendering or OCR.
-- Network policies: renderer has no internet; the web worker can reach only validated public HTTPS destinations; the Go worker reaches configured LLM providers.
-- Backward-compatible migrations executed by a release job with rollback planning.
-- Object lifecycle policy, PostgreSQL PITR, and tested restoration.
-- Multi-AZ first; cross-region disaster recovery depends on later RPO/RTO and cost requirements.
+## 10. Deployment Modes
 
-Initial objectives:
+### 10.1 Docker Compose
 
-- API availability: 99.5%.
-- Accepted async jobs survive control-plane restart.
-- RPO within 24 hours for early production, improvable to minutes; RTO within four hours.
-- Users see progress, cancellation, actionable failure, and retry controls.
+The supported complete local deployment is:
 
-## 18. Recommended Repository Layout
-
-```text
-ResumeGPT/
-  apps/
-    web/                    # Vue/TypeScript
-    api/                    # Go API composition root
-    worker/                 # Go async workers
-    document-worker/        # Python parsing/OCR worker
-    web-worker/             # Isolated Playwright page renderer
-  internal/
-    identity/
-    profile/
-    job/
-    application/
-    generation/
-    template/
-    artifact/
-    validation/
-    reporting/
-    platform/
-  adapters/
-    llm/
-    persistence/
-    vector/
-    blob/
-    messaging/
-    crawler/
-    renderer/
-  contracts/
-    api/
-    events/
-    schemas/
-  deploy/
-    local/
-    kubernetes/
-  docs/
-    adr/
-    threat-model/
+```bash
+docker compose up -d --build
 ```
 
-Organize Go packages by domain, not broad horizontal `controllers/services/repositories` folders. Provider SDKs may appear only in adapters or the composition root.
+Compose supplies PostgreSQL and S3 persistence, development authentication, migrations, health checks, and internal service URLs. The browser application is available at `http://localhost:5173`.
 
-## 19. Delivery Roadmap
+### 10.2 Host development
 
-### Phase 0: Technical Spikes
+The API can use in-memory repositories and storage by setting `PERSISTENCE_MODE=memory` and `OBJECT_STORAGE_MODE=memory`. This mode supports lightweight backend and UI work, but durable uploads, generation, task monitoring, and the complete worker workflows require PostgreSQL, object storage, and the isolated services.
 
-- Validate parsing/rendering with representative PDF, DOCX, and TeX samples.
-- Define ResumeDocument and CoverLetterDocument JSON Schemas.
-- Validate structured output with at least one cloud and one local model.
-- Validate profile-grounded generation and PDF page/overflow checks.
-- Define the supported template subset and sandbox boundary.
+### 10.3 Authentication modes
 
-### Phase 1: Single-User MVP
+- `development`: uses a fixed local subject and the seeded personal workspace.
+- `oidc`: validates bearer tokens using the configured issuer and client ID, then resolves workspace membership and role from PostgreSQL.
 
-- Editable profiles, optional avatars, and review-before-save document import.
-- Job URL/manual import, details, and basic status tracking.
-- Initial CV/letter generation, revision, and PDF/DOCX download.
-- Basic profile-grounding gate, template rendering, and deterministic visual checks.
-- PostgreSQL and object storage; omit Kafka/Qdrant/Redis unless already operationally justified.
+## 11. Current Product Boundaries
 
-### Phase 2: Beta
-
-- Workspaces, collaboration, quotas, audit, and complete deletion.
-- Multi-provider routing, budgets, fallback, and local-model policy.
-- Optional pgvector/Qdrant retrieval and Kafka/workflow infrastructure only when measured needs justify them.
-- Reporting, reminders, multilingual templates, and evaluation pipelines.
-- More job-site adapters and stronger compliance management.
-
-### Phase 3: Scale
-
-- Extract ingestion, crawler, generation, and rendering services by workload.
-- Kubernetes autoscaling, dedicated rendering/OCR nodes, and multi-AZ deployment.
-- Enterprise SSO, fine-grained RBAC, residency, and compliance programs.
-- Model shadow/canary rollout, automated quality regression, and cost optimization.
-
-## 20. MVP Simplification
-
-Limit the first deployed system to:
-
-1. Vue web application.
-2. Go API and Go worker built from one codebase.
-3. Python document worker.
-4. PostgreSQL plus S3-compatible object storage.
-5. Isolated document and public-page rendering workers.
-
-Keep Redis, Kafka, and optional vector retrieval behind interfaces, but deploy them only when needed:
-
-- Add Redis for demonstrated cache, rate-limit, or coordination load.
-- Connect Outbox to Kafka when consumers, throughput, or event-retention needs grow.
-- Introduce pgvector only when direct profile input misses measured targets; move to Qdrant only if scale, filtering, or retrieval SLOs later justify it.
-
-This preserves replacement paths without burdening local development, CI, and prototype operations.
-
-## 21. Architecture Decision Records
-
-The ADR index records proposed, accepted, and superseded decisions. Proposed decisions require project-owner acceptance before their implementation becomes authoritative:
-
-1. [ADR-001: Modular Monolith with Independent Workers](./adr/ADR-001-modular-monolith-and-workers.md)
-2. [ADR-002: Profile Facts and Evidence](./adr/ADR-002-profile-facts-and-evidence.md) (superseded)
-3. [ADR-003: Versioned Document Intermediate Representation](./adr/ADR-003-document-intermediate-representation.md)
-4. [ADR-004: Use pgvector for the MVP](./adr/ADR-004-vector-store.md) (superseded)
-5. [ADR-005: PostgreSQL Jobs and Transactional Outbox](./adr/ADR-005-durable-jobs-and-workflows.md)
-6. [ADR-006: Managed Templates and Sandboxed Rendering](./adr/ADR-006-template-and-rendering-boundary.md) (template management superseded)
-7. [ADR-007: Data-Classification-Driven LLM Routing](./adr/ADR-007-llm-data-and-routing-policy.md) (superseded)
-8. [ADR-008: Unsupported-Claim Export Gate](./adr/ADR-008-unsupported-claim-gate.md)
-9. [ADR-009: Compliant and Constrained Job Crawling](./adr/ADR-009-job-crawling-policy.md) (superseded)
-10. [ADR-010: Workspace Tenancy and Authorization](./adr/ADR-010-workspace-tenancy-and-authorization.md)
-11. [ADR-011: Simple Editable Profiles](./adr/ADR-011-simple-editable-profiles.md)
-12. [ADR-012: Simple Job Tracking and Background URL Import](./adr/ADR-012-simple-job-tracking-and-import.md)
-13. [ADR-013: User-Managed LLM Connections](./adr/ADR-013-user-managed-llm-connections.md)
-14. [ADR-014: Simple User-Managed Template Library](./adr/ADR-014-simple-template-library.md)
-15. [ADR-015: Bounded Agent Generation](./adr/ADR-015-bounded-agent-generation.md)
-16. [ADR-016: Agent-Assisted Job Import](./adr/ADR-016-agent-assisted-job-import.md)
-17. [ADR-017: Scheduled Agent Job Hunting](./adr/ADR-017-scheduled-agent-job-hunting.md)
-
-See the [ADR index](./adr/README.md) for status definitions and maintenance rules.
-
-## 22. Acceptance Baseline
-
-Release acceptance baseline:
-
-- Every final factual claim can resolve to supporting text in the saved profile snapshot.
-- Changing an LLM provider requires only adapter/configuration changes, not domain changes.
-- Adding or changing optional vector retrieval, S3/MinIO, and Kafka/other messaging implementations does not change use-case contracts.
-- Upload, Job import, generation, and rendering jobs are idempotently retryable and survive API restart.
-- Tests cover malicious URLs, TeX, spoofed MIME types, and prompt injection.
-- The system detects page count, overflow, blank pages, clipping, and lost PDF text.
-- Every artifact can resolve its exact input snapshots, template, model, and configuration.
-- Workspace deletion covers PostgreSQL, object storage, and any optional vector indexes or cache-derived data.
-- UI locale and generation language are independent, with end-to-end coverage for English and at least one other language.
-
----
-
-The central architectural decision is to treat **user-saved profile content in PostgreSQL as the core asset; LLMs as replaceable reasoning and writing components; and DOCX, TeX, and PDF as deterministic renderings of structured content**. This enables rapid prototype delivery while preserving clear paths to replace models, databases, queues, storage, and deployment platforms.
+- Profile content is stored directly in PostgreSQL and passed from a frozen snapshot; no vector database is active.
+- Generation currently applies ready LaTeX templates. Word templates can be uploaded, inspected, and previewed, but are not used as generation-time layout sources.
+- Visual review depends on the selected model's image capability and degrades to a warning when unsupported.
+- Job crawling covers public content only and does not bypass access controls.
+- General list views use client-side pagination; the Task Monitor uses server-side pagination.
+- Generation progress is polled by the browser rather than streamed.
