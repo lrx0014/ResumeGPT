@@ -19,30 +19,49 @@ const profiles = ref<Profile[]>([])
 const templates = ref<Template[]>([])
 const connections = ref<LLMConnection[]>([])
 const models = reactive<Record<string, string[]>>({})
+const loadingModelConnections = reactive<Record<string, boolean>>({})
 const activeOpportunityIds = ref<string[]>([])
 const loading = ref(false)
 const submitting = ref(false)
 const error = ref('')
+const useSpecifiedModel = ref(false)
 
 const emptyChoice = (): GenerationModelChoice => ({ connectionId: '', model: '' })
 const form = reactive<Omit<GenerationInput, 'opportunityId'>>({
   profileId: '', templateId: '', documentType: 'resume', language: 'English', pageTarget: 'one_page', customInstructions: '',
-  pipelineMode: 'single', writer: emptyChoice(), renderer: emptyChoice(), reviewer: emptyChoice(),
+  pipelineMode: 'multi', writer: emptyChoice(), renderer: emptyChoice(), reviewer: emptyChoice(),
 })
+const writerDefault = ref<GenerationModelChoice | null>(null)
+const templateApplierDefault = ref<GenerationModelChoice | null>(null)
+const designerDefault = ref<GenerationModelChoice | null>(null)
+const reviewerDefault = ref<GenerationModelChoice | null>(null)
 
 const selectedOpportunities = computed(() => activeOpportunityIds.value.map(id => props.opportunities.find(item => item.id === id)).filter((item): item is Job => Boolean(item)))
 const matchingTemplates = computed(() => templates.value.filter(item => item.state === 'ready' && item.format === 'latex' && item.kind === form.documentType))
-const ready = computed(() => Boolean(activeOpportunityIds.value.length && form.profileId && form.templateId && form.writer.connectionId && form.writer.model && (form.pipelineMode === 'single' || (form.renderer.connectionId && form.renderer.model && form.reviewer.connectionId && form.reviewer.model))))
+const ready = computed(() => Boolean(activeOpportunityIds.value.length && form.profileId && form.writer.connectionId && form.writer.model && (form.pipelineMode === 'single' || (form.renderer.connectionId && form.renderer.model && form.reviewer.connectionId && form.reviewer.model))))
 const documentLabel = computed(() => form.documentType === 'resume' ? 'CV' : 'cover letter')
 
 async function discover(choice: GenerationModelChoice) {
-  if (!choice.connectionId || models[choice.connectionId]) return
+  const connectionId = choice.connectionId
+  if (!connectionId) return
+  if (models[connectionId]) {
+    if (!choice.model) choice.model = models[connectionId][0] ?? ''
+    return
+  }
+  loadingModelConnections[connectionId] = true
   try {
-    models[choice.connectionId] = (await api.testLLMConnection(choice.connectionId)).models
-    if (!choice.model) choice.model = models[choice.connectionId][0] ?? ''
+    models[connectionId] = (await api.testLLMConnection(connectionId)).models
+    if (choice.connectionId === connectionId && !choice.model) choice.model = models[connectionId][0] ?? ''
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : 'Could not load models.'
+  } finally {
+    loadingModelConnections[connectionId] = false
   }
+}
+
+function changeConnection(choice: GenerationModelChoice) {
+  choice.model = ''
+  void discover(choice)
 }
 
 async function prepare() {
@@ -51,20 +70,25 @@ async function prepare() {
   activeOpportunityIds.value = props.opportunities.map(item => item.id)
   form.documentType = props.initialDocumentType
   form.pageTarget = 'one_page'
+  form.templateId = ''
+  useSpecifiedModel.value = false
+  form.pipelineMode = 'multi'
   try {
     const [profileList, templateList, connectionList, storedDefaults] = await Promise.all([api.listProfiles(), api.listTemplates(), api.listLLMConnections(), api.getAgentDefaults()])
     profiles.value = profileList.items.filter(item => item.content.trim())
     templates.value = templateList.items
     connections.value = connectionList.items
     if (!profiles.value.some(item => item.id === form.profileId)) form.profileId = profiles.value[0]?.id ?? ''
-    if (!matchingTemplates.value.some(item => item.id === form.templateId)) form.templateId = matchingTemplates.value[0]?.id ?? ''
-    if (!connections.value.some(item => item.id === form.writer.connectionId)) {
-      const defaults = Object.fromEntries(storedDefaults.items.map((item: AgentDefault) => [item.agent, item])) as Partial<Record<AgentDefault['agent'], AgentDefault>>
-      const valid = (choice?: AgentDefault) => choice && connections.value.some(item => item.id === choice.connectionId) ? { connectionId: choice.connectionId, model: choice.model } : undefined
-      form.writer = valid(defaults.writer) ?? { connectionId: connections.value[0]?.id ?? '', model: '' }
-      form.renderer = valid(defaults.template_applier) ?? { ...form.writer }
-      form.reviewer = valid(defaults.visual_reviewer) ?? { ...form.writer }
-    }
+    const defaults = Object.fromEntries(storedDefaults.items.map((item: AgentDefault) => [item.agent, item])) as Partial<Record<AgentDefault['agent'], AgentDefault>>
+    const valid = (choice?: AgentDefault) => choice && connections.value.some(item => item.id === choice.connectionId) ? { connectionId: choice.connectionId, model: choice.model } : undefined
+    const fallback = valid(defaults.writer) ?? { connectionId: connections.value[0]?.id ?? '', model: '' }
+    writerDefault.value = { ...fallback }
+    templateApplierDefault.value = valid(defaults.template_applier) ?? { ...fallback }
+    designerDefault.value = valid(defaults.document_designer) ?? { ...fallback }
+    reviewerDefault.value = valid(defaults.visual_reviewer) ?? { ...fallback }
+    form.writer = { ...fallback }
+    form.renderer = { ...(designerDefault.value ?? fallback) }
+    form.reviewer = { ...(reviewerDefault.value ?? fallback) }
     await Promise.all([discover(form.writer), discover(form.renderer), discover(form.reviewer)])
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : 'Could not load generation options.'
@@ -104,11 +128,26 @@ async function submit() {
 
 watch(() => props.open, value => { if (value) void prepare() })
 watch(() => form.documentType, () => {
-  if (!matchingTemplates.value.some(item => item.id === form.templateId)) form.templateId = matchingTemplates.value[0]?.id ?? ''
+  if (form.templateId && !matchingTemplates.value.some(item => item.id === form.templateId)) form.templateId = ''
 })
-watch(() => form.writer.connectionId, () => { void discover(form.writer) })
-watch(() => form.renderer.connectionId, () => { void discover(form.renderer) })
-watch(() => form.reviewer.connectionId, () => { void discover(form.reviewer) })
+watch(() => form.templateId, () => {
+  if (useSpecifiedModel.value) return
+  const choice = form.templateId ? templateApplierDefault.value : designerDefault.value
+  if (choice) form.renderer = { ...choice }
+  void discover(form.renderer)
+})
+watch(useSpecifiedModel, value => {
+  form.pipelineMode = value ? 'single' : 'multi'
+  if (value) {
+    form.renderer = { ...form.writer }
+    form.reviewer = { ...form.writer }
+  } else {
+    form.writer = { ...(writerDefault.value ?? form.writer) }
+    form.renderer = { ...((form.templateId ? templateApplierDefault.value : designerDefault.value) ?? form.writer) }
+    form.reviewer = { ...(reviewerDefault.value ?? form.writer) }
+    void Promise.all([discover(form.renderer), discover(form.reviewer)])
+  }
+})
 </script>
 
 <template>
@@ -127,21 +166,16 @@ watch(() => form.reviewer.connectionId, () => { void discover(form.reviewer) })
       <div v-if="loading" class="empty-state compact">Loading generation options…</div>
       <form v-else @submit.prevent="submit">
         <p v-if="!profiles.length" class="notice">Create a Profile with saved content before generating documents.</p>
-        <p v-else-if="!matchingTemplates.length" class="notice">Add a ready LaTeX {{ form.documentType === 'resume' ? 'CV' : 'cover letter' }} template before continuing.</p>
         <p v-else-if="!connections.length" class="notice">Add an LLM connection in Settings before generating documents.</p>
         <div class="form-grid">
           <label><span>Document type</span><select v-model="form.documentType"><option value="resume">CV</option><option value="cover_letter">Cover letter</option></select></label>
           <label><span>Output language</span><input v-model="form.language" required maxlength="40" /></label>
           <label><span>Profile</span><select v-model="form.profileId" required><option value="" disabled>Select a profile</option><option v-for="item in profiles" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
-          <label><span>LaTeX template</span><select v-model="form.templateId" required><option value="" disabled>Select a template</option><option v-for="item in matchingTemplates" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
+          <label><span>Template</span><select v-model="form.templateId"><option value="">No template — let AI design it</option><option v-for="item in matchingTemplates" :key="item.id" :value="item.id">{{ item.name }}</option></select><small v-if="!form.templateId">The Document Designer will create a print-ready HTML/CSS layout.</small></label>
           <label><span>Page target</span><select v-model="form.pageTarget"><option value="one_page">One page</option><option value="two_pages">Two pages</option><option value="flexible">Flexible</option></select></label>
           <label class="full"><span>Custom instructions</span><textarea v-model="form.customInstructions" rows="3" maxlength="4000" placeholder="Optional emphasis or tone shared by these documents." /></label>
-          <div class="full pipeline-choice"><label><input v-model="form.pipelineMode" type="radio" value="single" /> One model</label><label><input v-model="form.pipelineMode" type="radio" value="multi" /> Specialized models</label></div>
-          <fieldset class="full model-card"><legend>{{ form.pipelineMode === 'single' ? 'Workflow model' : 'Writer model' }}</legend><div class="model-row"><label><span>Connection</span><select v-model="form.writer.connectionId"><option value="" disabled>Select connection</option><option v-for="item in connections" :key="item.id" :value="item.id">{{ item.name }}</option></select></label><label><span>Model</span><input v-model="form.writer.model" list="batch-writer-models" placeholder="Model name" /><datalist id="batch-writer-models"><option v-for="model in models[form.writer.connectionId] || []" :key="model" :value="model" /></datalist></label></div><small v-if="form.pipelineMode === 'single'">A text-only model can still generate a PDF; visual QA will be skipped with a warning.</small></fieldset>
-          <template v-if="form.pipelineMode === 'multi'">
-            <fieldset class="full model-card"><legend>Template applier</legend><div class="model-row"><label><span>Connection</span><select v-model="form.renderer.connectionId"><option value="" disabled>Select connection</option><option v-for="item in connections" :key="item.id" :value="item.id">{{ item.name }}</option></select></label><label><span>Model</span><input v-model="form.renderer.model" list="batch-renderer-models" /><datalist id="batch-renderer-models"><option v-for="model in models[form.renderer.connectionId] || []" :key="model" :value="model" /></datalist></label></div></fieldset>
-            <fieldset class="full model-card"><legend>Visual reviewer</legend><div class="model-row"><label><span>Connection</span><select v-model="form.reviewer.connectionId"><option value="" disabled>Select connection</option><option v-for="item in connections" :key="item.id" :value="item.id">{{ item.name }}</option></select></label><label><span>Model</span><input v-model="form.reviewer.model" list="batch-reviewer-models" /><datalist id="batch-reviewer-models"><option v-for="model in models[form.reviewer.connectionId] || []" :key="model" :value="model" /></datalist></label></div></fieldset>
-          </template>
+          <div class="full model-routing"><label class="model-switch"><input v-model="useSpecifiedModel" type="checkbox" role="switch" /><span class="model-switch-track" aria-hidden="true"><span /></span><span>Use a specific model</span></label><p v-if="!useSpecifiedModel">Each agent uses its default model from System Settings. <RouterLink to="/settings">Configure agent models →</RouterLink></p><p v-else>The selected model will handle writing, document creation, and visual review for every application in this batch.</p></div>
+          <fieldset v-if="useSpecifiedModel" class="full model-card"><legend>Model for every agent</legend><div class="model-row"><label><span>Connection</span><select v-model="form.writer.connectionId" @change="changeConnection(form.writer)"><option value="" disabled>Select connection</option><option v-for="item in connections" :key="item.id" :value="item.id">{{ item.name }}</option></select></label><label><span>Model</span><select v-if="models[form.writer.connectionId]?.length" v-model="form.writer.model" required><option value="" disabled>Select model</option><option v-for="model in models[form.writer.connectionId]" :key="model" :value="model">{{ model }}</option></select><input v-else v-model="form.writer.model" required :disabled="loadingModelConnections[form.writer.connectionId]" :placeholder="loadingModelConnections[form.writer.connectionId] ? 'Loading models…' : 'Enter model name'" /></label></div><small>A text-only model can still generate a PDF; visual QA will be skipped with a warning.</small></fieldset>
         </div>
         <div class="modal-actions"><button class="button" type="button" :disabled="submitting" @click="close">Cancel</button><button class="button primary" :disabled="!ready || submitting">{{ submitting ? 'Queuing…' : `Create ${activeOpportunityIds.length} ${documentLabel}${activeOpportunityIds.length === 1 ? '' : 's'}` }}</button></div>
       </form>

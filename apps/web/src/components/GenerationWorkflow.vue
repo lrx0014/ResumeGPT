@@ -44,6 +44,7 @@ function status(index: number): WorkflowStatus {
 
 const icon = (value: WorkflowStatus) => ({ completed: '✓', active: '•', failed: '×', waiting: '·' })[value]
 const statusLabel = (value: WorkflowStatus) => ({ completed: 'Completed', active: 'In progress', failed: 'Failed', waiting: 'Waiting' })[value]
+const stageLabel = (stage: (typeof stages)[number]) => stage.key === 'rendering' ? props.run.templateId ? 'Applying template' : 'Designing document' : stage.label
 </script>
 
 <template>
@@ -54,7 +55,7 @@ const statusLabel = (value: WorkflowStatus) => ({ completed: 'Completed', active
         <div v-if="index" class="workflow-connector" :class="{ completed: status(index) === 'completed' || status(index) === 'active' || status(index) === 'failed' }"><span /></div>
         <div class="workflow-stage" :class="status(index)" :tabindex="status(index) === 'failed' ? 0 : undefined">
           <span class="workflow-node">{{ icon(status(index)) }}</span>
-          <strong>{{ stage.label }}</strong>
+          <strong>{{ stageLabel(stage) }}</strong>
           <small>{{ statusLabel(status(index)) }}</small>
           <div v-if="status(index) === 'failed'" class="failure-tooltip" role="tooltip">
             <strong>What went wrong</strong>

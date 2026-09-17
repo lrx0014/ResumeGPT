@@ -42,8 +42,12 @@ func (m *gatewayModel) Call(ctx context.Context, prompt string, options ...llms.
 
 func (m *gatewayModel) GenerateContent(ctx context.Context, messages []llms.MessageContent, options ...llms.CallOption) (*llms.ContentResponse, error) {
 	requiredTool := m.nextRequiredTool()
-	if m.agentOutput && requiredTool == "read_template_source" {
-		return &llms.ContentResponse{Choices: []*llms.ContentChoice{{Content: "Action: read_template_source\nAction Input: Inspect the complete template project before producing LaTeX."}}}, nil
+	if m.agentOutput && (requiredTool == "read_template_source" || requiredTool == "read_document_design_brief") {
+		instruction := "Inspect the complete template project before producing LaTeX."
+		if requiredTool == "read_document_design_brief" {
+			instruction = "Read the grounded draft, layout requirements, and available assets before designing the document."
+		}
+		return &llms.ContentResponse{Choices: []*llms.ContentChoice{{Content: "Action: " + requiredTool + "\nAction Input: " + instruction}}}, nil
 	}
 	if m.agentOutput && len(m.requiredTools) > 0 && requiredTool == "" {
 		return &llms.ContentResponse{Choices: []*llms.ContentChoice{{Content: "Final Answer: Required tool validation completed successfully."}}}, nil

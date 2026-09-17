@@ -14,7 +14,7 @@ import (
 	"github.com/lrx0014/ResumeGPT/internal/shared/id"
 )
 
-const generationColumns = `id,workspace_id,profile_id,opportunity_id,template_id,document_type,language,page_target,custom_instructions,pipeline_mode,writer,renderer,reviewer,state,stage,COALESCE(draft,''),COALESCE(rendered_source,''),COALESCE(review,''),repair_count,COALESCE(artifact_object_id,''),COALESCE(error_code,''),COALESCE(error_message,''),profile_snapshot,opportunity_snapshot,template_snapshot,created_at,updated_at`
+const generationColumns = `id,workspace_id,profile_id,opportunity_id,COALESCE(template_id,''),document_type,language,page_target,custom_instructions,pipeline_mode,writer,renderer,reviewer,state,stage,COALESCE(draft,''),COALESCE(rendered_source,''),COALESCE(review,''),repair_count,COALESCE(artifact_object_id,''),COALESCE(error_code,''),COALESCE(error_message,''),profile_snapshot,opportunity_snapshot,template_snapshot,created_at,updated_at`
 
 type GenerationRepository struct{ pool *pgxpool.Pool }
 
@@ -30,7 +30,7 @@ func (r *GenerationRepository) Create(ctx context.Context, value generation.Run,
 		writer, _ := json.Marshal(value.Writer)
 		renderer, _ := json.Marshal(value.Renderer)
 		reviewer, _ := json.Marshal(value.Reviewer)
-		_, err := tx.Exec(ctx, `INSERT INTO generation_runs(id,workspace_id,profile_id,opportunity_id,template_id,document_type,language,page_target,custom_instructions,pipeline_mode,writer,renderer,reviewer,profile_snapshot,opportunity_snapshot,template_snapshot,state,stage,job_id,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`, value.ID, value.WorkspaceID, value.ProfileID, value.OpportunityID, value.TemplateID, value.DocumentType, value.Language, value.PageTarget, value.CustomInstructions, value.PipelineMode, writer, renderer, reviewer, value.ProfileSnapshot, value.OpportunitySnapshot, value.TemplateSnapshot, value.State, value.Stage, task.ID, value.CreatedAt, value.UpdatedAt)
+		_, err := tx.Exec(ctx, `INSERT INTO generation_runs(id,workspace_id,profile_id,opportunity_id,template_id,document_type,language,page_target,custom_instructions,pipeline_mode,writer,renderer,reviewer,profile_snapshot,opportunity_snapshot,template_snapshot,state,stage,job_id,created_at,updated_at) VALUES($1,$2,$3,$4,NULLIF($5,''),$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`, value.ID, value.WorkspaceID, value.ProfileID, value.OpportunityID, value.TemplateID, value.DocumentType, value.Language, value.PageTarget, value.CustomInstructions, value.PipelineMode, writer, renderer, reviewer, value.ProfileSnapshot, value.OpportunitySnapshot, value.TemplateSnapshot, value.State, value.Stage, task.ID, value.CreatedAt, value.UpdatedAt)
 		if err != nil {
 			return err
 		}
@@ -115,7 +115,7 @@ func (r *GenerationRepository) Reconfigure(ctx context.Context, value generation
 		writer, _ := json.Marshal(value.Writer)
 		renderer, _ := json.Marshal(value.Renderer)
 		reviewer, _ := json.Marshal(value.Reviewer)
-		_, err = tx.Exec(ctx, `UPDATE generation_runs SET profile_id=$3,opportunity_id=$4,template_id=$5,document_type=$6,language=$7,page_target=$8,custom_instructions=$9,pipeline_mode=$10,writer=$11,renderer=$12,reviewer=$13,profile_snapshot=$14,opportunity_snapshot=$15,template_snapshot=$16,state='queued',stage='queued',draft=NULL,rendered_source=NULL,review=NULL,repair_count=0,artifact_object_id=NULL,error_code=NULL,error_message=NULL,updated_at=$17 WHERE workspace_id=$1 AND id=$2`, value.WorkspaceID, value.ID, value.ProfileID, value.OpportunityID, value.TemplateID, value.DocumentType, value.Language, value.PageTarget, value.CustomInstructions, value.PipelineMode, writer, renderer, reviewer, value.ProfileSnapshot, value.OpportunitySnapshot, value.TemplateSnapshot, value.UpdatedAt)
+		_, err = tx.Exec(ctx, `UPDATE generation_runs SET profile_id=$3,opportunity_id=$4,template_id=NULLIF($5,''),document_type=$6,language=$7,page_target=$8,custom_instructions=$9,pipeline_mode=$10,writer=$11,renderer=$12,reviewer=$13,profile_snapshot=$14,opportunity_snapshot=$15,template_snapshot=$16,state='queued',stage='queued',draft=NULL,rendered_source=NULL,review=NULL,repair_count=0,artifact_object_id=NULL,error_code=NULL,error_message=NULL,updated_at=$17 WHERE workspace_id=$1 AND id=$2`, value.WorkspaceID, value.ID, value.ProfileID, value.OpportunityID, value.TemplateID, value.DocumentType, value.Language, value.PageTarget, value.CustomInstructions, value.PipelineMode, writer, renderer, reviewer, value.ProfileSnapshot, value.OpportunitySnapshot, value.TemplateSnapshot, value.UpdatedAt)
 		if err != nil {
 			return err
 		}

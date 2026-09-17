@@ -29,6 +29,7 @@ const agentModels = reactive<Record<string, string[]>>({})
 const agentDefaults = reactive<Record<AgentKind, GenerationModelChoice>>({
   writer: { connectionId: '', model: '' },
   template_applier: { connectionId: '', model: '' },
+  document_designer: { connectionId: '', model: '' },
   visual_reviewer: { connectionId: '', model: '' },
   job_import: { connectionId: '', model: '' },
   job_hunter: { connectionId: '', model: '' },
@@ -36,6 +37,7 @@ const agentDefaults = reactive<Record<AgentKind, GenerationModelChoice>>({
 const agentDefinitions: { kind: AgentKind; name: string; summary: string; requirements: string[] }[] = [
   { kind: 'writer', name: 'Writer Agent', summary: 'Creates tailored CV and cover-letter content from a Profile and Job Opportunity.', requirements: ['Text generation', 'Reliable tool calling', 'Strong writing and instruction following', 'Long context recommended'] },
   { kind: 'template_applier', name: 'Template Applying Agent', summary: 'Studies template source, writes LaTeX, compiles it, and repairs rendering errors.', requirements: ['Reliable tool calling', 'Strong coding and LaTeX ability', 'Long context', 'Multi-step reasoning'] },
+  { kind: 'document_designer', name: 'Document Designer Agent', summary: 'Designs a polished CV or cover letter with print-ready HTML and CSS when no template is selected.', requirements: ['Reliable tool calling', 'Strong HTML and CSS ability', 'Visual design and typography', 'Multi-step reasoning'] },
   { kind: 'visual_reviewer', name: 'Visual Reviewer Agent', summary: 'Inspects rendered PDF pages for layout, typography, clipping, and visual quality.', requirements: ['Image input / vision', 'Structured JSON output', 'Layout reasoning'] },
   { kind: 'job_import', name: 'Job Import Agent', summary: 'Browses a supplied job page, expands dynamic content, and extracts structured job details.', requirements: ['Reliable tool calling', 'HTML and webpage understanding', 'Structured data extraction'] },
   { kind: 'job_hunter', name: 'Job Hunter Agent', summary: 'Searches the public web and ranks fresh openings against the configured criteria and optional Profile.', requirements: ['Reliable tool calling', 'Web search reasoning', 'Long context recommended'] },
@@ -111,12 +113,12 @@ async function load() {
   }
 }
 
-async function loadAgentModels(kind: AgentKind) {
+async function loadAgentModels(kind: AgentKind, force = false) {
   const choice = agentDefaults[kind]
   if (!choice.connectionId) return
   loadingAgentModels.value = kind
   try {
-    if (!agentModels[choice.connectionId]) agentModels[choice.connectionId] = (await api.testLLMConnection(choice.connectionId)).models
+    if (force || !agentModels[choice.connectionId]) agentModels[choice.connectionId] = (await api.testLLMConnection(choice.connectionId)).models
     if (!choice.model) choice.model = agentModels[choice.connectionId][0] ?? ''
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : 'Could not load models for this Agent.'
@@ -127,7 +129,7 @@ async function loadAgentModels(kind: AgentKind) {
 
 function changeAgentConnection(kind: AgentKind) {
   agentDefaults[kind].model = ''
-  if (agentModels[agentDefaults[kind].connectionId]) agentDefaults[kind].model = agentModels[agentDefaults[kind].connectionId][0] ?? ''
+  void loadAgentModels(kind)
 }
 
 async function saveAgentDefaults() {
@@ -271,7 +273,7 @@ onMounted(load)
             <div class="agent-copy"><div><h3>{{ definition.name }}</h3><span class="optional-label">Optional default</span></div><p>{{ definition.summary }}</p></div>
             <div class="agent-fields">
               <label><span>Connection</span><select v-model="agentDefaults[definition.kind].connectionId" @change="changeAgentConnection(definition.kind)"><option value="">Choose each time</option><option v-for="item in connections" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
-              <label><span>Model</span><div class="model-input-row"><input v-model="agentDefaults[definition.kind].model" :disabled="!agentDefaults[definition.kind].connectionId" :list="`agent-default-models-${definition.kind}`" placeholder="Model name" maxlength="200" /><button class="button compact-button" type="button" :disabled="!agentDefaults[definition.kind].connectionId || loadingAgentModels === definition.kind" @click="loadAgentModels(definition.kind)">{{ loadingAgentModels === definition.kind ? 'Loading…' : 'Load models' }}</button></div><datalist :id="`agent-default-models-${definition.kind}`"><option v-for="model in agentModels[agentDefaults[definition.kind].connectionId] || []" :key="model" :value="model" /></datalist></label>
+              <label><span>Model</span><div class="model-input-row"><select v-if="agentModels[agentDefaults[definition.kind].connectionId]?.length" v-model="agentDefaults[definition.kind].model"><option value="" disabled>Select model</option><option v-if="agentDefaults[definition.kind].model && !agentModels[agentDefaults[definition.kind].connectionId].includes(agentDefaults[definition.kind].model)" :value="agentDefaults[definition.kind].model">{{ agentDefaults[definition.kind].model }}</option><option v-for="model in agentModels[agentDefaults[definition.kind].connectionId]" :key="model" :value="model">{{ model }}</option></select><input v-else v-model="agentDefaults[definition.kind].model" :disabled="!agentDefaults[definition.kind].connectionId || loadingAgentModels === definition.kind" :placeholder="loadingAgentModels === definition.kind ? 'Loading models…' : 'Enter model name'" maxlength="200" /><button class="button compact-button" type="button" :disabled="!agentDefaults[definition.kind].connectionId || loadingAgentModels === definition.kind" @click="loadAgentModels(definition.kind, true)">{{ loadingAgentModels === definition.kind ? 'Loading…' : 'Refresh' }}</button></div></label>
             </div>
             <aside class="agent-tip"><strong>Model capability tips</strong><div><span v-for="requirement in definition.requirements" :key="requirement">{{ requirement }}</span></div></aside>
           </article>

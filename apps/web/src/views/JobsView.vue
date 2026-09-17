@@ -132,18 +132,18 @@ async function importURLs(urls: string[]) {
   }
 }
 
-async function discoverImportModels() {
+async function discoverImportModels(resetModel = false) {
   const connectionId = importConnectionId.value
-  importModel.value = ''
+  if (resetModel) importModel.value = ''
   if (!connectionId) return
   if (importModels[connectionId]) {
-    importModel.value = importModels[connectionId][0] ?? ''
+    if (!importModel.value || !importModels[connectionId].includes(importModel.value)) importModel.value = importModels[connectionId][0] ?? ''
     return
   }
   loadingImportModels.value = true
   try {
     importModels[connectionId] = (await api.testLLMConnection(connectionId)).models
-    importModel.value = importModels[connectionId][0] ?? ''
+    if (importConnectionId.value === connectionId && (!importModel.value || !importModels[connectionId].includes(importModel.value))) importModel.value = importModels[connectionId][0] ?? ''
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : 'Could not load models for AI-assisted import.'
   } finally {
@@ -162,11 +162,11 @@ async function openBatchImport() {
     if (configured && connections.value.some(item => item.id === configured.connectionId)) {
       importConnectionId.value = configured.connectionId
       importModel.value = configured.model
-      importModels[configured.connectionId] = [configured.model]
     } else if (!connections.value.some(item => item.id === importConnectionId.value)) {
       importConnectionId.value = connections.value[0]?.id ?? ''
       importModel.value = ''
     }
+    if (aiAssisted.value && importConnectionId.value) await discoverImportModels()
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : 'Could not load LLM connections.'
   }
@@ -210,8 +210,8 @@ function importLabel(item: Job) {
   return ({ queued: 'Queued', fetching: 'Importing', analyzing: 'AI is analyzing this page', needs_user_action: 'Needs editing', failed: 'Import failed' } as Record<string, string>)[item.importState]
 }
 
-watch(aiAssisted, value => { if (value && importConnectionId.value) void discoverImportModels() })
-watch(importConnectionId, () => { if (aiAssisted.value) void discoverImportModels() })
+watch(aiAssisted, value => { if (value && importConnectionId.value) void discoverImportModels(false) })
+watch(importConnectionId, () => { if (aiAssisted.value) void discoverImportModels(true) })
 
 async function removeJob() {
   const item = pendingDelete.value
@@ -287,7 +287,7 @@ onBeforeUnmount(() => { if (pollTimer) window.clearInterval(pollTimer) })
       <template v-if="aiAssisted">
         <p v-if="!connections.length" class="full notice setup-notice">Add an <RouterLink to="/settings">LLM connection in Settings</RouterLink> before using AI-assisted import.</p>
         <label><span>LLM connection</span><select v-model="importConnectionId" required><option value="" disabled>Select connection</option><option v-for="item in connections" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
-        <label><span>Model</span><input v-model="importModel" required :disabled="loadingImportModels" list="job-import-models" :placeholder="loadingImportModels ? 'Loading models…' : 'Model name'" /><datalist id="job-import-models"><option v-for="model in importModels[importConnectionId] || []" :key="model" :value="model" /></datalist></label>
+        <label><span>Model</span><select v-if="importModels[importConnectionId]?.length" v-model="importModel" required><option value="" disabled>Select model</option><option v-for="model in importModels[importConnectionId]" :key="model" :value="model">{{ model }}</option></select><input v-else v-model="importModel" required :disabled="loadingImportModels" :placeholder="loadingImportModels ? 'Loading models…' : 'Enter model name'" /></label>
       </template>
       <label class="full"><span>Job opportunity URLs</span><textarea v-model="batchText" required rows="8" :placeholder="aiAssisted ? 'Paste up to 50 public HTTPS job page URLs, one per line. A single URL works too.' : 'Paste up to 50 LinkedIn or Indeed URLs, one per line. A single URL works too.'" /></label>
       <div class="full form-actions"><button class="button primary" :disabled="busy || (aiAssisted && (!importConnectionId || !importModel))">{{ busy ? 'Queuing…' : 'Import job opportunities' }}</button></div>

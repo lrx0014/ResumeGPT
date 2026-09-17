@@ -128,6 +128,44 @@ func (e *HTTPExtractor) PreviewTemplate(ctx context.Context, name, entryFile str
 	return preview, nil
 }
 
+func (e *HTTPExtractor) HTMLPDF(ctx context.Context, source string) ([]byte, error) {
+	if len(source) < 1 || len(source) > MaxDocumentBytes {
+		return nil, &ExtractionFailure{Code: "size_limit_exceeded", Message: "HTML documents must be between 1 byte and 10 MiB."}
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, e.endpoint+"/v1/html-pdfs", strings.NewReader(source))
+	if err != nil {
+		return nil, err
+	}
+	request.ContentLength = int64(len(source))
+	request.Header.Set("Content-Type", "text/html; charset=utf-8")
+	request.Header.Set("X-Document-Name", "generated.html")
+	response, err := e.client.Do(request)
+	if err != nil {
+		return nil, &ExtractionFailure{Code: "html_renderer_unavailable", Message: "The isolated HTML rendering service is unavailable.", Retryable: true}
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		var payload struct {
+			Error struct {
+				Code    string `json:"code"`
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+		if err := json.NewDecoder(io.LimitReader(response.Body, 64*1024)).Decode(&payload); err != nil || payload.Error.Code == "" {
+			return nil, &ExtractionFailure{Code: "html_render_failed", Message: "The isolated HTML renderer returned an invalid response.", Retryable: response.StatusCode >= 500}
+		}
+		return nil, &ExtractionFailure{Code: payload.Error.Code, Message: payload.Error.Message, Retryable: response.StatusCode >= 500}
+	}
+	if response.Header.Get("Content-Type") != "application/pdf" {
+		return nil, &ExtractionFailure{Code: "invalid_html_pdf", Message: "The isolated HTML renderer did not return a PDF."}
+	}
+	pdf, err := io.ReadAll(io.LimitReader(response.Body, 20*1024*1024+1))
+	if err != nil || len(pdf) < 5 || len(pdf) > 20*1024*1024 || string(pdf[:5]) != "%PDF-" {
+		return nil, &ExtractionFailure{Code: "invalid_html_pdf", Message: "The isolated HTML renderer returned an invalid PDF."}
+	}
+	return pdf, nil
+}
+
 func (e *HTTPExtractor) PDFPages(ctx context.Context, pdf []byte) (PDFPages, error) {
 	if len(pdf) < 5 || len(pdf) > MaxDocumentBytes || string(pdf[:5]) != "%PDF-" {
 		return PDFPages{}, &ExtractionFailure{Code: "invalid_pdf", Message: "Visual review requires a valid PDF."}

@@ -1,6 +1,7 @@
 package generation
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -39,6 +40,7 @@ type RuntimeResolver interface {
 
 type DocumentRenderer interface {
 	PreviewTemplate(context.Context, string, string, io.Reader, int64) ([]byte, error)
+	HTMLPDF(context.Context, string) ([]byte, error)
 	PDFPages(context.Context, []byte) (document.PDFPages, error)
 }
 
@@ -90,7 +92,9 @@ func (p *Processor) handle(ctx context.Context, task workqueue.Job) {
 	var profileValue profile.Profile
 	var opportunity job.Job
 	var templateValue resumetemplate.Template
-	if json.Unmarshal(run.ProfileSnapshot, &profileValue) != nil || json.Unmarshal(run.OpportunitySnapshot, &opportunity) != nil || json.Unmarshal(run.TemplateSnapshot, &templateValue) != nil {
+	templateSnapshot := bytes.TrimSpace(run.TemplateSnapshot)
+	usesTemplate := run.TemplateID != "" || len(templateSnapshot) > 2 && string(templateSnapshot) != "null"
+	if json.Unmarshal(run.ProfileSnapshot, &profileValue) != nil || json.Unmarshal(run.OpportunitySnapshot, &opportunity) != nil || usesTemplate && json.Unmarshal(run.TemplateSnapshot, &templateValue) != nil {
 		p.fail(ctx, task, "invalid_snapshot", "The saved generation inputs are invalid.", false)
 		return
 	}
@@ -118,7 +122,12 @@ func (p *Processor) handle(ctx context.Context, task workqueue.Job) {
 		return
 	}
 	_ = p.Repository.SetStage(ctx, task, "rendering", draft, "", 0)
-	application, err := agentTeam.ApplyTemplate(ctx, task.WorkspaceID, run, templateValue, profileValue.AvatarObjectID, draft, payload.RevisionPrompt, payload.UseFallback)
+	var application TemplateApplyResult
+	if !usesTemplate {
+		application, err = agentTeam.DesignDocument(ctx, task.WorkspaceID, run, profileValue.AvatarObjectID, draft, payload.RevisionPrompt, payload.UseFallback)
+	} else {
+		application, err = agentTeam.ApplyTemplate(ctx, task.WorkspaceID, run, templateValue, profileValue.AvatarObjectID, draft, payload.RevisionPrompt, payload.UseFallback)
+	}
 	if err != nil {
 		if errors.Is(err, ErrAgentConnection) {
 			p.fail(ctx, task, "renderer_unavailable", "The selected renderer connection is unavailable.", false)
@@ -143,18 +152,33 @@ func (p *Processor) handle(ctx context.Context, task workqueue.Job) {
 		if len(application.Failures) == 0 {
 			p.recordTemplateFailure(ctx, task, source, application.ValidationError, repairCount)
 		}
-		source = fallbackLatex(draft)
-		reviewText = "The Template Applying agent could not produce compilable LaTeX within its repair limit. Switching to the safe basic layout."
+		if !usesTemplate {
+			source = fallbackHTML(draft)
+			reviewText = "The Document Designer could not produce valid HTML within its repair limit. Switching to the safe basic layout."
+		} else {
+			source = fallbackLatex(draft)
+			reviewText = "The Template Applying agent could not produce compilable LaTeX within its repair limit. Switching to the safe basic layout."
+		}
 		_ = p.Repository.SetStage(ctx, task, "rendering", draft, reviewText, repairCount)
 	}
 	for {
-		pdf, err = agentTeam.RenderPDF(ctx, task.WorkspaceID, templateValue, profileValue.AvatarObjectID, source)
+		if !usesTemplate {
+			pdf, err = agentTeam.RenderHTMLPDF(ctx, task.WorkspaceID, profileValue.AvatarObjectID, source)
+		} else {
+			pdf, err = agentTeam.RenderPDF(ctx, task.WorkspaceID, templateValue, profileValue.AvatarObjectID, source)
+		}
 		if err != nil {
 			if fallbackReason == "" {
 				p.recordTemplateFailure(ctx, task, source, err, repairCount)
-				source = fallbackLatex(draft)
-				fallbackReason = "the validated template candidate could not be compiled again while creating the artifact"
-				reviewText = "The model-generated LaTeX failed compilation. Switching to the safe basic layout."
+				if !usesTemplate {
+					source = fallbackHTML(draft)
+					fallbackReason = "the validated HTML design could not be rendered again while creating the artifact"
+					reviewText = "The model-generated HTML failed rendering. Switching to the safe basic layout."
+				} else {
+					source = fallbackLatex(draft)
+					fallbackReason = "the validated template candidate could not be compiled again while creating the artifact"
+					reviewText = "The model-generated LaTeX failed compilation. Switching to the safe basic layout."
+				}
 				_ = p.Repository.SetStage(ctx, task, "rendering", draft, reviewText, repairCount)
 				continue
 			}
@@ -189,7 +213,11 @@ func (p *Processor) handle(ctx context.Context, task workqueue.Job) {
 			}
 			repairCount++
 			_ = p.Repository.SetStage(ctx, task, "repairing", draft, reviewText, repairCount)
-			source, err = agentTeam.Polish(ctx, task.WorkspaceID, run, templateValue, profileValue.AvatarObjectID, draft, source, reviewText)
+			if !usesTemplate {
+				source, err = agentTeam.PolishDesign(ctx, task.WorkspaceID, run, profileValue.AvatarObjectID, draft, source, reviewText)
+			} else {
+				source, err = agentTeam.Polish(ctx, task.WorkspaceID, run, templateValue, profileValue.AvatarObjectID, draft, source, reviewText)
+			}
 			if err != nil {
 				p.recordTemplateFailure(ctx, task, source, err, repairCount)
 				p.fail(ctx, task, "repair_failed", err.Error(), true)
@@ -215,7 +243,11 @@ func (p *Processor) handle(ctx context.Context, task workqueue.Job) {
 		}
 		repairCount++
 		_ = p.Repository.SetStage(ctx, task, "repairing", draft, reviewText, repairCount)
-		source, err = agentTeam.Polish(ctx, task.WorkspaceID, run, templateValue, profileValue.AvatarObjectID, draft, source, reviewText)
+		if !usesTemplate {
+			source, err = agentTeam.PolishDesign(ctx, task.WorkspaceID, run, profileValue.AvatarObjectID, draft, source, reviewText)
+		} else {
+			source, err = agentTeam.Polish(ctx, task.WorkspaceID, run, templateValue, profileValue.AvatarObjectID, draft, source, reviewText)
+		}
 		if err != nil {
 			p.recordTemplateFailure(ctx, task, source, err, repairCount)
 			p.fail(ctx, task, "repair_failed", err.Error(), true)
@@ -223,7 +255,10 @@ func (p *Processor) handle(ctx context.Context, task workqueue.Job) {
 		}
 	}
 	if fallbackReason != "" {
-		warning := "Template fallback used: " + fallbackReason + ", so ResumeGPT generated a safe basic layout instead of the selected template."
+		warning := "Document design fallback used: " + fallbackReason + ", so ResumeGPT generated a safe basic layout."
+		if usesTemplate {
+			warning = "Template fallback used: " + fallbackReason + ", so ResumeGPT generated a safe basic layout instead of the selected template."
+		}
 		if reviewText != "" {
 			reviewText = warning + " " + reviewText
 		} else {
@@ -247,7 +282,7 @@ func (p *Processor) recordTemplateFailure(ctx context.Context, task workqueue.Jo
 		code = failure.Code
 		message = failure.Message
 	}
-	feedback := fmt.Sprintf("Template validation failed [%s]: %s", code, message)
+	feedback := fmt.Sprintf("Document rendering validation failed [%s]: %s", code, message)
 	_ = p.Repository.RecordStep(ctx, task, Step{
 		ID:          id.New("step"),
 		Kind:        "system_warning",

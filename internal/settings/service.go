@@ -42,7 +42,7 @@ func (s *Service) ListAgentDefaults(ctx context.Context, workspaceID string) ([]
 
 func (s *Service) SaveAgentDefaults(ctx context.Context, workspaceID string, input AgentDefaultsInput) ([]AgentDefault, error) {
 	validAgents := map[string]bool{
-		AgentWriter: true, AgentTemplateApplier: true, AgentVisualReviewer: true,
+		AgentWriter: true, AgentTemplateApplier: true, AgentDocumentDesigner: true, AgentVisualReviewer: true,
 		AgentJobImport: true, AgentJobHunter: true,
 	}
 	seen := make(map[string]bool)

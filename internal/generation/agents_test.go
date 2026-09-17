@@ -166,6 +166,10 @@ func (d *archiveCaptureDocuments) PreviewTemplate(_ context.Context, name, entry
 	return []byte("%PDF-result"), nil
 }
 
+func (*archiveCaptureDocuments) HTMLPDF(context.Context, string) ([]byte, error) {
+	return []byte("%PDF-result"), nil
+}
+
 func (*archiveCaptureDocuments) PDFPages(context.Context, []byte) (document.PDFPages, error) {
 	return document.PDFPages{}, errors.New("not used")
 }
@@ -175,6 +179,10 @@ func (d *agentRepairDocuments) PreviewTemplate(context.Context, string, string, 
 	if d.alwaysFail || d.calls == 1 {
 		return nil, &document.ExtractionFailure{Code: "preview_render_failed", Message: "LaTeX compilation failed: Undefined control sequence."}
 	}
+	return []byte("%PDF-result"), nil
+}
+
+func (*agentRepairDocuments) HTMLPDF(context.Context, string) ([]byte, error) {
 	return []byte("%PDF-result"), nil
 }
 

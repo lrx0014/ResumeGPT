@@ -10,6 +10,7 @@ from urllib.parse import unquote_plus
 from .extractor import MAX_DOCUMENT_BYTES, ExtractionError, extract, malware_scanner
 from .preview import render_preview
 from .pdf_pages import render_pdf_pages
+from .html_pdf import render_html_pdf
 
 
 class ExtractionHandler(BaseHTTPRequestHandler):
@@ -26,7 +27,7 @@ class ExtractionHandler(BaseHTTPRequestHandler):
             self._write_error(HTTPStatus.SERVICE_UNAVAILABLE, error.code, str(error))
 
     def do_POST(self) -> None:
-        if self.path not in {"/v1/extractions", "/v1/previews", "/v1/pdf-pages"}:
+        if self.path not in {"/v1/extractions", "/v1/previews", "/v1/pdf-pages", "/v1/html-pdfs"}:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         try:
@@ -54,9 +55,11 @@ class ExtractionHandler(BaseHTTPRequestHandler):
                     preview = render_preview(name, data, entry_file)
                 elif self.path == "/v1/pdf-pages":
                     pages = render_pdf_pages(data)
+                elif self.path == "/v1/html-pdfs":
+                    preview = render_html_pdf(data)
                 else:
                     result = extract(Path(temporary.name), entry_file=entry_file)
-            if self.path == "/v1/previews":
+            if self.path in {"/v1/previews", "/v1/html-pdfs"}:
                 self._write_bytes(HTTPStatus.OK, "application/pdf", preview)
             elif self.path == "/v1/pdf-pages":
                 self._write_json(HTTPStatus.OK, pages)
@@ -67,6 +70,7 @@ class ExtractionHandler(BaseHTTPRequestHandler):
                 "scanner_unavailable", "scanner_definitions_stale", "scanner_timeout", "scanner_failed",
                 "converter_unavailable", "pdf_engine_unavailable", "ocr_unavailable",
                 "tex_renderer_unavailable", "word_renderer_unavailable",
+                "html_renderer_unavailable",
             } else HTTPStatus.UNPROCESSABLE_ENTITY
             self._write_error(status, error.code, str(error))
         except Exception:

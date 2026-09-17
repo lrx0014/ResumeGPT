@@ -162,7 +162,7 @@ export interface LLMConnectionTest {
   models: string[]
 }
 
-export type AgentKind = 'writer' | 'template_applier' | 'visual_reviewer' | 'job_import' | 'job_hunter'
+export type AgentKind = 'writer' | 'template_applier' | 'document_designer' | 'visual_reviewer' | 'job_import' | 'job_hunter'
 export interface AgentDefault {
   agent: AgentKind
   connectionId: string

@@ -20,7 +20,7 @@ Add a workspace Settings page that manages multiple named LLM connections. A con
 - Base URL; and
 - an optional encrypted API token.
 
-The Settings page can test a saved connection, discover its available models, and store an optional default connection/model pair for the Writer, Template Applying, Visual Reviewer, Job Import, and Job Hunter Agents. Each default includes capability guidance. Defaults prefill new task forms but never prevent a per-task override. Every queued task still captures its resolved connection and model explicitly in its immutable input.
+The Settings page can test a saved connection, discover its available models, and store an optional default connection/model pair for the Writer, Template Applying, Document Designer, Visual Reviewer, Job Import, and Job Hunter Agents. Each default includes capability guidance. Defaults prefill new task forms but never prevent a per-task override. Every queued task still captures its resolved connection and model explicitly in its immutable input.
 
 Interface language and theme are workspace preferences. Document type, output language, page target, paper size, template, Profile, and Opportunity remain generation-specific choices.
 

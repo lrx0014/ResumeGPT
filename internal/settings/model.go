@@ -51,11 +51,12 @@ type RuntimeConnection struct {
 }
 
 const (
-	AgentWriter          = "writer"
-	AgentTemplateApplier = "template_applier"
-	AgentVisualReviewer  = "visual_reviewer"
-	AgentJobImport       = "job_import"
-	AgentJobHunter       = "job_hunter"
+	AgentWriter           = "writer"
+	AgentTemplateApplier  = "template_applier"
+	AgentDocumentDesigner = "document_designer"
+	AgentVisualReviewer   = "visual_reviewer"
+	AgentJobImport        = "job_import"
+	AgentJobHunter        = "job_hunter"
 )
 
 type AgentDefault struct {

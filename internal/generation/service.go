@@ -66,9 +66,12 @@ func (s *Service) prepareInputs(ctx context.Context, workspaceID string, input C
 	if err != nil || strings.TrimSpace(opportunity.Description) == "" {
 		return CreateInput{}, nil, nil, nil, ErrState
 	}
-	templateValue, err := s.templates.Get(ctx, workspaceID, input.TemplateID)
-	if err != nil || templateValue.State != "ready" || templateValue.Kind != input.DocumentType || templateValue.Format != "latex" {
-		return CreateInput{}, nil, nil, nil, ErrState
+	var templateValue resumetemplate.Template
+	if input.TemplateID != "" {
+		templateValue, err = s.templates.Get(ctx, workspaceID, input.TemplateID)
+		if err != nil || templateValue.State != "ready" || templateValue.Kind != input.DocumentType || templateValue.Format != "latex" {
+			return CreateInput{}, nil, nil, nil, ErrState
+		}
 	}
 	for _, choice := range []ModelChoice{input.Writer, input.Renderer, input.Reviewer} {
 		if _, err := s.settings.RuntimeConnection(ctx, workspaceID, choice.ConnectionID); err != nil {
@@ -77,7 +80,10 @@ func (s *Service) prepareInputs(ctx context.Context, workspaceID string, input C
 	}
 	profileJSON, _ := json.Marshal(profileValue)
 	opportunityJSON, _ := json.Marshal(opportunity)
-	templateJSON, _ := json.Marshal(templateValue)
+	templateJSON := json.RawMessage(`{}`)
+	if input.TemplateID != "" {
+		templateJSON, _ = json.Marshal(templateValue)
+	}
 	return input, profileJSON, opportunityJSON, templateJSON, nil
 }
 

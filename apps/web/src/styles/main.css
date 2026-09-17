@@ -142,6 +142,7 @@ h1, h2, .brand { font-family: 'Avenir Next', 'Segoe UI', system-ui, sans-serif; 
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-bottom: 24px; }
 .form-grid.single { grid-template-columns: 1fr; margin: 24px 0 0; }
 .form-grid label { display: grid; gap: 7px; }
+.form-grid > label { align-self: start; }
 .form-grid label > span { color: #3d4843; font-size: 12px; font-weight: 700; }
 .form-grid .full { grid-column: 1 / -1; }
 input, select, textarea { width: 100%; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--ink); outline: none; padding: 11px 12px; }
@@ -178,6 +179,16 @@ textarea { resize: vertical; line-height: 1.5; }
 .pipeline-choice { display: flex; flex-wrap: wrap; gap: 20px; padding: 14px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .pipeline-choice label { display: flex; grid-template-columns: auto 1fr; align-items: center; gap: 8px; }
 .pipeline-choice input { width: auto; }
+.model-routing { display: grid; gap: 10px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-soft); }
+.model-routing p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
+.model-routing p a { color: var(--accent); font-weight: 700; }
+.model-switch { display: flex !important; align-items: center; justify-content: flex-start; gap: 10px !important; width: fit-content; cursor: pointer; color: var(--ink); font-size: 13px; font-weight: 700; }
+.model-switch > input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.model-switch-track { display: flex; width: 40px; height: 23px; padding: 3px; border-radius: 99px; background: #aeb8b3; transition: background .18s ease; }
+.model-switch-track > span { width: 17px; height: 17px; border-radius: 50%; background: white; box-shadow: 0 1px 4px rgba(0, 0, 0, .2); transition: transform .18s ease; }
+.model-switch > input:checked + .model-switch-track { background: var(--accent); }
+.model-switch > input:checked + .model-switch-track > span { transform: translateX(17px); }
+.model-switch > input:focus-visible + .model-switch-track { box-shadow: 0 0 0 3px rgba(61, 107, 87, .18); }
 .model-card { margin: 0; padding: 18px; border: 1px solid var(--line); border-radius: 12px; }
 .model-card legend { padding: 0 7px; color: var(--accent-dark); font-size: 12px; font-weight: 700; }
 .model-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }

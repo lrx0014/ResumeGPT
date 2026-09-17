@@ -3,6 +3,7 @@ package generation
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -13,6 +14,8 @@ import (
 	resumetemplate "github.com/lrx0014/ResumeGPT/internal/template"
 	"github.com/tmc/langchaingo/tools"
 )
+
+const profileAvatarPlaceholder = "{{PROFILE_AVATAR}}"
 
 type GenerationBlobs interface {
 	blobstore.Reader
@@ -50,6 +53,79 @@ type renderPDFTool struct {
 	pdf            []byte
 	lastErr        error
 	failures       []TemplateValidationFailure
+}
+
+type renderHTMLPDFTool struct {
+	documents      DocumentRenderer
+	blobs          GenerationBlobs
+	workspaceID    string
+	avatarObjectID string
+	avatarName     string
+	avatar         []byte
+	avatarLoaded   bool
+	source         string
+	pdf            []byte
+	lastErr        error
+	failures       []TemplateValidationFailure
+}
+
+var _ tools.Tool = (*renderHTMLPDFTool)(nil)
+
+func (*renderHTMLPDFTool) Name() string { return "render_html_pdf" }
+func (*renderHTMLPDFTool) Description() string {
+	return "Render a complete self-contained HTML and CSS document into PDF in an isolated renderer. External URLs, scripts, and local files are unavailable."
+}
+func (t *renderHTMLPDFTool) Call(ctx context.Context, source string) (string, error) {
+	t.source = cleanModelSource(source)
+	lowered := strings.ToLower(t.source)
+	if !strings.Contains(lowered, "<html") || !strings.Contains(lowered, "<body") || !strings.Contains(lowered, "</html>") {
+		t.pdf = nil
+		t.lastErr = errors.New("candidate source is not a complete HTML document")
+		t.failures = append(t.failures, TemplateValidationFailure{Source: t.source, Error: t.lastErr})
+		result, _ := json.Marshal(map[string]any{"status": "render_error", "code": "incomplete_html", "error": t.lastErr.Error()})
+		return string(result), nil
+	}
+	avatarName, avatar, err := t.loadAvatar(ctx)
+	if err != nil {
+		t.lastErr = err
+		return "", err
+	}
+	renderedSource := t.source
+	if strings.Contains(renderedSource, profileAvatarPlaceholder) {
+		if len(avatar) == 0 {
+			renderedSource = strings.ReplaceAll(renderedSource, profileAvatarPlaceholder, "")
+		} else {
+			mediaType := "image/png"
+			if strings.HasSuffix(avatarName, ".jpg") {
+				mediaType = "image/jpeg"
+			}
+			dataURL := "data:" + mediaType + ";base64," + base64.StdEncoding.EncodeToString(avatar)
+			renderedSource = strings.ReplaceAll(renderedSource, profileAvatarPlaceholder, dataURL)
+		}
+	}
+	pdf, err := t.documents.HTMLPDF(ctx, renderedSource)
+	if err != nil {
+		t.pdf = nil
+		t.lastErr = err
+		t.failures = append(t.failures, TemplateValidationFailure{Source: t.source, Error: err})
+		result, _ := json.Marshal(map[string]any{"status": "render_error", "error": limit(err.Error(), 1200)})
+		return string(result), nil
+	}
+	t.pdf = pdf
+	t.lastErr = nil
+	result, _ := json.Marshal(map[string]any{"status": "rendered", "bytes": len(pdf)})
+	return string(result), nil
+}
+
+func (t *renderHTMLPDFTool) succeeded() bool { return len(t.pdf) > 0 && t.lastErr == nil }
+
+func (t *renderHTMLPDFTool) loadAvatar(ctx context.Context) (string, []byte, error) {
+	if t.avatarLoaded {
+		return t.avatarName, t.avatar, nil
+	}
+	t.avatarLoaded = true
+	t.avatarName, t.avatar, t.lastErr = loadProfileAvatar(ctx, t.blobs, t.workspaceID, t.avatarObjectID)
+	return t.avatarName, t.avatar, t.lastErr
 }
 
 var _ tools.Tool = (*renderPDFTool)(nil)

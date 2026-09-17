@@ -20,7 +20,7 @@ ResumeGPT is a personal CV and cover-letter optimization application. This repos
 - Scheduled Job Hunters that prioritize established job sources, deduplicate URLs, queue the existing Job Import Agent automatically, and collect blocked or unparseable pages in a per-Hunter confirmation inbox.
 - Workspace Settings for encrypted cloud/local LLM connections, per-Agent default models with capability guidance, model discovery, interface language, theme, and deployment status.
 - A simple resume and cover-letter template library with an attributed built-in LaTeX template, single-file TeX or multi-file LaTeX ZIP uploads, Word uploads, security scanning, extracted text for generation, and cached PDF previews.
-- Durable LaTeX generation runs with single-model or specialized writer/renderer/reviewer modes, immutable input snapshots, streamed local-model responses, bounded automatic repair, safe basic-layout fallback, and stored PDF downloads.
+- Durable generation runs with optional LaTeX templates or AI-designed HTML/CSS layouts, single-model or specialized Agent modes, immutable input snapshots, bounded automatic repair, safe basic-layout fallback, and stored PDF downloads.
 - English-first internationalization setup.
 
 Infrastructure integrations remain behind application ports and adapters so that storage, identity, and messaging choices can change without rewriting domain services.
@@ -140,9 +140,10 @@ This checklist is the project-level source of truth for planned delivery. An ite
 - [x] Implement the provider-independent OpenAI, OpenAI-compatible, and Ollama chat gateway.
 - [x] Run generation roles through LangChainGo agents and expose PDF operations as scoped LangChainGo tools.
 - [x] Require the Template Applying Agent to study the complete template project before rendering and inject an optional Profile avatar through the template's existing photo mechanism.
+- [x] Make templates optional and use a dedicated Document Designer Agent with sandboxed HTML/CSS-to-PDF tools when no template is selected.
 - [x] Select one shared model or specialized writer, renderer, and visual-reviewer models for each Opportunity generation.
 - [ ] Generate successfully through at least one cloud connection and one local Ollama or OpenAI-compatible connection.
-- [x] Freeze Profile, Opportunity, template, and model input snapshots when a generation is queued.
+- [x] Freeze Profile, Opportunity, optional template, and model input snapshots when a generation is queued.
 - [ ] Build the job-requirement-to-profile-content matching plan.
 - [x] Generate a profile-grounded draft and apply it to a selected LaTeX template.
 - [ ] Generate tailored one-page, two-page, and custom-length CVs.
@@ -159,7 +160,7 @@ This checklist is the project-level source of truth for planned delivery. An ite
 - [x] Let users retry failed generations while reusing a persisted writing draft when available.
 - [ ] Add cancellation and server-sent event progress streaming.
 - [ ] Implement artifact revisions with parent history and restoration.
-- [x] Support bounded follow-up prompt revisions against the grounded draft and current LaTeX source.
+- [x] Support bounded follow-up prompt revisions against the grounded draft and current LaTeX or HTML/CSS source.
 - [ ] Show semantic diffs and allow users to lock sections.
 - [ ] Track model version, prompt version, token usage, latency, and cost.
 

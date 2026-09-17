@@ -200,6 +200,9 @@ type processorDocuments struct{}
 func (processorDocuments) PreviewTemplate(context.Context, string, string, io.Reader, int64) ([]byte, error) {
 	return []byte("%PDF-result"), nil
 }
+func (processorDocuments) HTMLPDF(context.Context, string) ([]byte, error) {
+	return []byte("%PDF-result"), nil
+}
 func (processorDocuments) PDFPages(context.Context, []byte) (document.PDFPages, error) {
 	return document.PDFPages{PageCount: 1, Images: []string{"image"}}, nil
 }
@@ -211,6 +214,9 @@ func (d *fallbackDocuments) PreviewTemplate(context.Context, string, string, io.
 	if d.calls <= 4 {
 		return nil, errors.New("model LaTeX did not compile")
 	}
+	return []byte("%PDF-fallback"), nil
+}
+func (*fallbackDocuments) HTMLPDF(context.Context, string) ([]byte, error) {
 	return []byte("%PDF-fallback"), nil
 }
 func (*fallbackDocuments) PDFPages(context.Context, []byte) (document.PDFPages, error) {
@@ -250,5 +256,27 @@ func TestProcessorCompletesWrittenRenderedAndReviewedPDF(t *testing.T) {
 		if repository.stages[i] != want[i] {
 			t.Fatalf("stages = %#v", repository.stages)
 		}
+	}
+}
+
+func TestProcessorUsesDocumentDesignerWithoutTemplate(t *testing.T) {
+	p, _ := json.Marshal(profile.Profile{Content: "Built reliable Go services."})
+	j, _ := json.Marshal(job.Job{Title: "Backend Engineer", Company: "Example", Description: "Build Go systems."})
+	repository := &processorRepository{run: Run{
+		ID: "gen_designer", WorkspaceID: "ws_test", Writer: ModelChoice{ConnectionID: "writer", Model: "writer-model"},
+		Renderer: ModelChoice{ConnectionID: "designer", Model: "designer-model"}, Reviewer: ModelChoice{ConnectionID: "reviewer", Model: "vision-model"},
+		DocumentType: "resume", PageTarget: "one_page", ProfileSnapshot: p, OpportunitySnapshot: j, TemplateSnapshot: json.RawMessage(`{}`),
+	}}
+	gateway := &processorGateway{responses: []string{
+		"# Draft",
+		"<!doctype html><html><body><h1>Resume</h1><p>Built reliable Go services.</p></body></html>",
+		`{"approved":true,"feedback":"Layout is balanced."}`,
+	}}
+	blobs := &processorBlobs{}
+	processor := Processor{Repository: repository, Settings: processorSettings{}, Blobs: blobs, Documents: processorDocuments{}, Gateway: gateway, WorkerID: "worker", Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	payload, _ := json.Marshal(Payload{RunID: "gen_designer"})
+	processor.handle(context.Background(), workqueue.Job{ID: "task", WorkspaceID: "ws_test", Payload: payload, LeaseOwner: "worker", Attempt: 1, MaxAttempts: 3})
+	if !repository.completed || gateway.calls != 3 || !strings.HasPrefix(string(blobs.stored), "%PDF-") {
+		t.Fatalf("template-free generation failed: completed=%v calls=%d artifact=%q", repository.completed, gateway.calls, blobs.stored)
 	}
 }
