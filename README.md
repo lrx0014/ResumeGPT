@@ -11,7 +11,7 @@ ResumeGPT is a personal CV and cover-letter optimization application. This repos
 - PostgreSQL adapters with embedded migrations, workspace RLS, audit events, and transactional outbox writes.
 - Development and OIDC authentication modes with workspace RBAC.
 - S3-compatible signed upload and download URLs, with MinIO for local development.
-- PostgreSQL-backed durable jobs and a leased outbox dispatcher.
+- PostgreSQL-backed durable jobs, persisted lifecycle events, a workspace-scoped Task Monitor, and a leased outbox dispatcher.
 - Optional in-memory adapters for zero-dependency local development.
 - OpenTelemetry HTTP tracing and W3C trace-context propagation.
 - Multiple editable profiles with role metadata, Markdown-friendly text, optional avatars, and full CRUD operations.
@@ -67,6 +67,7 @@ This checklist is the project-level source of truth for planned delivery. An ite
 - [x] Add application-level workspace scoping and PostgreSQL Row-Level Security.
 - [x] Implement S3-compatible object storage and signed upload/download URLs.
 - [x] Implement durable PostgreSQL jobs, leases, heartbeats, retries, cancellation, and terminal failure handling.
+- [x] Add a System Task Monitor with server-side filtering, pagination, sanitized inputs, errors, attempts, and persisted lifecycle logs.
 - [x] Write transactional outbox events with Profile and Job mutations.
 - [x] Implement leased outbox publication with stable event IDs and retry backoff.
 - [x] Persist audit events with Profile and Job mutations.

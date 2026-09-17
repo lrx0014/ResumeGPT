@@ -410,6 +410,8 @@ queued -> running -> succeeded
 
 Each job records type, idempotency key, input references, attempt count, maximum retries, deadline, heartbeat, error class, and trace ID. Store large payloads in object storage.
 
+`durable_job_events` records user-readable lifecycle transitions for every durable job. The System Task Monitor provides a workspace-scoped, read-only view across job imports, profile document extraction, template processing, and generation. Its list API owns filtering and pagination, while its detail API returns attempts, actionable errors, sanitized input metadata, and the persisted event log. Secrets are redacted before task payloads leave the service. Operational container logs and transactional outbox delivery remain separate concerns and are not exposed through this UI.
+
 ### 12.2 Consistency
 
 - Write business data and outbox events in one PostgreSQL transaction.

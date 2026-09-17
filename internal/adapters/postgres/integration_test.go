@@ -20,6 +20,7 @@ import (
 	"github.com/lrx0014/ResumeGPT/internal/profile"
 	"github.com/lrx0014/ResumeGPT/internal/settings"
 	"github.com/lrx0014/ResumeGPT/internal/shared/id"
+	"github.com/lrx0014/ResumeGPT/internal/taskmonitor"
 	resumetemplate "github.com/lrx0014/ResumeGPT/internal/template"
 )
 
@@ -217,6 +218,22 @@ func TestRepositoriesPersistEventsAndEnforceWorkspaceScope(t *testing.T) {
 	}
 	if err := queue.Complete(ctx, claimed.ID, "integration-worker"); err != nil {
 		t.Fatal(err)
+	}
+	monitored, err := postgres.NewTaskMonitorRepository(pool).Get(ctx, workspaceID, queued.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if monitored.State != "succeeded" || len(monitored.Events) < 5 || monitored.Events[0].EventType != "completed" {
+		t.Fatalf("unexpected monitored task: state=%s events=%#v", monitored.State, monitored.Events)
+	}
+	monitoredPage, err := postgres.NewTaskMonitorRepository(pool).List(ctx, workspaceID, taskmonitor.Filter{
+		State: "succeeded", Kind: queued.Kind, Search: queued.ID, Page: 1, PageSize: 20,
+	})
+	if err != nil || monitoredPage.Total != 1 || len(monitoredPage.Items) != 1 || monitoredPage.Items[0].ID != queued.ID {
+		t.Fatalf("unexpected monitored task page: %#v, error: %v", monitoredPage, err)
+	}
+	if _, err := postgres.NewTaskMonitorRepository(pool).Get(ctx, otherWorkspaceID, queued.ID); !errors.Is(err, taskmonitor.ErrNotFound) {
+		t.Fatalf("cross-workspace monitored task error = %v, want ErrNotFound", err)
 	}
 
 	failedJob := workqueue.Job{

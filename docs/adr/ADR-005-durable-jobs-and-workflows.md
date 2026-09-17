@@ -22,6 +22,8 @@ For the MVP, persist jobs, step attempts, leases, and a transactional outbox in 
 - Store large payloads in object storage; job/outbox rows contain references, hashes, and versions.
 - Support cancellation, dead-lettering, audited replay, and orphaned-job recovery.
 - Both publisher and consumer maintain deduplication/inbox records.
+- Persist compact lifecycle events whenever a durable job is queued, claimed, retried, completed, failed, or cancelled.
+- Expose workspace-scoped task state, sanitized input metadata, attempts, errors, and lifecycle events through a read-only Task Monitor. Keep application task history separate from raw service logs and outbox-delivery internals.
 
 ### Kafka Is Not the Job Record
 
@@ -55,4 +57,3 @@ The initial dependency and transaction model stays small. The team must correctl
 ## Revisit
 
 Review when any workflow exceeds eight persisted steps, includes cross-day waiting, or recovery defects repeatedly become a major incident source.
-

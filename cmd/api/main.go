@@ -22,6 +22,7 @@ import (
 	"github.com/lrx0014/ResumeGPT/internal/platform/telemetry"
 	"github.com/lrx0014/ResumeGPT/internal/profile"
 	"github.com/lrx0014/ResumeGPT/internal/settings"
+	"github.com/lrx0014/ResumeGPT/internal/taskmonitor"
 	resumetemplate "github.com/lrx0014/ResumeGPT/internal/template"
 	"github.com/lrx0014/ResumeGPT/internal/transport/httpapi"
 )
@@ -55,12 +56,14 @@ func main() {
 	var settingsRepository settings.Repository
 	var templateRepository resumetemplate.Repository
 	var generationRepository generation.Repository
+	var taskMonitorService *taskmonitor.Service
 	switch cfg.PersistenceMode {
 	case "memory":
 		profileRepository = memory.NewProfileRepository()
 		jobRepository = memory.NewJobRepository()
 		settingsRepository = memory.NewSettingsRepository()
 		templateRepository = memory.NewTemplateRepository()
+		taskMonitorService = taskmonitor.NewService(memory.NewTaskMonitorRepository())
 		accessRepository = memory.AccessRepository{
 			Subject: identity.Subject{Issuer: "development", Subject: "developer", Email: "developer@localhost"},
 			Principal: identity.Principal{
@@ -83,6 +86,7 @@ func main() {
 		settingsRepository = postgresadapter.NewSettingsRepository(pool)
 		templateRepository = postgresadapter.NewTemplateRepository(pool)
 		generationRepository = postgresadapter.NewGenerationRepository(pool)
+		taskMonitorService = taskmonitor.NewService(postgresadapter.NewTaskMonitorRepository(pool))
 	default:
 		logger.Error("unsupported persistence mode", "mode", cfg.PersistenceMode)
 		os.Exit(1)
@@ -175,6 +179,7 @@ func main() {
 		Settings:           settingsService,
 		Templates:          templateService,
 		Generations:        generationService,
+		Tasks:              taskMonitorService,
 	})
 
 	server := &http.Server{

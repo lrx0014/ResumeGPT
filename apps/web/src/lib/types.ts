@@ -42,6 +42,43 @@ export interface ListResponse<T> {
   items: T[]
 }
 
+export type BackgroundTaskState = 'queued' | 'running' | 'retry_wait' | 'succeeded' | 'failed' | 'cancelled'
+export interface BackgroundTaskEvent {
+  id: number
+  eventType: 'queued' | 'started' | 'retry_scheduled' | 'completed' | 'failed' | 'cancelled'
+  state: BackgroundTaskState
+  attempt: number
+  errorClass?: string
+  message: string
+  occurredAt: string
+}
+export interface BackgroundTask {
+  id: string
+  workspaceId: string
+  kind: string
+  state: BackgroundTaskState
+  idempotencyKey: string
+  payload: unknown
+  attempt: number
+  maxAttempts: number
+  availableAt: string
+  deadlineAt?: string
+  leaseExpiresAt?: string
+  heartbeatAt?: string
+  errorClass?: string
+  errorMessage?: string
+  createdAt: string
+  updatedAt: string
+  events?: BackgroundTaskEvent[]
+}
+export interface BackgroundTaskPage {
+  items: BackgroundTask[]
+  total: number
+  page: number
+  pageSize: number
+  counts: Record<string, number>
+}
+
 export interface APIError {
   error: {
     code: string

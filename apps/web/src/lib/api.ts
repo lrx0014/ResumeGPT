@@ -1,4 +1,4 @@
-import type { APIError, Job, JobImportInput, JobInput, ListResponse, Profile, DocumentUpload, SignedURL, StagedDocumentUpload, SettingsPreferences, LLMConnection, LLMConnectionInput, LLMConnectionTest, StagedTemplate, Template, TemplateKind, GenerationInput, GenerationRun, GenerationStep } from './types'
+import type { APIError, BackgroundTask, BackgroundTaskPage, Job, JobImportInput, JobInput, ListResponse, Profile, DocumentUpload, SignedURL, StagedDocumentUpload, SettingsPreferences, LLMConnection, LLMConnectionInput, LLMConnectionTest, StagedTemplate, Template, TemplateKind, GenerationInput, GenerationRun, GenerationStep } from './types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
 
@@ -20,6 +20,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   capabilities: () => request<{ features: Record<string, boolean> }>('/v1/system/capabilities'),
+  listTasks: (input: { search?: string; state?: string; kind?: string; page?: number; pageSize?: number }) => {
+    const query = new URLSearchParams()
+    if (input.search) query.set('search', input.search)
+    if (input.state && input.state !== 'all') query.set('state', input.state)
+    if (input.kind && input.kind !== 'all') query.set('kind', input.kind)
+    query.set('page', String(input.page ?? 1))
+    query.set('pageSize', String(input.pageSize ?? 20))
+    return request<BackgroundTaskPage>(`/v1/system/tasks?${query}`)
+  },
+  getTask: (id: string) => request<BackgroundTask>(`/v1/system/tasks/${encodeURIComponent(id)}`),
   getProfile: (id: string) => request<Profile>(`/v1/profiles/${encodeURIComponent(id)}`),
   stageDocument: (id: string, file: File) => request<StagedDocumentUpload>(`/v1/profiles/${encodeURIComponent(id)}/document-uploads`, {
     method: 'POST', body: JSON.stringify({ name: file.name, contentType: file.type || 'application/octet-stream' }),

@@ -15,6 +15,7 @@ const messages = {
       templates: 'Templates',
       generate: 'Create CVs',
       settings: 'Settings',
+      tasks: 'Task Monitor',
     },
   },
   de: {
@@ -31,6 +32,7 @@ const messages = {
       templates: 'Vorlagen',
       generate: 'Lebensläufe erstellen',
       settings: 'Einstellungen',
+      tasks: 'Task-Monitor',
     },
   },
 }

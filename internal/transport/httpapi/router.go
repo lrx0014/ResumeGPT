@@ -16,6 +16,7 @@ import (
 	"github.com/lrx0014/ResumeGPT/internal/profile"
 	"github.com/lrx0014/ResumeGPT/internal/settings"
 	"github.com/lrx0014/ResumeGPT/internal/shared/id"
+	"github.com/lrx0014/ResumeGPT/internal/taskmonitor"
 	resumetemplate "github.com/lrx0014/ResumeGPT/internal/template"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/trace"
@@ -35,6 +36,7 @@ type Dependencies struct {
 	Settings           *settings.Service
 	Templates          *resumetemplate.Service
 	Generations        *generation.Service
+	Tasks              *taskmonitor.Service
 }
 
 type API struct {
@@ -51,6 +53,7 @@ type API struct {
 	settings           *settings.Service
 	templates          *resumetemplate.Service
 	generations        *generation.Service
+	tasks              *taskmonitor.Service
 }
 
 func New(deps Dependencies) http.Handler {
@@ -68,6 +71,7 @@ func New(deps Dependencies) http.Handler {
 		settings:           deps.Settings,
 		templates:          deps.Templates,
 		generations:        deps.Generations,
+		tasks:              deps.Tasks,
 	}
 
 	protected := http.NewServeMux()
@@ -75,6 +79,7 @@ func New(deps Dependencies) http.Handler {
 	api.registerSettings(protected)
 	api.registerTemplates(protected)
 	api.registerGenerations(protected)
+	api.registerTaskMonitor(protected)
 	protected.Handle("GET /v1/system/capabilities", api.requireRole(identity.RoleViewer, api.capabilities))
 	protected.Handle("GET /v1/profiles", api.requireRole(identity.RoleViewer, api.listProfiles))
 	protected.Handle("POST /v1/profiles", api.requireRole(identity.RoleEditor, api.createProfile))
@@ -118,6 +123,7 @@ func (a *API) capabilities(w http.ResponseWriter, _ *http.Request) {
 			"settings":         a.settings != nil,
 			"templates":        a.templates != nil,
 			"templateUploads":  a.templates != nil && a.templates.UploadsEnabled(),
+			"taskMonitor":      a.tasks != nil,
 			"templatePreviews": a.templates != nil && a.templates.PreviewsEnabled(),
 		},
 	})

@@ -60,6 +60,9 @@ onMounted(async () => {
         <nav class="nav utility-nav" :aria-label="t('navGroups.system')">
           <section class="nav-group">
             <p class="nav-group-label">{{ t('navGroups.system') }}</p>
+            <RouterLink to="/system/tasks" active-class="active">
+              <span class="nav-icon">◴</span>{{ t('nav.tasks') }}
+            </RouterLink>
             <RouterLink to="/settings" active-class="active">
               <span class="nav-icon">⚙</span>{{ t('nav.settings') }}
             </RouterLink>

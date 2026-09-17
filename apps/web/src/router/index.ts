@@ -10,6 +10,7 @@ import ProfileView from '../views/ProfileView.vue'
 import SettingsView from '../views/SettingsView.vue'
 import TemplatesView from '../views/TemplatesView.vue'
 import TemplateView from '../views/TemplateView.vue'
+import TaskMonitorView from '../views/TaskMonitorView.vue'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -24,5 +25,6 @@ export const router = createRouter({
     { path: '/generate', name: 'generate', component: GenerateView },
     { path: '/generate/:generationId', name: 'generation', component: GenerationView },
     { path: '/settings', name: 'settings', component: SettingsView },
+    { path: '/system/tasks', name: 'task-monitor', component: TaskMonitorView },
   ],
 })
