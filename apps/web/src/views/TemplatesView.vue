@@ -36,7 +36,7 @@ const visibleItems = computed(() => filteredItems.value.slice((page.value - 1) *
 watch([search, kindFilter, pageSize], () => { page.value = 1 })
 watch(() => filteredItems.value.length, total => { page.value = Math.min(page.value, Math.max(1, Math.ceil(total / pageSize.value))) })
 
-function kindLabel(kind: TemplateKind) { return kind === 'resume' ? 'Resume' : 'Cover letter' }
+function kindLabel(kind: TemplateKind) { return kind === 'resume' ? 'Résumé' : 'Cover letter' }
 function formatLabel(item: Template) { return item.sourceName.toLowerCase().endsWith('.zip') ? 'LATEX ZIP' : item.format === 'latex' ? 'TEX' : item.format.toUpperCase() }
 function isZipFile() { return file.value?.name.toLowerCase().endsWith('.zip') ?? false }
 
@@ -98,8 +98,8 @@ onBeforeUnmount(() => window.clearTimeout(pollTimer))
     </PageHeader>
     <p v-if="error" class="notice error" role="alert">{{ error }}</p>
     <form v-if="showUpload" class="panel form-grid upload-panel" @submit.prevent="upload">
-      <label><span>Template name</span><input v-model="form.name" required maxlength="120" placeholder="Engineering resume" /></label>
-      <label><span>Document type</span><select v-model="form.kind"><option value="resume">Resume</option><option value="cover_letter">Cover letter</option></select></label>
+      <label><span>Template name</span><input v-model="form.name" required maxlength="120" placeholder="Engineering résumé" /></label>
+      <label><span>Document type</span><select v-model="form.kind"><option value="resume">Résumé</option><option value="cover_letter">Cover letter</option></select></label>
       <label class="full"><span>Description</span><textarea v-model="form.description" maxlength="1000" rows="3" placeholder="Optional note about layout or intended use" /></label>
       <label class="full"><span>Template file</span><input required type="file" accept=".tex,.zip,.doc,.docx,application/x-tex,application/zip,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" @change="chooseFile" /><small>Single TeX file, multi-file LaTeX ZIP, DOC, or DOCX · maximum 5 MiB</small></label>
       <label v-if="isZipFile()" class="full"><span>LaTeX entry file <small>Optional</small></span><input v-model="form.entryFile" maxlength="300" placeholder="main.tex" /><small>Leave empty to detect main.tex automatically. Use a relative path such as src/resume.tex when needed.</small></label>
@@ -108,7 +108,7 @@ onBeforeUnmount(() => window.clearTimeout(pollTimer))
     <div v-if="loading" class="empty-state">Loading templates…</div>
     <template v-else-if="items.length">
     <ListFilters v-model:search="search" :total="filteredItems.length" search-placeholder="Search templates, files, or authors…">
-      <label>Type <select v-model="kindFilter"><option value="all">All types</option><option value="resume">Resume</option><option value="cover_letter">Cover letter</option></select></label>
+      <label>Type <select v-model="kindFilter"><option value="all">All types</option><option value="resume">Résumé</option><option value="cover_letter">Cover letter</option></select></label>
     </ListFilters>
     <TransitionGroup v-if="visibleItems.length" name="card-list" tag="div" class="card-grid">
       <article v-for="item in visibleItems" :key="item.id" class="entity-card template-card">

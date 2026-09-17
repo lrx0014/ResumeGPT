@@ -227,7 +227,7 @@ func defaultResume(workspaceID string, includeContent bool) Template {
 		content = string(defaultResumeSource)
 	}
 	return Template{ID: DefaultResumeID, WorkspaceID: workspaceID, Name: "Rezume", Kind: "resume", Format: "latex",
-		Description: "A clean single-page LaTeX resume template for developers.", SourceName: "rezume.tex",
+		Description: "A clean single-page LaTeX résumé template for developers.", SourceName: "rezume.tex",
 		DeclaredMediaType: "application/x-tex", Content: content, State: "ready", BuiltIn: true,
 		AuthorName: "Nanu Panchamurthy", SourceURL: "https://www.overleaf.com/latex/templates/rezume/kfrvqywfkwjs", License: "MIT"}
 }

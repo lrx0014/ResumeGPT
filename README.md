@@ -1,5 +1,9 @@
 # ResumeGPT
 
+<p align="center">
+  <img src="./docs/assets/resumegpt-logo.png" alt="ResumeGPT Ré logo" width="128" height="128">
+</p>
+
 ResumeGPT is a self-hosted workspace for tailoring CVs and cover letters to specific job opportunities. It combines profile management, job tracking, scheduled job discovery, reusable templates, configurable LLM agents, PDF generation, visual review, and background-task monitoring in one application.
 
 ## TL;DR

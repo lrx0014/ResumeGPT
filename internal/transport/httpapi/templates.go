@@ -112,7 +112,7 @@ func (a *API) updateTemplate(w http.ResponseWriter, r *http.Request) {
 	item, err := a.templates.Update(r.Context(), workspaceID(r), r.PathValue("templateID"), input)
 	switch {
 	case errors.Is(err, resumetemplate.ErrInvalid):
-		writeError(w, 422, "invalid_template", "Provide a name, resume or cover-letter type, and a valid description.")
+		writeError(w, 422, "invalid_template", "Provide a name, résumé or cover-letter type, and a valid description.")
 	case errors.Is(err, resumetemplate.ErrBuiltIn):
 		writeError(w, 409, "built_in_template", "Built-in templates cannot be edited.")
 	case errors.Is(err, resumetemplate.ErrNotFound):

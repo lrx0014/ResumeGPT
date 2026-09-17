@@ -23,7 +23,7 @@ onMounted(async () => {
   <div class="app-shell">
     <aside class="sidebar">
       <RouterLink class="brand" to="/">
-        <span class="brand-mark">R</span>
+        <span class="brand-mark">Ré</span>
         <span>ResumeGPT</span>
       </RouterLink>
 
