@@ -65,15 +65,15 @@ Then open [http://localhost:5173](http://localhost:5173). The Compose stack supp
 - Preserve a valid PDF with a visible warning when the selected model cannot perform visual inspection.
 - Fall back to a safe basic layout if an AI-generated document cannot be rendered reliably.
 - Follow generation progress, inspect drafts, intermediate PDFs, review feedback, warnings, and user prompts in a timeline.
-- Edit a completed or failed application's inputs and regenerate it without discarding earlier timeline records.
+- Edit a completed or failed generation's inputs and regenerate it without discarding earlier timeline records.
 - Send a follow-up instruction to revise a completed artifact.
 
-### LLM Connections and Settings
+### LLM Providers and Settings
 
-- Configure OpenAI, OpenAI-compatible, and local Ollama connections.
+- Configure OpenAI, OpenAI-compatible, and local Ollama providers.
 - Store API tokens encrypted at rest and never return plaintext tokens to the browser.
 - Discover available models automatically from `/models` or Ollama's `/api/tags` endpoint.
-- Assign default connections and models independently to the Writer, Template Applying, Document Designer, Visual Reviewer, Job Import, and Job Hunter Agents.
+- Assign default providers and models independently to the Writer, Template Applying, Document Designer, Visual Reviewer, Job Import, and Job Hunter Agents.
 - Override the default routing with a single model for an individual generation.
 - Configure the interface language and System, Light, or Dark theme.
 

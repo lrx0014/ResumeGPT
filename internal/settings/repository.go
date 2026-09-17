@@ -8,7 +8,7 @@ import (
 var (
 	ErrNotFound         = errors.New("settings resource not found")
 	ErrInvalid          = errors.New("invalid settings")
-	ErrConnectionFailed = errors.New("LLM connection failed")
+	ErrConnectionFailed = errors.New("LLM provider failed")
 )
 
 type Repository interface {

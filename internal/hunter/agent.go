@@ -38,7 +38,7 @@ func NewJobHunterAgent(connections RuntimeResolver, gateway Gateway, search WebS
 func (a *JobHunterAgent) Hunt(ctx context.Context, value Hunter) ([]string, error) {
 	runtime, err := a.connections.RuntimeConnection(ctx, value.WorkspaceID, value.ConnectionID)
 	if err != nil {
-		return nil, errors.New("the selected LLM connection is unavailable")
+		return nil, errors.New("the selected LLM provider is unavailable")
 	}
 	searchTool := &webSearchTool{search: a.search}
 	finish := &finishHuntTool{limit: value.MaxResults}

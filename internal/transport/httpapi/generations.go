@@ -112,7 +112,7 @@ func (a *API) createGeneration(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, generation.ErrInvalid):
 		writeError(w, 422, "invalid_generation", "Choose valid inputs and models for this generation.")
 	case errors.Is(err, generation.ErrState):
-		writeError(w, 409, "generation_input_not_ready", "Choose a saved profile, an Opportunity with a description, a ready matching LaTeX template, and available LLM connections.")
+		writeError(w, 409, "generation_input_not_ready", "Choose a saved profile, an Opportunity with a description, a ready matching LaTeX template, and available LLM providers.")
 	case err != nil:
 		a.logger.Error("create generation", "error", err)
 		writeError(w, 500, "generation_create_failed", "Could not queue the generation.")

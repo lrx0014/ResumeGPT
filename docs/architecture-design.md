@@ -87,7 +87,7 @@ The service blocks private and non-global network destinations, non-HTTPS URLs, 
 
 ### 2.6 PostgreSQL and object storage
 
-PostgreSQL stores domain records, encrypted LLM connection metadata, durable jobs, task events, audit records, outbox records, and generation timelines. Row-level security and application-level workspace filters isolate workspace data.
+PostgreSQL stores domain records, encrypted LLM provider metadata, durable jobs, task events, audit records, outbox records, and generation timelines. Row-level security and application-level workspace filters isolate workspace data.
 
 S3-compatible object storage contains uploaded documents, profile avatars, template sources, cached previews, intermediate generation PDFs, and final artifacts. MinIO supplies this interface in the local Compose stack.
 
@@ -103,7 +103,7 @@ internal/hunter/             Scheduled job discovery
 internal/template/           Template library and preparation
 internal/generation/         Agent workflow and artifact generation
 internal/document/           Upload and document-worker integration
-internal/settings/           Preferences and LLM connections
+internal/settings/           Preferences and LLM providers
 internal/taskmonitor/        Read model for durable tasks
 internal/identity/           Development and OIDC authentication
 internal/adapters/postgres/  PostgreSQL repositories and work queue
@@ -142,7 +142,7 @@ Development authentication maps requests to the seeded `ws_personal_dev` workspa
 
 ### 4.2 LLM credentials
 
-LLM connection records contain provider type, local or cloud execution mode, Base URL, and encrypted API-token ciphertext. AES-GCM encryption uses `SETTINGS_ENCRYPTION_KEY`. API responses expose only whether a token exists; plaintext tokens are decrypted only when a backend Agent needs the connection.
+LLM provider records contain provider type, local or cloud execution mode, Base URL, and encrypted API-token ciphertext. AES-GCM encryption uses `SETTINGS_ENCRYPTION_KEY`. API responses expose only whether a token exists; plaintext tokens are decrypted only when a backend Agent needs the provider.
 
 ## 5. Durable Background Work
 
@@ -184,7 +184,7 @@ URLs are normalized for deduplication. Imported records remain editable, and the
 
 ### 6.3 Scheduled Job Hunter
 
-The scheduler periodically finds enabled Hunters whose next run is due and queues `job.hunt.v1` work when no run is already active. A Hunter contains search criteria, cadence, result limit, selected LLM connection and model, and an optional profile reference.
+The scheduler periodically finds enabled Hunters whose next run is due and queues `job.hunt.v1` work when no run is already active. A Hunter contains search criteria, cadence, result limit, selected LLM provider and model, and an optional profile reference.
 
 The Job Hunter Agent uses a bounded DuckDuckGo search tool and returns candidate job URLs. New normalized URLs are passed into the ordinary job-import workflow. Successfully parsed results appear as Hunter-originated opportunities. Blocked or unparseable pages are stored as review items instead of incomplete opportunities, allowing the user to inspect, manually add, or dismiss them.
 

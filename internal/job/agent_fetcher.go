@@ -39,7 +39,7 @@ func NewJobImportAgent(connections RuntimeResolver, gateway AgentGateway, browse
 func (a *JobImportAgent) Fetch(ctx context.Context, workspaceID string, payload ImportPayload) (ParsedJob, error) {
 	runtime, err := a.connections.RuntimeConnection(ctx, workspaceID, payload.ConnectionID)
 	if err != nil {
-		return ParsedJob{}, &FetchError{Code: "llm_connection_unavailable", Message: "The selected LLM connection is unavailable. Choose another connection or edit the job manually."}
+		return ParsedJob{}, &FetchError{Code: "llm_connection_unavailable", Message: "The selected LLM provider is unavailable. Choose another provider or edit the job manually."}
 	}
 	snapshot, err := a.browser.Render(ctx, payload.SourceURL, nil)
 	if err != nil {

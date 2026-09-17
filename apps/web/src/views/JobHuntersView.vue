@@ -68,7 +68,7 @@ async function discoverModels(resetModel = false) {
     models[form.connectionId] = (await api.testLLMConnection(form.connectionId)).models
     if (!form.model) form.model = models[form.connectionId][0] ?? ''
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not load models for this connection.'
+    error.value = cause instanceof Error ? cause.message : 'Could not load models for this provider.'
   } finally {
     loadingModels.value = false
   }
@@ -197,10 +197,10 @@ onBeforeUnmount(() => { if (pollTimer) window.clearInterval(pollTimer) })
       <label><span>Profile reference <small>Optional</small></span><select v-model="form.profileId"><option value="">No profile reference</option><option v-for="item in profiles" :key="item.id" :value="item.id">{{ item.name }}{{ item.targetRole ? ` · ${item.targetRole}` : '' }}</option></select></label>
       <label><span>Jobs per run</span><input v-model.number="form.maxResults" type="number" min="1" max="10" required /><small class="field-hint">Up to 10 new opportunities per scheduled run.</small></label>
       <label><span>Schedule</span><select v-model.number="form.intervalMinutes"><option :value="360">Every 6 hours</option><option :value="720">Every 12 hours</option><option :value="1440">Daily</option><option :value="10080">Weekly</option></select></label>
-      <label><span>LLM connection</span><select v-model="form.connectionId" required @change="discoverModels(true)"><option value="" disabled>Select connection</option><option v-for="item in connections" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
+      <label><span>LLM provider</span><select v-model="form.connectionId" required @change="discoverModels(true)"><option value="" disabled>Select provider</option><option v-for="item in connections" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
       <label><span>Model</span><select v-if="models[form.connectionId]?.length" v-model="form.model" required><option value="" disabled>Select model</option><option v-if="form.model && !models[form.connectionId].includes(form.model)" :value="form.model">{{ form.model }}</option><option v-for="model in models[form.connectionId]" :key="model" :value="model">{{ model }}</option></select><input v-else v-model="form.model" required :disabled="loadingModels" :placeholder="loadingModels ? 'Loading models…' : 'Enter model name'" /></label>
       <label class="enabled-field"><input v-model="form.enabled" type="checkbox" /><span>Enable automatic runs</span></label>
-      <p v-if="!connections.length" class="full notice">Add an <RouterLink to="/settings">LLM connection in Settings</RouterLink> before creating a Job Hunter.</p>
+      <p v-if="!connections.length" class="full notice">Add an <RouterLink to="/settings">LLM provider in Settings</RouterLink> before creating a Job Hunter.</p>
       <div class="full form-actions"><button class="button primary" :disabled="busy || !connections.length || !form.model">{{ busy ? 'Saving…' : editingId ? 'Save changes' : 'Create and schedule' }}</button></div>
     </form>
 

@@ -138,7 +138,7 @@ func (r *SettingsRepository) CreateConnection(ctx context.Context, value setting
 			if isSettingsConstraintError(err) {
 				return settings.ErrInvalid
 			}
-			return fmt.Errorf("create LLM connection: %w", err)
+			return fmt.Errorf("create LLM provider: %w", err)
 		}
 		if err := appendEvent(ctx, tx, value.Connection.WorkspaceID, "llm.connection.created.v1", "llm_connection", value.Connection.ID,
 			map[string]string{"connectionId": value.Connection.ID}); err != nil {

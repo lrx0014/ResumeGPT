@@ -48,7 +48,7 @@ const stageLabel = (stage: (typeof stages)[number]) => stage.key === 'rendering'
 </script>
 
 <template>
-  <section class="workflow-panel" aria-label="Application generation progress">
+  <section class="workflow-panel" aria-label="Generation progress">
     <div class="workflow-heading"><div><p class="eyebrow">Workflow</p><h2>Generation progress</h2></div><span>{{ run.state === 'ready' ? 'Complete' : run.state === 'failed' ? 'Action required' : 'Processing' }}</span></div>
     <div class="workflow-track">
       <template v-for="(stage, index) in stages" :key="stage.key">
@@ -59,7 +59,7 @@ const stageLabel = (stage: (typeof stages)[number]) => stage.key === 'rendering'
           <small>{{ statusLabel(status(index)) }}</small>
           <div v-if="status(index) === 'failed'" class="failure-tooltip" role="tooltip">
             <strong>What went wrong</strong>
-            <p>{{ run.errorMessage || 'This stage stopped unexpectedly. Check the selected inputs and model connection, then retry or edit and regenerate.' }}</p>
+            <p>{{ run.errorMessage || 'This stage stopped unexpectedly. Check the selected inputs and model provider, then retry or edit and regenerate.' }}</p>
             <small v-if="run.errorCode">{{ run.errorCode.replaceAll('_', ' ') }}</small>
           </div>
         </div>

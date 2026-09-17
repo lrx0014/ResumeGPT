@@ -105,7 +105,7 @@ func (p *Processor) handle(ctx context.Context, task workqueue.Job) {
 		draft, err = agentTeam.Write(ctx, task.WorkspaceID, run, profileValue, opportunity)
 		if err != nil {
 			if errors.Is(err, ErrAgentConnection) {
-				p.fail(ctx, task, "writer_unavailable", "The selected writer connection is unavailable.", false)
+				p.fail(ctx, task, "writer_unavailable", "The selected writer provider is unavailable.", false)
 				return
 			}
 			p.fail(ctx, task, "writing_failed", err.Error(), true)
@@ -130,7 +130,7 @@ func (p *Processor) handle(ctx context.Context, task workqueue.Job) {
 	}
 	if err != nil {
 		if errors.Is(err, ErrAgentConnection) {
-			p.fail(ctx, task, "renderer_unavailable", "The selected renderer connection is unavailable.", false)
+			p.fail(ctx, task, "renderer_unavailable", "The selected renderer provider is unavailable.", false)
 			return
 		}
 		code := "rendering_failed"
@@ -198,7 +198,7 @@ func (p *Processor) handle(ctx context.Context, task workqueue.Job) {
 		pages, approved, feedback, response, reviewErr := agentTeam.Review(ctx, task.WorkspaceID, run, pdf)
 		if reviewErr != nil && !errors.Is(reviewErr, ErrVisionUnsupported) {
 			if errors.Is(reviewErr, ErrAgentConnection) {
-				p.fail(ctx, task, "reviewer_unavailable", "The selected reviewer connection is unavailable.", false)
+				p.fail(ctx, task, "reviewer_unavailable", "The selected reviewer provider is unavailable.", false)
 				return
 			}
 			p.fail(ctx, task, "visual_review_failed", reviewErr.Error(), true)

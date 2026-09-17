@@ -78,7 +78,7 @@ func (a *API) createHunter(w http.ResponseWriter, r *http.Request) {
 	}
 	item, err := a.hunters.Create(r.Context(), workspaceID(r), input)
 	if errors.Is(err, hunter.ErrInvalid) {
-		writeError(w, http.StatusUnprocessableEntity, "invalid_hunter", "Provide valid search criteria, Profile, result limit, schedule, LLM connection, and model.")
+		writeError(w, http.StatusUnprocessableEntity, "invalid_hunter", "Provide valid search criteria, Profile, result limit, schedule, LLM provider, and model.")
 		return
 	}
 	if err != nil {
@@ -97,7 +97,7 @@ func (a *API) updateHunter(w http.ResponseWriter, r *http.Request) {
 	item, err := a.hunters.Update(r.Context(), workspaceID(r), r.PathValue("hunterID"), input)
 	switch {
 	case errors.Is(err, hunter.ErrInvalid):
-		writeError(w, http.StatusUnprocessableEntity, "invalid_hunter", "Provide valid search criteria, Profile, result limit, schedule, LLM connection, and model.")
+		writeError(w, http.StatusUnprocessableEntity, "invalid_hunter", "Provide valid search criteria, Profile, result limit, schedule, LLM provider, and model.")
 	case errors.Is(err, hunter.ErrNotFound):
 		writeError(w, http.StatusNotFound, "hunter_not_found", "The requested Job Hunter does not exist.")
 	case err != nil:

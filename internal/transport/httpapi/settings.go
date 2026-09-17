@@ -40,7 +40,7 @@ func (a *API) updateAgentDefaults(w http.ResponseWriter, r *http.Request) {
 	}
 	items, err := a.settings.SaveAgentDefaults(r.Context(), workspaceID(r), input)
 	if errors.Is(err, settings.ErrInvalid) {
-		writeError(w, http.StatusUnprocessableEntity, "invalid_agent_defaults", "Choose a valid LLM connection and model for each configured Agent.")
+		writeError(w, http.StatusUnprocessableEntity, "invalid_agent_defaults", "Choose a valid LLM provider and model for each configured Agent.")
 		return
 	}
 	if err != nil {
@@ -80,7 +80,7 @@ func (a *API) updateSettings(w http.ResponseWriter, r *http.Request) {
 func (a *API) listLLMConnections(w http.ResponseWriter, r *http.Request) {
 	items, err := a.settings.ListConnections(r.Context(), workspaceID(r))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "llm_connections_read_failed", "Could not load LLM connections.")
+		writeError(w, http.StatusInternalServerError, "llm_connections_read_failed", "Could not load LLM providers.")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
@@ -124,11 +124,11 @@ func (a *API) testLLMConnection(w http.ResponseWriter, r *http.Request) {
 	result, err := a.settings.TestConnection(r.Context(), workspaceID(r), r.PathValue("connectionID"))
 	switch {
 	case errors.Is(err, settings.ErrNotFound):
-		writeError(w, http.StatusNotFound, "llm_connection_not_found", "The requested LLM connection does not exist.")
+		writeError(w, http.StatusNotFound, "llm_connection_not_found", "The requested LLM provider does not exist.")
 	case errors.Is(err, settings.ErrConnectionFailed):
 		writeError(w, http.StatusBadGateway, "llm_connection_test_failed", err.Error())
 	case err != nil:
-		writeError(w, http.StatusInternalServerError, "llm_connection_test_failed", "Could not test the LLM connection.")
+		writeError(w, http.StatusInternalServerError, "llm_connection_test_failed", "Could not test the LLM provider.")
 	default:
 		writeJSON(w, http.StatusOK, result)
 	}
@@ -139,9 +139,9 @@ func handleSettingsMutationError(w http.ResponseWriter, err error, operation str
 	case errors.Is(err, settings.ErrInvalid):
 		writeError(w, http.StatusUnprocessableEntity, "invalid_llm_connection", "Provide a valid name, mode, provider, and Base URL.")
 	case errors.Is(err, settings.ErrNotFound):
-		writeError(w, http.StatusNotFound, "llm_connection_not_found", "The requested LLM connection does not exist.")
+		writeError(w, http.StatusNotFound, "llm_connection_not_found", "The requested LLM provider does not exist.")
 	case err != nil:
-		writeError(w, http.StatusInternalServerError, "llm_connection_"+operation+"_failed", "Could not "+operation+" the LLM connection.")
+		writeError(w, http.StatusInternalServerError, "llm_connection_"+operation+"_failed", "Could not "+operation+" the LLM provider.")
 	default:
 		return false
 	}

@@ -22,6 +22,7 @@ const busy = ref(false)
 const deletingId = ref('')
 const updatingStatusId = ref('')
 const pendingDelete = ref<Job | null>(null)
+const previewJob = ref<Job | null>(null)
 const error = ref('')
 const batchText = ref('')
 const showBatch = ref(false)
@@ -68,6 +69,18 @@ watch(() => jobs.value.map(item => item.id).join(','), () => selection.retain(jo
 
 function canGenerate(item: Job) {
   return Boolean(item.description?.trim()) && ['manual', 'ready'].includes(item.importState)
+}
+
+function jobLocation(item: Job) {
+  return item.location || [item.city, item.country].filter(Boolean).join(', ') || 'Not specified'
+}
+
+function openJobPreview(item: Job) {
+  previewJob.value = item
+}
+
+function handleKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && previewJob.value) previewJob.value = null
 }
 
 function openGeneration(items: Job[], documentType: TemplateKind) {
@@ -168,7 +181,7 @@ async function openBatchImport() {
     }
     if (aiAssisted.value && importConnectionId.value) await discoverImportModels()
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not load LLM connections.'
+    error.value = cause instanceof Error ? cause.message : 'Could not load LLM providers.'
   }
 }
 
@@ -255,6 +268,7 @@ async function updateStatus(item: Job, event: Event) {
 }
 
 onMounted(async () => {
+  window.addEventListener('keydown', handleKeydown)
   const manualURL = typeof route.query.manualUrl === 'string' ? route.query.manualUrl : ''
   if (manualURL) {
     manual.sourceUrl = manualURL
@@ -266,7 +280,10 @@ onMounted(async () => {
   importsAvailable.value = capabilities?.features.jobImports ?? true
   pollTimer = window.setInterval(() => { if (pending.value) void load(false) }, 2000)
 })
-onBeforeUnmount(() => { if (pollTimer) window.clearInterval(pollTimer) })
+onBeforeUnmount(() => {
+  if (pollTimer) window.clearInterval(pollTimer)
+  window.removeEventListener('keydown', handleKeydown)
+})
 </script>
 
 <template>
@@ -281,12 +298,12 @@ onBeforeUnmount(() => { if (pollTimer) window.clearInterval(pollTimer) })
     <form v-if="showBatch" class="panel form-grid" @submit.prevent="importBatch">
       <div class="full ai-import-toggle">
         <label class="switch-row"><input v-model="aiAssisted" type="checkbox" /><span class="switch-track" aria-hidden="true"><span /></span><span>Enable AI assistance</span></label>
-        <span class="help-tooltip" tabindex="0" aria-label="About AI-assisted import">?<span role="tooltip">Uses an AI agent to open public job pages, reveal expandable content, and extract job details. It may take longer and use your selected LLM connection. Sign-in pages, CAPTCHAs, and restricted content cannot be bypassed.</span></span>
+        <span class="help-tooltip" tabindex="0" aria-label="About AI-assisted import">?<span role="tooltip">Uses an AI agent to open public job pages, reveal expandable content, and extract job details. It may take longer and use your selected LLM provider. Sign-in pages, CAPTCHAs, and restricted content cannot be bypassed.</span></span>
       </div>
       <p class="full import-mode-help">{{ aiAssisted ? 'The Job Import Agent will analyze each publicly accessible HTTPS page from the beginning.' : 'Fast import for public LinkedIn and Indeed job pages.' }}</p>
       <template v-if="aiAssisted">
-        <p v-if="!connections.length" class="full notice setup-notice">Add an <RouterLink to="/settings">LLM connection in Settings</RouterLink> before using AI-assisted import.</p>
-        <label><span>LLM connection</span><select v-model="importConnectionId" required><option value="" disabled>Select connection</option><option v-for="item in connections" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
+        <p v-if="!connections.length" class="full notice setup-notice">Add an <RouterLink to="/settings">LLM provider in Settings</RouterLink> before using AI-assisted import.</p>
+        <label><span>LLM provider</span><select v-model="importConnectionId" required><option value="" disabled>Select provider</option><option v-for="item in connections" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
         <label><span>Model</span><select v-if="importModels[importConnectionId]?.length" v-model="importModel" required><option value="" disabled>Select model</option><option v-for="model in importModels[importConnectionId]" :key="model" :value="model">{{ model }}</option></select><input v-else v-model="importModel" required :disabled="loadingImportModels" :placeholder="loadingImportModels ? 'Loading models…' : 'Enter model name'" /></label>
       </template>
       <label class="full"><span>Job opportunity URLs</span><textarea v-model="batchText" required rows="8" :placeholder="aiAssisted ? 'Paste up to 50 public HTTPS job page URLs, one per line. A single URL works too.' : 'Paste up to 50 LinkedIn or Indeed URLs, one per line. A single URL works too.'" /></label>
@@ -319,8 +336,8 @@ onBeforeUnmount(() => { if (pollTimer) window.clearInterval(pollTimer) })
     <TransitionGroup v-if="visibleJobs.length" name="card-list" tag="div" class="list-panel">
       <article v-for="item in visibleJobs" :key="item.id" class="job-row" :class="{ selected: selection.isSelected(item.id) }">
         <input class="row-selector" type="checkbox" :checked="selection.isSelected(item.id)" :disabled="!canGenerate(item)" :aria-label="`Select ${item.title || 'job opportunity'}`" :title="canGenerate(item) ? 'Select for a batch action' : 'Add a job description before creating documents'" @change="selection.toggle(item.id)" />
-        <span class="company-mark">{{ (item.company || '?').slice(0, 2).toUpperCase() }}</span>
-        <div class="job-main">
+        <button class="company-mark company-preview-button" type="button" :aria-label="`Preview ${item.title || 'job opportunity'}`" @click="openJobPreview(item)">{{ (item.company || '?').slice(0, 2).toUpperCase() }}</button>
+        <div class="job-main job-preview-trigger" role="button" tabindex="0" :aria-label="`Preview ${item.title || 'job opportunity'}`" @click="openJobPreview(item)" @keydown.enter="openJobPreview(item)" @keydown.space.prevent="openJobPreview(item)">
           <h2>{{ item.title || 'Importing job details…' }}</h2>
           <p>{{ item.company || 'Company pending' }}<span v-if="item.location"> · {{ item.location }}</span><span v-else-if="item.city || item.country"> · {{ [item.city, item.country].filter(Boolean).join(', ') }}</span></p>
           <small v-if="importLabel(item)" :class="{ 'import-warning': item.importState === 'needs_user_action' || item.importState === 'failed' }">{{ importLabel(item) }}</small>
@@ -328,7 +345,7 @@ onBeforeUnmount(() => { if (pollTimer) window.clearInterval(pollTimer) })
           <AttentionNotice v-if="item.importState === 'needs_user_action' || item.importState === 'failed'" compact :message="item.importError || 'ResumeGPT could not extract complete job details from this page. Open the job opportunity to enter or correct the missing information.'" />
         </div>
         <label class="status-control" :class="item.status" :aria-label="`Change status for ${item.title}`"><select :value="item.status" :disabled="updatingStatusId === item.id" @change="updateStatus(item, $event)"><option v-for="status in jobStatuses" :key="status.value" :value="status.value">{{ status.label }}</option></select><span aria-hidden="true">⌄</span></label>
-        <div class="row-actions"><button class="text-button" type="button" :disabled="!canGenerate(item)" @click="openGeneration([item], 'resume')">Create CV</button><button class="text-button" type="button" :disabled="!canGenerate(item)" @click="openGeneration([item], 'cover_letter')">Create cover letter</button><RouterLink class="text-button" :to="`/jobs/${item.id}`">View</RouterLink><a v-if="item.sourceUrl" class="source-link" :href="item.sourceUrl" target="_blank" rel="noopener noreferrer">Source ↗</a><button class="text-button danger-text" type="button" @click="pendingDelete = item">Delete</button></div>
+        <div class="row-actions"><button class="text-button" type="button" :disabled="!canGenerate(item)" @click="openGeneration([item], 'resume')">Create CV</button><button class="text-button" type="button" :disabled="!canGenerate(item)" @click="openGeneration([item], 'cover_letter')">Create cover letter</button><RouterLink class="text-button" :to="`/jobs/${item.id}`">Edit</RouterLink><a v-if="item.sourceUrl" class="source-link" :href="item.sourceUrl" target="_blank" rel="noopener noreferrer">Source ↗</a><button class="text-button danger-text" type="button" @click="pendingDelete = item">Delete</button></div>
       </article>
     </TransitionGroup>
     <div v-else class="empty-state compact"><h2>No matching job opportunities</h2><p>Try another keyword or status.</p></div>
@@ -339,6 +356,38 @@ onBeforeUnmount(() => { if (pollTimer) window.clearInterval(pollTimer) })
     </div>
     <ConfirmDialog :open="Boolean(pendingDelete)" title="Delete job opportunity?" :message="`${[pendingDelete?.title, pendingDelete?.company].filter(Boolean).join(' at ') || 'This job opportunity'} will be removed from your tracked roles. This action cannot be undone.`" :busy="deletingId === pendingDelete?.id" @cancel="pendingDelete = null" @confirm="removeJob" />
     <DocumentGenerationDialog :open="showGeneration" :opportunities="generationTargets" :initial-document-type="generationDocumentType" @close="showGeneration = false" @queued="handleGenerationQueued" />
+    <Teleport to="body">
+      <Transition name="job-preview">
+        <div v-if="previewJob" class="modal-backdrop job-preview-backdrop" @click.self="previewJob = null">
+          <section class="panel job-preview-modal" role="dialog" aria-modal="true" aria-labelledby="job-preview-title">
+            <header class="modal-header job-preview-header">
+              <div><p class="eyebrow">Job opportunity</p><h2 id="job-preview-title">{{ previewJob.title || 'Job details pending' }}</h2><p>{{ previewJob.company || 'Company pending' }}</p></div>
+              <button class="modal-close" type="button" aria-label="Close job preview" @click="previewJob = null">×</button>
+            </header>
+
+            <div class="job-preview-meta">
+              <div><span>Location</span><strong>{{ jobLocation(previewJob) }}</strong></div>
+              <div><span>Work mode</span><strong>{{ previewJob.workMode || 'Not specified' }}</strong></div>
+              <div><span>Employment type</span><strong>{{ previewJob.employmentType || 'Not specified' }}</strong></div>
+              <div><span>Tracking status</span><strong>{{ jobStatusLabel(previewJob.status) }}</strong></div>
+            </div>
+
+            <AttentionNotice v-if="previewJob.importState === 'needs_user_action' || previewJob.importState === 'failed'" :message="previewJob.importError || 'ResumeGPT could not extract complete job details from this page.'" />
+
+            <section class="job-preview-description">
+              <div><p class="eyebrow">Role details</p><h3>Job description</h3></div>
+              <p>{{ previewJob.description || 'No job description is available yet.' }}</p>
+            </section>
+
+            <footer class="modal-actions job-preview-actions">
+              <button class="button" type="button" @click="previewJob = null">Close</button>
+              <a v-if="previewJob.sourceUrl" class="button" :href="previewJob.sourceUrl" target="_blank" rel="noopener noreferrer">Open source ↗</a>
+              <RouterLink class="button primary" :to="`/jobs/${previewJob.id}`" @click="previewJob = null">Edit job</RouterLink>
+            </footer>
+          </section>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -346,13 +395,20 @@ onBeforeUnmount(() => { if (pollTimer) window.clearInterval(pollTimer) })
 .jobs-page { display: grid; gap: 1.25rem; }
 .jobs-page :deep(.page-header) { margin-bottom: .5rem; }
 .header-actions, .row-actions { display: flex; align-items: center; gap: .6rem; }
-.job-row { grid-template-columns: auto auto minmax(0, 1fr) auto minmax(250px, auto); transition: background .18s ease, box-shadow .18s ease; }
+.job-row { grid-template-columns: auto auto minmax(0, 1fr) 112px 390px; transition: background .18s ease, box-shadow .18s ease; }
 .job-row.selected { background: color-mix(in srgb, var(--accent-pale) 55%, white); box-shadow: inset 3px 0 var(--accent); }
 .row-selector { width: 17px; height: 17px; accent-color: var(--accent); cursor: pointer; }
 .row-selector:disabled { cursor: not-allowed; opacity: .35; }
+.company-preview-button { border: 0; cursor: pointer; font: inherit; }
+.company-preview-button:hover { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
+.company-preview-button:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 24%, transparent); outline-offset: 2px; }
+.job-preview-trigger { min-width: 0; margin: -8px; padding: 8px; border-radius: 10px; cursor: pointer; transition: background .18s ease; }
+.job-preview-trigger:hover { background: color-mix(in srgb, var(--surface-soft) 72%, transparent); }
+.job-preview-trigger:hover h2 { color: var(--accent-dark); }
+.job-preview-trigger:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 18%, transparent); outline-offset: 1px; }
 .row-actions { flex-wrap: wrap; justify-content: flex-end; }
 .row-actions .text-button:disabled { cursor: not-allowed; opacity: .4; }
-.status-control { position: relative; display: inline-flex; align-items: center; width: fit-content; border-radius: 999px; background: var(--surface-soft); color: var(--accent-dark); }
+.status-control { position: relative; display: inline-flex; align-items: center; justify-self: end; width: fit-content; border-radius: 999px; background: var(--surface-soft); color: var(--accent-dark); }
 .status-control select { width: auto; min-width: 0; padding: 5px 25px 5px 10px; appearance: none; border: 0; border-radius: inherit; outline: 0; background: transparent; color: inherit; cursor: pointer; font: inherit; font-size: 11px; font-weight: 700; text-transform: capitalize; }
 .status-control > span { position: absolute; right: 9px; line-height: 1; pointer-events: none; transform: translateY(-1px); }
 .status-control:focus-within { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
@@ -376,6 +432,24 @@ onBeforeUnmount(() => { if (pollTimer) window.clearInterval(pollTimer) })
 .help-tooltip > span { position: absolute; z-index: 10; top: calc(100% + 9px); left: 50%; width: min(340px, 75vw); padding: 11px 13px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); box-shadow: 0 14px 36px rgba(25,34,30,.16); color: var(--ink); font-size: 11px; font-weight: 500; line-height: 1.55; opacity: 0; pointer-events: none; transform: translate(-50%, -4px); visibility: hidden; transition: .18s ease; }
 .help-tooltip:hover > span, .help-tooltip:focus > span { opacity: 1; transform: translate(-50%, 0); visibility: visible; }
 .import-mode-help { margin: -9px 0 0; color: var(--muted); font-size: 12px; }
+.job-preview-backdrop { z-index: 35; }
+.job-preview-modal { width: min(900px, 100%); max-height: calc(100vh - 48px); overflow-y: auto; box-shadow: 0 30px 90px rgba(0, 0, 0, .28); }
+.job-preview-header { align-items: flex-start; }
+.job-preview-header h2 { margin-top: 3px; }
+.job-preview-header div > p:last-child { margin-top: .45rem; color: var(--muted); }
+.job-preview-meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 24px; }
+.job-preview-meta > div { display: grid; gap: 6px; min-width: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-soft); }
+.job-preview-meta span { color: var(--muted); font-size: 11px; }
+.job-preview-meta strong { overflow-wrap: anywhere; font-size: 13px; }
+.job-preview-description { display: grid; gap: 14px; padding: 22px 0 6px; border-top: 1px solid var(--line); }
+.job-preview-description h3 { margin: 3px 0 0; }
+.job-preview-description > p { margin: 0; color: var(--ink); line-height: 1.7; overflow-wrap: anywhere; white-space: pre-wrap; }
+.job-preview-actions { margin-top: 24px; }
+.job-preview-enter-active, .job-preview-leave-active { transition: opacity .18s ease; }
+.job-preview-enter-active .job-preview-modal, .job-preview-leave-active .job-preview-modal { transition: transform .2s ease, opacity .18s ease; }
+.job-preview-enter-from, .job-preview-leave-to { opacity: 0; }
+.job-preview-enter-from .job-preview-modal, .job-preview-leave-to .job-preview-modal { opacity: 0; transform: translateY(10px) scale(.98); }
 @media (max-width: 980px) { .job-row { grid-template-columns: auto auto minmax(0, 1fr); } .job-row .status-control, .job-row .row-actions { grid-column: 3; } .row-actions { justify-content: flex-start; } }
-@media (max-width: 760px) { .header-actions, .row-actions { align-items: stretch; flex-direction: column; } .job-row .status-control { grid-column: 2; } }
+@media (max-width: 760px) { .header-actions, .row-actions { align-items: stretch; flex-direction: column; } .job-row .status-control { grid-column: 2; } .job-preview-meta { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 520px) { .job-preview-meta { grid-template-columns: 1fr; } .job-preview-actions { align-items: stretch; flex-direction: column; } }
 </style>

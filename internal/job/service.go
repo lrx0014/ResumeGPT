@@ -19,7 +19,7 @@ const ImportJobKind = "job.page.import.v1"
 var (
 	ErrInvalidInput    = errors.New("invalid job input")
 	ErrInvalidURL      = errors.New("only public LinkedIn and Indeed HTTPS job URLs are supported")
-	ErrInvalidAIConfig = errors.New("AI-assisted import requires an LLM connection and model")
+	ErrInvalidAIConfig = errors.New("AI-assisted import requires an LLM provider and model")
 	ErrTooManyURLs     = errors.New("a batch can contain at most 50 URLs")
 )
 
