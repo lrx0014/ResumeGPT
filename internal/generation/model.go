@@ -52,6 +52,7 @@ type Run struct {
 	Draft               string          `json:"draft,omitempty"`
 	RenderedSource      string          `json:"renderedSource,omitempty"`
 	Review              string          `json:"review,omitempty"`
+	HasWarning          bool            `json:"hasWarning"`
 	RepairCount         int             `json:"repairCount"`
 	ArtifactObjectID    string          `json:"artifactObjectId,omitempty"`
 	ErrorCode           string          `json:"errorCode,omitempty"`

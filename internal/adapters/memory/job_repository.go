@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"sync"
+	"time"
 
 	"github.com/lrx0014/ResumeGPT/internal/job"
 	"github.com/lrx0014/ResumeGPT/internal/platform/workqueue"
@@ -102,6 +103,8 @@ func (r *JobRepository) List(_ context.Context, workspaceID string) ([]job.Job, 
 	result := make([]job.Job, 0)
 	for _, item := range r.items {
 		if item.WorkspaceID == workspaceID {
+			item.HasDescription = len(item.Description) > 0
+			item.Description = ""
 			result = append(result, item)
 		}
 	}
@@ -139,6 +142,18 @@ func (r *JobRepository) Update(_ context.Context, value job.Job) (job.Job, error
 	value.Origin, value.HunterID = current.Origin, current.HunterID
 	r.items[value.ID] = value
 	return value, nil
+}
+
+func (r *JobRepository) UpdateStatus(_ context.Context, workspaceID, jobID, status string, updatedAt time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	current, ok := r.items[jobID]
+	if !ok || current.WorkspaceID != workspaceID {
+		return job.ErrNotFound
+	}
+	current.Status, current.UpdatedAt = status, updatedAt
+	r.items[jobID] = current
+	return nil
 }
 
 func (r *JobRepository) Delete(_ context.Context, workspaceID, jobID string) error {

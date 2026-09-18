@@ -14,6 +14,7 @@ type Job struct {
 	EmploymentType string    `json:"employmentType,omitempty"`
 	SourceURL      string    `json:"sourceUrl,omitempty"`
 	Description    string    `json:"description,omitempty"`
+	HasDescription bool      `json:"hasDescription"`
 	Status         string    `json:"status"`
 	ImportState    string    `json:"importState"`
 	ImportError    string    `json:"importError,omitempty"`
@@ -38,6 +39,10 @@ type SaveInput struct {
 
 type CreateInput = SaveInput
 type UpdateInput = SaveInput
+
+type StatusInput struct {
+	Status string `json:"status"`
+}
 
 type ImportInput struct {
 	URLs         []string `json:"urls"`

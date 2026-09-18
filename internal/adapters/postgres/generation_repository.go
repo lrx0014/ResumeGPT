@@ -15,6 +15,7 @@ import (
 )
 
 const generationColumns = `id,workspace_id,profile_id,opportunity_id,COALESCE(template_id,''),document_type,language,page_target,custom_instructions,pipeline_mode,writer,renderer,reviewer,state,stage,COALESCE(draft,''),COALESCE(rendered_source,''),COALESCE(review,''),repair_count,COALESCE(artifact_object_id,''),COALESCE(error_code,''),COALESCE(error_message,''),profile_snapshot,opportunity_snapshot,template_snapshot,created_at,updated_at`
+const generationSummaryColumns = `id,workspace_id,profile_id,opportunity_id,COALESCE(template_id,''),document_type,language,page_target,pipeline_mode,writer,renderer,reviewer,state,stage,repair_count,COALESCE(error_code,''),COALESCE(error_message,''),(COALESCE(review,'') LIKE 'Template fallback used:%' OR COALESCE(review,'') LIKE 'Visual QA skipped:%'),created_at,updated_at`
 
 type GenerationRepository struct{ pool *pgxpool.Pool }
 
@@ -44,14 +45,14 @@ func (r *GenerationRepository) Create(ctx context.Context, value generation.Run,
 func (r *GenerationRepository) List(ctx context.Context, workspaceID string) ([]generation.Run, error) {
 	items := []generation.Run{}
 	err := withWorkspaceTx(ctx, r.pool, workspaceID, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT `+generationColumns+` FROM generation_runs WHERE workspace_id=$1 ORDER BY created_at DESC`, workspaceID)
+		rows, err := tx.Query(ctx, `SELECT `+generationSummaryColumns+` FROM generation_runs WHERE workspace_id=$1 ORDER BY created_at DESC`, workspaceID)
 		if err != nil {
 			return err
 		}
 		defer rows.Close()
 		for rows.Next() {
 			var item generation.Run
-			if err := scanGeneration(rows, &item); err != nil {
+			if err := scanGenerationSummary(rows, &item); err != nil {
 				return err
 			}
 			items = append(items, item)
@@ -293,6 +294,21 @@ type generationScanner interface{ Scan(...any) error }
 func scanGeneration(row generationScanner, item *generation.Run) error {
 	var writer, renderer, reviewer []byte
 	err := row.Scan(&item.ID, &item.WorkspaceID, &item.ProfileID, &item.OpportunityID, &item.TemplateID, &item.DocumentType, &item.Language, &item.PageTarget, &item.CustomInstructions, &item.PipelineMode, &writer, &renderer, &reviewer, &item.State, &item.Stage, &item.Draft, &item.RenderedSource, &item.Review, &item.RepairCount, &item.ArtifactObjectID, &item.ErrorCode, &item.ErrorMessage, &item.ProfileSnapshot, &item.OpportunitySnapshot, &item.TemplateSnapshot, &item.CreatedAt, &item.UpdatedAt)
+	if err != nil {
+		return err
+	}
+	if json.Unmarshal(writer, &item.Writer) != nil || json.Unmarshal(renderer, &item.Renderer) != nil || json.Unmarshal(reviewer, &item.Reviewer) != nil {
+		return fmt.Errorf("invalid generation model choices")
+	}
+	return nil
+}
+
+func scanGenerationSummary(row generationScanner, item *generation.Run) error {
+	var writer, renderer, reviewer []byte
+	err := row.Scan(&item.ID, &item.WorkspaceID, &item.ProfileID, &item.OpportunityID, &item.TemplateID,
+		&item.DocumentType, &item.Language, &item.PageTarget, &item.PipelineMode, &writer, &renderer, &reviewer,
+		&item.State, &item.Stage, &item.RepairCount, &item.ErrorCode, &item.ErrorMessage, &item.HasWarning,
+		&item.CreatedAt, &item.UpdatedAt)
 	if err != nil {
 		return err
 	}

@@ -99,6 +99,7 @@ The default Compose deployment runs:
 | `document-worker` | Malware scanning, extraction, OCR, preview, and PDF rendering | Internal |
 | `web-worker` | Isolated Playwright page rendering for AI-assisted imports | Internal |
 | `postgres` | Application data, queue, events, and settings | `localhost:5432` |
+| `redis` | Expiring cache for provider model discovery | `localhost:6379` |
 | `minio` | S3-compatible object storage | API `localhost:9000`, console `localhost:9001` |
 | `migrate` | One-shot database migration process | Internal |
 
@@ -115,12 +116,12 @@ Stop the stack without deleting data:
 docker compose down
 ```
 
-PostgreSQL and MinIO data remain in named volumes. Use `docker compose down --volumes` only when you intentionally want to erase local application data.
+PostgreSQL, Redis, and MinIO data remain in named volumes. Use `docker compose down --volumes` only when you intentionally want to erase local application data.
 
 ## First Use
 
 1. Open `http://localhost:5173/settings`.
-2. Add an OpenAI, OpenAI-compatible, or Ollama connection and test it.
+2. Add an OpenAI, OpenAI-compatible, or Ollama provider and test it.
 3. Choose default models for the Agents you plan to use.
 4. Create a Profile and save your source content.
 5. Add or import a Job Opportunity.
@@ -143,6 +144,7 @@ Important settings include:
 | `WEB_PORT` | Browser-facing web port; default `5173` |
 | `API_PORT` | Browser-facing API port; default `8080` |
 | `POSTGRES_*` | Local PostgreSQL database and credentials |
+| `REDIS_PORT`, `MODEL_CACHE_TTL` | Redis port and LLM provider model-cache lifetime |
 | `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD` | Local object-storage credentials |
 | `SETTINGS_ENCRYPTION_KEY` | Encrypts stored LLM API tokens |
 | `AUTH_MODE` | `development` or `oidc` |

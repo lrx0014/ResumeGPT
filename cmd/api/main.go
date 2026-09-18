@@ -8,9 +8,11 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/lrx0014/ResumeGPT/internal/adapters/memory"
 	postgresadapter "github.com/lrx0014/ResumeGPT/internal/adapters/postgres"
+	redisadapter "github.com/lrx0014/ResumeGPT/internal/adapters/redis"
 	s3adapter "github.com/lrx0014/ResumeGPT/internal/adapters/s3"
 	"github.com/lrx0014/ResumeGPT/internal/document"
 	"github.com/lrx0014/ResumeGPT/internal/generation"
@@ -103,6 +105,22 @@ func main() {
 		os.Exit(1)
 	}
 	settingsService := settings.NewService(settingsRepository, tokenCipher, settings.NewHTTPModelDiscoverer())
+	if cfg.RedisURL != "" {
+		modelCache, cacheErr := redisadapter.NewModelCache(cfg.RedisURL)
+		if cacheErr != nil {
+			logger.Error("initialize Redis model cache", "error", cacheErr)
+			os.Exit(1)
+		}
+		cacheContext, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		cacheErr = modelCache.Ping(cacheContext)
+		cancel()
+		if cacheErr != nil {
+			logger.Error("connect to Redis model cache", "error", cacheErr)
+			os.Exit(1)
+		}
+		defer modelCache.Close()
+		settingsService.ConfigureModelCache(modelCache, cfg.ModelCacheTTL)
+	}
 	var blobSigner blobstore.Signer
 	switch cfg.ObjectStorageMode {
 	case "memory":

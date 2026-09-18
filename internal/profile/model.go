@@ -9,6 +9,8 @@ type Profile struct {
 	TargetRole      string    `json:"targetRole,omitempty"`
 	DefaultLanguage string    `json:"defaultLanguage"`
 	Content         string    `json:"content"`
+	ContentPreview  string    `json:"contentPreview,omitempty"`
+	HasContent      bool      `json:"hasContent"`
 	AvatarObjectID  string    `json:"avatarObjectId,omitempty"`
 	CreatedAt       time.Time `json:"createdAt"`
 	UpdatedAt       time.Time `json:"updatedAt"`

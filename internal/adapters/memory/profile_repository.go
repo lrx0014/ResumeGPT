@@ -22,6 +22,13 @@ func (r *ProfileRepository) List(_ context.Context, workspaceID string) ([]profi
 	result := make([]profile.Profile, 0)
 	for _, item := range r.items {
 		if item.WorkspaceID == workspaceID {
+			item.HasContent = len(item.Content) > 0
+			preview := []rune(item.Content)
+			if len(preview) > 140 {
+				preview = preview[:140]
+			}
+			item.ContentPreview = string(preview)
+			item.Content = ""
 			result = append(result, item)
 		}
 	}

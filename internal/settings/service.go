@@ -3,6 +3,7 @@ package settings
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/url"
 	"strings"
 	"time"
@@ -16,11 +17,17 @@ type Service struct {
 	repository Repository
 	cipher     TokenCipher
 	discoverer ModelDiscoverer
+	modelCache ModelCache
+	cacheTTL   time.Duration
 	now        func() time.Time
 }
 
 func NewService(repository Repository, cipher TokenCipher, discoverer ModelDiscoverer) *Service {
 	return &Service{repository: repository, cipher: cipher, discoverer: discoverer, now: time.Now}
+}
+
+func (s *Service) ConfigureModelCache(cache ModelCache, ttl time.Duration) {
+	s.modelCache, s.cacheTTL = cache, ttl
 }
 
 func (s *Service) GetPreferences(ctx context.Context, workspaceID string) (Preferences, error) {
@@ -125,9 +132,19 @@ func (s *Service) DeleteConnection(ctx context.Context, workspaceID, connectionI
 }
 
 func (s *Service) TestConnection(ctx context.Context, workspaceID, connectionID string) (ConnectionTest, error) {
+	return s.DiscoverModels(ctx, workspaceID, connectionID, false)
+}
+
+func (s *Service) DiscoverModels(ctx context.Context, workspaceID, connectionID string, refresh bool) (ConnectionTest, error) {
 	stored, err := s.repository.GetConnection(ctx, workspaceID, connectionID)
 	if err != nil {
 		return ConnectionTest{}, err
+	}
+	cacheKey := fmt.Sprintf("llm-models:%s:%s:%d", workspaceID, connectionID, stored.Connection.UpdatedAt.UnixNano())
+	if !refresh && s.modelCache != nil {
+		if models, found, cacheErr := s.modelCache.Get(ctx, cacheKey); cacheErr == nil && found {
+			return ConnectionTest{Status: "connected", Models: models}, nil
+		}
 	}
 	token, err := s.cipher.Decrypt(stored.TokenCiphertext)
 	if err != nil {
@@ -136,6 +153,9 @@ func (s *Service) TestConnection(ctx context.Context, workspaceID, connectionID 
 	models, err := s.discoverer.Models(ctx, stored.Connection, token)
 	if err != nil {
 		return ConnectionTest{}, err
+	}
+	if s.modelCache != nil && s.cacheTTL > 0 {
+		_ = s.modelCache.Set(ctx, cacheKey, models, s.cacheTTL)
 	}
 	return ConnectionTest{Status: "connected", Models: models}, nil
 }

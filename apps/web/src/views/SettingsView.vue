@@ -265,7 +265,7 @@ async function testConnection(item: LLMConnection) {
   testingId.value = item.id
   error.value = ''
   try {
-    const result = await api.testLLMConnection(item.id)
+    const result = await api.testLLMConnection(item.id, true)
     connectionResults[item.id] = `Available · ${result.models.length} model${result.models.length === 1 ? '' : 's'}`
     discoveredModels.value = result.models
     agentModels[item.id] = result.models

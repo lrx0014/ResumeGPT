@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -28,7 +29,7 @@ func (r *JobRepository) List(ctx context.Context, workspaceID string) ([]job.Job
 	err := withWorkspaceTx(ctx, r.pool, workspaceID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `
 			SELECT id,workspace_id,title,company,location,country,city,work_mode,employment_type,source_url,
-				description,status,import_state,import_error,origin,COALESCE(hunter_id,''),created_at,updated_at
+				'',status,import_state,import_error,origin,COALESCE(hunter_id,''),created_at,updated_at,LENGTH(BTRIM(description)) > 0
 			FROM jobs
 			WHERE workspace_id = $1 AND (origin <> 'hunter' OR import_state IN ('ready','manual'))
 			ORDER BY created_at DESC, id`, workspaceID)
@@ -39,7 +40,7 @@ func (r *JobRepository) List(ctx context.Context, workspaceID string) ([]job.Job
 		items = make([]job.Job, 0)
 		for rows.Next() {
 			var item job.Job
-			if err := rows.Scan(jobFields(&item)...); err != nil {
+			if err := rows.Scan(append(jobFields(&item), &item.HasDescription)...); err != nil {
 				return fmt.Errorf("scan job: %w", err)
 			}
 			items = append(items, item)
@@ -111,6 +112,22 @@ func (r *JobRepository) Update(ctx context.Context, value job.Job) (job.Job, err
 		return appendAudit(ctx, tx, value.WorkspaceID, "job.update", "job", value.ID)
 	})
 	return value, err
+}
+
+func (r *JobRepository) UpdateStatus(ctx context.Context, workspaceID, jobID, status string, updatedAt time.Time) error {
+	return withWorkspaceTx(ctx, r.pool, workspaceID, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `UPDATE jobs SET status=$3,updated_at=$4 WHERE workspace_id=$1 AND id=$2`, workspaceID, jobID, status, updatedAt)
+		if err != nil {
+			return fmt.Errorf("update job status: %w", err)
+		}
+		if tag.RowsAffected() == 0 {
+			return job.ErrNotFound
+		}
+		if err := appendEvent(ctx, tx, workspaceID, "job.status.updated.v1", "job", jobID, map[string]string{"jobId": jobID, "status": status}); err != nil {
+			return err
+		}
+		return appendAudit(ctx, tx, workspaceID, "job.status.update", "job", jobID)
+	})
 }
 
 func (r *JobRepository) Delete(ctx context.Context, workspaceID, jobID string) error {

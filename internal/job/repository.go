@@ -3,6 +3,7 @@ package job
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/lrx0014/ResumeGPT/internal/platform/workqueue"
 )
@@ -14,6 +15,7 @@ type Repository interface {
 	Get(ctx context.Context, workspaceID, jobID string) (Job, error)
 	Create(ctx context.Context, value Job) (Job, error)
 	Update(ctx context.Context, value Job) (Job, error)
+	UpdateStatus(ctx context.Context, workspaceID, jobID, status string, updatedAt time.Time) error
 	Delete(ctx context.Context, workspaceID, jobID string) error
 }
 

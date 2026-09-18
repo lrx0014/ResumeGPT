@@ -74,6 +74,14 @@ func (s *Service) Update(ctx context.Context, workspaceID, jobID string, input U
 	return s.repository.Update(ctx, value)
 }
 
+func (s *Service) UpdateStatus(ctx context.Context, workspaceID, jobID string, input StatusInput) error {
+	status := strings.TrimSpace(input.Status)
+	if !validStatuses[status] {
+		return ErrInvalidInput
+	}
+	return s.repository.UpdateStatus(ctx, workspaceID, jobID, status, s.now().UTC())
+}
+
 func (s *Service) Delete(ctx context.Context, workspaceID, jobID string) error {
 	return s.repository.Delete(ctx, workspaceID, jobID)
 }

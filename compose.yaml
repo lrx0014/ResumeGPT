@@ -18,6 +18,8 @@ x-backend-environment: &backend-environment
   DOCUMENT_WORKER_URL: http://document-worker:8090
   WEB_WORKER_URL: http://web-worker:8091
   SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:-development-only-settings-key-change-me}
+  REDIS_URL: redis://redis:6379/0
+  MODEL_CACHE_TTL: ${MODEL_CACHE_TTL:-10m}
   OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
 
 x-backend-service: &backend-service
@@ -35,6 +37,21 @@ x-backend-service: &backend-service
     - ALL
 
 services:
+  redis:
+    image: redis:8.2-alpine
+    command: redis-server --save 60 1 --loglevel warning
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 3s
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+
   postgres:
     image: pgvector/pgvector:pg17
     environment:
@@ -86,6 +103,8 @@ services:
       - "${API_PORT:-8080}:8080"
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       minio:
         condition: service_healthy
@@ -182,3 +201,4 @@ services:
 volumes:
   postgres-data:
   minio-data:
+  redis-data:

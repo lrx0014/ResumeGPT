@@ -22,7 +22,8 @@ func (r *ProfileRepository) List(ctx context.Context, workspaceID string) ([]pro
 	var items []profile.Profile
 	err := withWorkspaceTx(ctx, r.pool, workspaceID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `
-			SELECT id, workspace_id, name, target_role, default_language, content, COALESCE(avatar_object_id, ''), created_at, updated_at
+			SELECT id, workspace_id, name, target_role, default_language, '', COALESCE(avatar_object_id, ''), created_at, updated_at,
+				LEFT(content, 140), LENGTH(BTRIM(content)) > 0
 			FROM profiles
 			WHERE workspace_id = $1
 			ORDER BY created_at DESC, id`, workspaceID)
@@ -33,7 +34,7 @@ func (r *ProfileRepository) List(ctx context.Context, workspaceID string) ([]pro
 		items = make([]profile.Profile, 0)
 		for rows.Next() {
 			var item profile.Profile
-			if err := rows.Scan(&item.ID, &item.WorkspaceID, &item.Name, &item.TargetRole, &item.DefaultLanguage, &item.Content, &item.AvatarObjectID, &item.CreatedAt, &item.UpdatedAt); err != nil {
+			if err := rows.Scan(&item.ID, &item.WorkspaceID, &item.Name, &item.TargetRole, &item.DefaultLanguage, &item.Content, &item.AvatarObjectID, &item.CreatedAt, &item.UpdatedAt, &item.ContentPreview, &item.HasContent); err != nil {
 				return fmt.Errorf("scan profile: %w", err)
 			}
 			items = append(items, item)

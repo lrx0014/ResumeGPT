@@ -121,7 +121,7 @@ func (a *API) deleteLLMConnection(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) testLLMConnection(w http.ResponseWriter, r *http.Request) {
-	result, err := a.settings.TestConnection(r.Context(), workspaceID(r), r.PathValue("connectionID"))
+	result, err := a.settings.DiscoverModels(r.Context(), workspaceID(r), r.PathValue("connectionID"), r.URL.Query().Get("refresh") == "true")
 	switch {
 	case errors.Is(err, settings.ErrNotFound):
 		writeError(w, http.StatusNotFound, "llm_connection_not_found", "The requested LLM provider does not exist.")

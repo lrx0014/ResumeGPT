@@ -14,7 +14,7 @@ const capabilities = ref<Record<string, boolean>>({})
 const loading = ref(true)
 const error = ref('')
 
-const preparedProfiles = computed(() => profiles.value.filter(item => item.content.trim()).length)
+const preparedProfiles = computed(() => profiles.value.filter(item => item.hasContent).length)
 const readyOpportunities = computed(() => opportunities.value.filter(item => ['manual', 'ready'].includes(item.importState)).length)
 const pendingOpportunities = computed(() => opportunities.value.filter(item => ['queued', 'fetching'].includes(item.importState)).length)
 const attentionOpportunities = computed(() => opportunities.value.filter(item => ['needs_user_action', 'failed'].includes(item.importState)).length)

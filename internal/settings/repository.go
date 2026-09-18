@@ -3,6 +3,7 @@ package settings
 import (
 	"context"
 	"errors"
+	"time"
 )
 
 var (
@@ -30,4 +31,9 @@ type TokenCipher interface {
 
 type ModelDiscoverer interface {
 	Models(context.Context, LLMConnection, string) ([]string, error)
+}
+
+type ModelCache interface {
+	Get(context.Context, string) ([]string, bool, error)
+	Set(context.Context, string, []string, time.Duration) error
 }

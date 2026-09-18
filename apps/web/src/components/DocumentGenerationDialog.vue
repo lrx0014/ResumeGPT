@@ -75,7 +75,7 @@ async function prepare() {
   form.pipelineMode = 'multi'
   try {
     const [profileList, templateList, connectionList, storedDefaults] = await Promise.all([api.listProfiles(), api.listTemplates(), api.listLLMConnections(), api.getAgentDefaults()])
-    profiles.value = profileList.items.filter(item => item.content.trim())
+    profiles.value = profileList.items.filter(item => item.hasContent)
     templates.value = templateList.items
     connections.value = connectionList.items
     if (!profiles.value.some(item => item.id === form.profileId)) form.profileId = profiles.value[0]?.id ?? ''

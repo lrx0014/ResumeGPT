@@ -23,6 +23,7 @@ const deletingId = ref('')
 const updatingStatusId = ref('')
 const pendingDelete = ref<Job | null>(null)
 const previewJob = ref<Job | null>(null)
+const previewLoading = ref(false)
 const error = ref('')
 const batchText = ref('')
 const showBatch = ref(false)
@@ -56,7 +57,7 @@ const statusOptions = jobStatuses
 const filteredJobs = computed(() => {
   const query = search.value.trim().toLocaleLowerCase()
   return jobs.value.filter(item => {
-    const matchesSearch = !query || [item.title, item.company, item.location, item.city, item.country, item.description].some(value => value?.toLocaleLowerCase().includes(query))
+    const matchesSearch = !query || [item.title, item.company, item.location, item.city, item.country].some(value => value?.toLocaleLowerCase().includes(query))
     return matchesSearch && (statusFilter.value === 'all' || item.status === statusFilter.value) && (originFilter.value === 'all' || item.origin === originFilter.value)
   })
 })
@@ -68,15 +69,24 @@ watch(() => filteredJobs.value.length, total => { page.value = Math.min(page.val
 watch(() => jobs.value.map(item => item.id).join(','), () => selection.retain(jobs.value.filter(canGenerate).map(item => item.id)))
 
 function canGenerate(item: Job) {
-  return Boolean(item.description?.trim()) && ['manual', 'ready'].includes(item.importState)
+  return Boolean(item.hasDescription || item.description?.trim()) && ['manual', 'ready'].includes(item.importState)
 }
 
 function jobLocation(item: Job) {
   return item.location || [item.city, item.country].filter(Boolean).join(', ') || 'Not specified'
 }
 
-function openJobPreview(item: Job) {
+async function openJobPreview(item: Job) {
   previewJob.value = item
+  previewLoading.value = true
+  try {
+    const detail = await api.getJob(item.id)
+    if (previewJob.value?.id === item.id) previewJob.value = detail
+  } catch (cause) {
+    toast.warning(cause instanceof Error ? cause.message : 'Could not load the job details.')
+  } finally {
+    if (previewJob.value?.id === item.id) previewLoading.value = false
+  }
 }
 
 function handleKeydown(event: KeyboardEvent) {
@@ -179,7 +189,6 @@ async function openBatchImport() {
       importConnectionId.value = connections.value[0]?.id ?? ''
       importModel.value = ''
     }
-    if (aiAssisted.value && importConnectionId.value) await discoverImportModels()
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : 'Could not load LLM providers.'
   }
@@ -223,7 +232,7 @@ function importLabel(item: Job) {
   return ({ queued: 'Queued', fetching: 'Importing', analyzing: 'AI is analyzing this page', needs_user_action: 'Needs editing', failed: 'Import failed' } as Record<string, string>)[item.importState]
 }
 
-watch(aiAssisted, value => { if (value && importConnectionId.value) void discoverImportModels(false) })
+watch(aiAssisted, value => { if (value && importConnectionId.value && !importModel.value) void discoverImportModels(false) })
 watch(importConnectionId, () => { if (aiAssisted.value) void discoverImportModels(true) })
 
 async function removeJob() {
@@ -251,12 +260,7 @@ async function updateStatus(item: Job, event: Event) {
   updatingStatusId.value = item.id
   item.status = nextStatus
   try {
-    const updated = await api.updateJob(item.id, {
-      title: item.title, company: item.company, location: item.location ?? '', country: item.country ?? '',
-      city: item.city ?? '', workMode: item.workMode ?? '', employmentType: item.employmentType ?? '',
-      sourceUrl: item.sourceUrl ?? '', description: item.description ?? '', status: nextStatus,
-    })
-    Object.assign(item, updated)
+    await api.updateJobStatus(item.id, nextStatus)
     toast.success(`Status updated to ${jobStatusLabel(nextStatus)}.`)
   } catch (cause) {
     item.status = previousStatus
@@ -376,7 +380,7 @@ onBeforeUnmount(() => {
 
             <section class="job-preview-description">
               <div><p class="eyebrow">Role details</p><h3>Job description</h3></div>
-              <p>{{ previewJob.description || 'No job description is available yet.' }}</p>
+              <p>{{ previewLoading ? 'Loading job details…' : previewJob.description || 'No job description is available yet.' }}</p>
             </section>
 
             <footer class="modal-actions job-preview-actions">

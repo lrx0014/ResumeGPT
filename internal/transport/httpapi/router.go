@@ -100,6 +100,7 @@ func New(deps Dependencies) http.Handler {
 	}
 	protected.Handle("GET /v1/jobs/{jobID}", api.requireRole(identity.RoleViewer, api.getJob))
 	protected.Handle("PUT /v1/jobs/{jobID}", api.requireRole(identity.RoleEditor, api.updateJob))
+	protected.Handle("PATCH /v1/jobs/{jobID}/status", api.requireRole(identity.RoleEditor, api.updateJobStatus))
 	protected.Handle("DELETE /v1/jobs/{jobID}", api.requireRole(identity.RoleEditor, api.deleteJob))
 	protected.Handle("POST /v1/storage/uploads", api.requireRole(identity.RoleEditor, api.createUpload))
 	protected.Handle("GET /v1/storage/objects/{objectID}/download", api.requireRole(identity.RoleViewer, api.createDownload))
@@ -270,6 +271,25 @@ func (a *API) updateJob(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "job_update_failed", "Could not update the job.")
 	default:
 		writeJSON(w, http.StatusOK, item)
+	}
+}
+
+func (a *API) updateJobStatus(w http.ResponseWriter, r *http.Request) {
+	var input job.StatusInput
+	if err := decodeJSON(w, r, &input); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", "The request body is not valid JSON.")
+		return
+	}
+	err := a.jobs.UpdateStatus(r.Context(), workspaceID(r), r.PathValue("jobID"), input)
+	switch {
+	case errors.Is(err, job.ErrInvalidInput):
+		writeError(w, http.StatusUnprocessableEntity, "invalid_job_status", "Choose a valid job status.")
+	case errors.Is(err, job.ErrNotFound):
+		writeError(w, http.StatusNotFound, "job_not_found", "The requested job does not exist.")
+	case err != nil:
+		writeError(w, http.StatusInternalServerError, "job_status_update_failed", "Could not update the job status.")
+	default:
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
 

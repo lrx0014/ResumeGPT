@@ -10,6 +10,7 @@ ResumeGPT is a self-hosted web application built around a Go modular monolith an
 flowchart LR
     B[Vue web application] -->|REST /api/v1| A[Go API]
     A --> P[(PostgreSQL)]
+    A --> C[(Redis)]
     A --> S[(S3 / MinIO)]
     W[Go background worker] --> P
     W --> S
@@ -20,7 +21,7 @@ flowchart LR
     R -->|Bounded page snapshot| W
 ```
 
-The default Docker Compose deployment includes the web application, API, background worker, migration process, PostgreSQL, MinIO, document worker, and web worker.
+The default Docker Compose deployment includes the web application, API, background worker, migration process, PostgreSQL, Redis, MinIO, document worker, and web worker.
 
 ## 2. Runtime Components
 
@@ -37,7 +38,7 @@ The default Docker Compose deployment includes the web application, API, backgro
 - Task Monitor
 - Settings
 
-The frontend uses Vue Router for navigation, Pinia and Vue state for client state, and polling for background workflow progress. List pages currently perform their search, filtering, and pagination in the browser, except the Task Monitor, which uses server-side filtering and pagination.
+The frontend uses Vue Router for navigation, Pinia and Vue state for client state, and polling for background workflow progress. List endpoints return compact summaries and load large profile, opportunity, and generation content only from detail endpoints. List pages currently perform their search, filtering, and pagination in the browser, except the Task Monitor, which uses server-side filtering and pagination.
 
 ### 2.2 Go API
 
@@ -85,11 +86,13 @@ The container runs read-only with a temporary filesystem. The HTML renderer bloc
 
 The service blocks private and non-global network destinations, non-HTTPS URLs, non-standard ports, downloads, service workers, images, media, and fonts. It does not receive database credentials or LLM API tokens.
 
-### 2.6 PostgreSQL and object storage
+### 2.6 PostgreSQL, Redis, and object storage
 
 PostgreSQL stores domain records, encrypted LLM provider metadata, durable jobs, task events, audit records, outbox records, and generation timelines. Row-level security and application-level workspace filters isolate workspace data.
 
 S3-compatible object storage contains uploaded documents, profile avatars, template sources, cached previews, intermediate generation PDFs, and final artifacts. MinIO supplies this interface in the local Compose stack.
+
+Redis stores expiring results from external LLM provider model-list APIs. Cache keys include the workspace, provider record, and provider update timestamp; the default TTL is ten minutes. Explicit provider tests bypass and refresh the cache.
 
 ## 3. Backend Structure
 
@@ -107,6 +110,7 @@ internal/settings/           Preferences and LLM providers
 internal/taskmonitor/        Read model for durable tasks
 internal/identity/           Development and OIDC authentication
 internal/adapters/postgres/  PostgreSQL repositories and work queue
+internal/adapters/redis/     Expiring external-read cache
 internal/adapters/s3/        S3-compatible object storage
 internal/adapters/memory/    Lightweight development adapters
 internal/platform/           Configuration, database, telemetry, and outbox
@@ -298,7 +302,7 @@ The supported complete local deployment is:
 docker compose up -d --build
 ```
 
-Compose supplies PostgreSQL and S3 persistence, development authentication, migrations, health checks, and internal service URLs. The browser application is available at `http://localhost:5173`.
+Compose supplies PostgreSQL and S3 persistence, Redis caching, development authentication, migrations, health checks, and internal service URLs. The browser application is available at `http://localhost:5173`.
 
 ### 10.2 Host development
 

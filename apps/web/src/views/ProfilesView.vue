@@ -27,7 +27,7 @@ const form = reactive({ name: '', targetRole: '', defaultLanguage: 'en-US', cont
 const filteredProfiles = computed(() => {
   const query = search.value.trim().toLocaleLowerCase()
   return profiles.value.filter(profile => {
-    const matchesSearch = !query || [profile.name, profile.targetRole, profile.content].some(value => value?.toLocaleLowerCase().includes(query))
+    const matchesSearch = !query || [profile.name, profile.targetRole, profile.contentPreview].some(value => value?.toLocaleLowerCase().includes(query))
     return matchesSearch && (languageFilter.value === 'all' || profile.defaultLanguage === languageFilter.value)
   })
 })
@@ -108,7 +108,7 @@ onMounted(load)
     <TransitionGroup v-if="visibleProfiles.length" name="card-list" tag="div" class="card-grid">
       <article v-for="profile in visibleProfiles" :key="profile.id" class="entity-card">
         <span class="entity-icon">◎</span>
-        <div><p class="eyebrow">{{ profile.targetRole || 'General profile' }}</p><h2>{{ profile.name }}</h2><p>{{ profile.content ? `${profile.content.slice(0, 140)}${profile.content.length > 140 ? '…' : ''}` : 'Add your experience, education, skills, and achievements.' }}</p></div>
+        <div><p class="eyebrow">{{ profile.targetRole || 'General profile' }}</p><h2>{{ profile.name }}</h2><p>{{ profile.hasContent ? `${profile.contentPreview || ''}${(profile.contentPreview?.length || 0) >= 140 ? '…' : ''}` : 'Add your experience, education, skills, and achievements.' }}</p></div>
         <footer><span>{{ profile.defaultLanguage }}</span><div class="card-actions"><button class="text-button danger-text" type="button" @click="pendingDelete = profile">Delete</button><RouterLink class="text-button" :to="`/profiles/${profile.id}`">Open →</RouterLink></div></footer>
       </article>
     </TransitionGroup>

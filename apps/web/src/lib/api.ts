@@ -60,6 +60,8 @@ export const api = {
     request<Job>('/v1/jobs', { method: 'POST', body: JSON.stringify(input) }),
   updateJob: (id: string, input: JobInput) =>
     request<Job>(`/v1/jobs/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(input) }),
+  updateJobStatus: (id: string, status: string) =>
+    request<void>(`/v1/jobs/${encodeURIComponent(id)}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   importJobs: (input: JobImportInput) => request<ListResponse<Job>>('/v1/jobs/imports', { method: 'POST', body: JSON.stringify(input) }),
   deleteJob: async (id: string) => {
     const response = await fetch(`${API_BASE_URL}/v1/jobs/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { 'X-Workspace-ID': 'ws_personal_dev' } })
@@ -99,8 +101,8 @@ export const api = {
       throw new Error(payload?.error.message ?? `Request failed with status ${response.status}`)
     }
   },
-  testLLMConnection: (id: string) =>
-    request<LLMConnectionTest>(`/v1/settings/llm-connections/${encodeURIComponent(id)}/test`, { method: 'POST' }),
+  testLLMConnection: (id: string, refresh = false) =>
+    request<LLMConnectionTest>(`/v1/settings/llm-connections/${encodeURIComponent(id)}/test${refresh ? '?refresh=true' : ''}`, { method: 'POST' }),
   listTemplates: () => request<ListResponse<Template>>('/v1/templates'),
   getTemplate: (id: string) => request<Template>(`/v1/templates/${encodeURIComponent(id)}`),
   stageTemplate: (input: { name: string; kind: TemplateKind; description: string; entryFile: string; file: File }) =>

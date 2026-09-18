@@ -24,6 +24,8 @@ type Config struct {
 	DocumentWorkerURL           string
 	WebWorkerURL                string
 	SettingsEncryptionKey       string
+	RedisURL                    string
+	ModelCacheTTL               time.Duration
 	APIAddress                  string
 	ReadTimeout                 time.Duration
 	WriteTimeout                time.Duration
@@ -50,6 +52,7 @@ func Load() (Config, error) {
 		DocumentWorkerURL:           getEnv("DOCUMENT_WORKER_URL", "http://localhost:8090"),
 		WebWorkerURL:                getEnv("WEB_WORKER_URL", "http://localhost:8091"),
 		SettingsEncryptionKey:       getEnv("SETTINGS_ENCRYPTION_KEY", "development-only-settings-key-change-me"),
+		RedisURL:                    getEnv("REDIS_URL", ""),
 		APIAddress:                  getEnv("API_ADDRESS", ":8080"),
 		WebOrigin:                   getEnv("WEB_ORIGIN", "http://localhost:5173"),
 	}
@@ -65,6 +68,9 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	if cfg.ShutdownTimeout, err = getDuration("API_SHUTDOWN_TIMEOUT", 10*time.Second); err != nil {
+		return Config{}, err
+	}
+	if cfg.ModelCacheTTL, err = getDuration("MODEL_CACHE_TTL", 10*time.Minute); err != nil {
 		return Config{}, err
 	}
 

@@ -5,6 +5,8 @@ export interface Profile {
   targetRole?: string
   defaultLanguage: string
   content: string
+  contentPreview?: string
+  hasContent: boolean
   avatarObjectId?: string
   createdAt: string
   updatedAt: string
@@ -22,6 +24,7 @@ export interface Job {
   employmentType?: string
   sourceUrl?: string
   description?: string
+  hasDescription: boolean
   status: string
   importState: 'manual' | 'queued' | 'fetching' | 'analyzing' | 'ready' | 'needs_user_action' | 'failed'
   importError?: string
@@ -246,7 +249,7 @@ export interface GenerationRun {
   documentType: TemplateKind; language: string; pageTarget: 'one_page' | 'two_pages' | 'flexible'
   customInstructions?: string; pipelineMode: 'single' | 'multi'
   writer: GenerationModelChoice; renderer: GenerationModelChoice; reviewer: GenerationModelChoice
-  state: GenerationState; stage: string; draft?: string; review?: string; repairCount: number
+  state: GenerationState; stage: string; draft?: string; review?: string; hasWarning: boolean; repairCount: number
   artifactObjectId?: string; errorCode?: string; errorMessage?: string; createdAt: string; updatedAt: string
 }
 export interface GenerationInput {
