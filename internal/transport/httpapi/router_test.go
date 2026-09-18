@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -216,6 +217,18 @@ func TestManagesSettingsWithoutReturningAPIToken(t *testing.T) {
 	handler.ServeHTTP(listedDefaults, httptest.NewRequest(http.MethodGet, "/v1/settings/agent-defaults", nil))
 	if listedDefaults.Code != http.StatusOK || !strings.Contains(listedDefaults.Body.String(), `"model":"model-a"`) {
 		t.Fatalf("Agent defaults list status = %d: %s", listedDefaults.Code, listedDefaults.Body.String())
+	}
+}
+
+func TestSettingsAcceptsEverySupportedInterfaceLanguage(t *testing.T) {
+	handler := newHandler()
+	for _, language := range []string{"en", "de", "fr", "es", "ja", "zh-CN", "zh-TW"} {
+		request := httptest.NewRequest(http.MethodPut, "/v1/settings", bytes.NewBufferString(fmt.Sprintf(`{"interfaceLanguage":%q,"theme":"system"}`, language)))
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("language %q returned status %d: %s", language, response.Code, response.Body.String())
+		}
 	}
 }
 

@@ -4,6 +4,8 @@ import { useI18n } from 'vue-i18n'
 
 import { api } from './lib/api'
 import { applyTheme } from './lib/preferences'
+import { normalizeInterfaceLocale } from './plugins/i18n'
+import LanguageSwitcher from './components/LanguageSwitcher.vue'
 import ToastViewport from './components/ToastViewport.vue'
 
 const { locale, t } = useI18n()
@@ -11,7 +13,8 @@ const { locale, t } = useI18n()
 onMounted(async () => {
   try {
     const settings = await api.getSettings()
-    locale.value = settings.interfaceLanguage
+    locale.value = normalizeInterfaceLocale(settings.interfaceLanguage)
+    document.documentElement.lang = settings.interfaceLanguage
     applyTheme(settings.theme)
   } catch {
     applyTheme('system')
@@ -27,7 +30,7 @@ onMounted(async () => {
         <span>ResumeGPT</span>
       </RouterLink>
 
-      <nav class="nav primary-nav" aria-label="Primary navigation">
+      <nav class="nav primary-nav" :aria-label="t('shell.primary')">
         <section class="nav-group" :aria-label="t('navGroups.workspace')">
           <p class="nav-group-label">{{ t('navGroups.workspace') }}</p>
           <RouterLink to="/" exact-active-class="active">
@@ -71,9 +74,10 @@ onMounted(async () => {
             </RouterLink>
           </section>
         </nav>
+        <LanguageSwitcher />
         <div class="user-card">
           <span class="avatar">DV</span>
-          <span><strong>Development</strong><small>Personal workspace</small></span>
+          <span><strong>{{ t('shell.development') }}</strong><small>{{ t('shell.personal') }}</small></span>
         </div>
       </div>
     </aside>

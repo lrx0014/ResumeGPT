@@ -132,7 +132,9 @@ func TestPreferencesValidation(t *testing.T) {
 	if _, err := service.SavePreferences(context.Background(), "ws_test", settings.PreferencesInput{InterfaceLanguage: "zh", Theme: "dark"}); err == nil {
 		t.Fatal("unsupported interface language was accepted")
 	}
-	if _, err := service.SavePreferences(context.Background(), "ws_test", settings.PreferencesInput{InterfaceLanguage: "en", Theme: "dark"}); err != nil {
-		t.Fatal(err)
+	for _, language := range []string{"en", "de", "fr", "es", "ja", "zh-CN", "zh-TW"} {
+		if _, err := service.SavePreferences(context.Background(), "ws_test", settings.PreferencesInput{InterfaceLanguage: language, Theme: "dark"}); err != nil {
+			t.Fatalf("supported language %q was rejected: %v", language, err)
+		}
 	}
 }

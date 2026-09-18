@@ -1,17 +1,19 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { GenerationRun } from '../lib/types'
 
 type WorkflowStatus = 'completed' | 'active' | 'failed' | 'waiting'
 
+const { t } = useI18n()
 const props = defineProps<{ run: GenerationRun }>()
 
 const stages = [
-  { key: 'writing', label: 'Drafting', detail: 'Tailoring profile content' },
-  { key: 'rendering', label: 'Applying template', detail: 'Building the document' },
-  { key: 'reviewing', label: 'Visual check', detail: 'Inspecting the rendered PDF' },
-  { key: 'repairing', label: 'Polishing', detail: 'Refining layout and spacing' },
-  { key: 'finalizing', label: 'Finalizing', detail: 'Saving the final PDF' },
+  { key: 'writing' },
+  { key: 'rendering' },
+  { key: 'reviewing' },
+  { key: 'repairing' },
+  { key: 'finalizing' },
 ] as const
 
 function inferredFailedIndex() {
@@ -43,13 +45,13 @@ function status(index: number): WorkflowStatus {
 }
 
 const icon = (value: WorkflowStatus) => ({ completed: '✓', active: '•', failed: '×', waiting: '·' })[value]
-const statusLabel = (value: WorkflowStatus) => ({ completed: 'Completed', active: 'In progress', failed: 'Failed', waiting: 'Waiting' })[value]
-const stageLabel = (stage: (typeof stages)[number]) => stage.key === 'rendering' ? props.run.templateId ? 'Applying template' : 'Designing document' : stage.label
+const statusLabel = (value: WorkflowStatus) => ({ completed: t('generate.workflow.status.completed'), active: t('generate.workflow.status.active'), failed: t('generate.workflow.status.failed'), waiting: t('generate.stage.waiting') })[value]
+const stageLabel = (stage: (typeof stages)[number]) => stage.key === 'rendering' ? (props.run.templateId ? t('generate.stage.applyingTemplate') : t('generate.stage.designingDocument')) : ({ writing: t('generate.workflow.stage.writing'), reviewing: t('generate.workflow.stage.reviewing'), repairing: t('generate.workflow.stage.repairing'), finalizing: t('generate.stage.finalizing') } as Record<string, string>)[stage.key]
 </script>
 
 <template>
-  <section class="workflow-panel" aria-label="Generation progress">
-    <div class="workflow-heading"><div><p class="eyebrow">Workflow</p><h2>Generation progress</h2></div><span>{{ run.state === 'ready' ? 'Complete' : run.state === 'failed' ? 'Action required' : 'Processing' }}</span></div>
+  <section class="workflow-panel" :aria-label="t('generate.workflow.title')">
+    <div class="workflow-heading"><div><p class="eyebrow">{{ t('generate.workflow.eyebrow') }}</p><h2>{{ t('generate.workflow.title') }}</h2></div><span>{{ run.state === 'ready' ? t('generate.workflow.overallComplete') : run.state === 'failed' ? t('generate.workflow.actionRequired') : t('generate.workflow.processing') }}</span></div>
     <div class="workflow-track">
       <template v-for="(stage, index) in stages" :key="stage.key">
         <div v-if="index" class="workflow-connector" :class="{ completed: status(index) === 'completed' || status(index) === 'active' || status(index) === 'failed' }"><span /></div>
@@ -58,8 +60,8 @@ const stageLabel = (stage: (typeof stages)[number]) => stage.key === 'rendering'
           <strong>{{ stageLabel(stage) }}</strong>
           <small>{{ statusLabel(status(index)) }}</small>
           <div v-if="status(index) === 'failed'" class="failure-tooltip" role="tooltip">
-            <strong>What went wrong</strong>
-            <p>{{ run.errorMessage || 'This stage stopped unexpectedly. Check the selected inputs and model provider, then retry or edit and regenerate.' }}</p>
+            <strong>{{ t('generate.workflow.failureTitle') }}</strong>
+            <p>{{ run.errorMessage || t('generate.workflow.failureFallback') }}</p>
             <small v-if="run.errorCode">{{ run.errorCode.replaceAll('_', ' ') }}</small>
           </div>
         </div>

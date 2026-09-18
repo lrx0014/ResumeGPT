@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import PageHeader from '../components/PageHeader.vue'
@@ -29,19 +32,19 @@ const form = reactive<JobHunterInput>(blankForm())
 const activeCount = computed(() => hunters.value.filter(item => item.enabled).length)
 
 function formatTime(value?: string) {
-  return value ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'Not run yet'
+  return value ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : t('hunters.card.notRunYet')
 }
 
 function scheduleLabel(minutes: number) {
-  return ({ 360: 'Every 6 hours', 720: 'Every 12 hours', 1440: 'Daily', 10080: 'Weekly' } as Record<number, string>)[minutes] ?? `${minutes} minutes`
+  return ({ 360: t('hunters.schedule.every6h'), 720: t('hunters.schedule.every12h'), 1440: t('hunters.schedule.daily'), 10080: t('hunters.schedule.weekly') } as Record<number, string>)[minutes] ?? t('hunters.schedule.minutes', { minutes })
 }
 
 function stateLabel(state: JobHunter['lastState']) {
-  return ({ never: 'Ready', queued: 'Queued', running: 'Searching', succeeded: 'Completed', failed: 'Needs attention' } as Record<string, string>)[state]
+  return ({ never: t('hunters.state.ready'), queued: t('hunters.state.queued'), running: t('hunters.state.searching'), succeeded: t('hunters.state.completed'), failed: t('common.needsAttention') } as Record<string, string>)[state]
 }
 
 function profileName(profileId?: string) {
-  return profiles.value.find(item => item.id === profileId)?.name ?? 'No profile reference'
+  return profiles.value.find(item => item.id === profileId)?.name ?? t('hunters.form.noProfileReference')
 }
 
 async function load(showLoading = true) {
@@ -50,7 +53,7 @@ async function load(showLoading = true) {
     hunters.value = (await api.listJobHunters()).items
     error.value = ''
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not load Job Hunters.'
+    error.value = cause instanceof Error ? cause.message : t('hunters.errors.loadFailed')
   } finally {
     loading.value = false
   }
@@ -68,7 +71,7 @@ async function discoverModels(resetModel = false) {
     models[form.connectionId] = (await api.testLLMConnection(form.connectionId)).models
     if (!form.model) form.model = models[form.connectionId][0] ?? ''
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not load models for this provider.'
+    error.value = cause instanceof Error ? cause.message : t('hunters.errors.modelsFailed')
   } finally {
     loadingModels.value = false
   }
@@ -106,9 +109,9 @@ async function save() {
     if (index >= 0) hunters.value[index] = saved
     else hunters.value.unshift(saved)
     showForm.value = false
-    toast.success(editingId.value ? 'Job Hunter updated.' : 'Job Hunter created and scheduled.')
+    toast.success(editingId.value ? t('hunters.toast.updated') : t('hunters.toast.created'))
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not save the Job Hunter.'
+    error.value = cause instanceof Error ? cause.message : t('hunters.errors.saveFailed')
   } finally {
     busy.value = false
   }
@@ -118,9 +121,9 @@ async function runNow(item: JobHunter) {
   try {
     await api.runJobHunter(item.id)
     item.lastState = 'queued'
-    toast.success('Job Hunter queued.')
+    toast.success(t('hunters.toast.queued'))
   } catch (cause) {
-    toast.warning(cause instanceof Error ? cause.message : 'Could not queue the Job Hunter.')
+    toast.warning(cause instanceof Error ? cause.message : t('hunters.errors.queueFailed'))
   }
 }
 
@@ -134,9 +137,9 @@ async function toggle(item: JobHunter) {
       intervalMinutes: item.intervalMinutes, enabled: !item.enabled,
     })
     Object.assign(item, updated)
-    toast.success(updated.enabled ? 'Job Hunter resumed.' : 'Job Hunter paused.')
+    toast.success(updated.enabled ? t('hunters.toast.resumed') : t('hunters.toast.paused'))
   } catch (cause) {
-    toast.warning(cause instanceof Error ? cause.message : 'Could not update the Job Hunter.')
+    toast.warning(cause instanceof Error ? cause.message : t('hunters.errors.updateFailed'))
   }
 }
 
@@ -148,9 +151,9 @@ async function remove() {
     await api.deleteJobHunter(item.id)
     hunters.value = hunters.value.filter(candidate => candidate.id !== item.id)
     pendingDelete.value = null
-    toast.success('Job Hunter deleted. Previously discovered opportunities were kept.')
+    toast.success(t('hunters.toast.deleted'))
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not delete the Job Hunter.'
+    error.value = cause instanceof Error ? cause.message : t('hunters.errors.deleteFailed')
   } finally {
     busy.value = false
   }
@@ -174,52 +177,52 @@ onBeforeUnmount(() => { if (pollTimer) window.clearInterval(pollTimer) })
 
 <template>
   <div class="page hunters-page">
-    <PageHeader title="Job Hunter" description="Let an AI agent search the web for fresh roles that match your career goals and add them to Job Opportunities automatically.">
-      <button class="button primary" type="button" @click="showForm ? showForm = false : openCreate()">{{ showForm ? 'Close' : 'Create Job Hunter' }}</button>
+    <PageHeader :title="t('pages.hunters.title')" :description="t('pages.hunters.description')">
+      <button class="button primary" type="button" @click="showForm ? showForm = false : openCreate()">{{ showForm ? t('common.close') : t('hunters.createButton') }}</button>
     </PageHeader>
 
-    <section class="hunter-summary" aria-label="Job Hunter summary">
-      <div><strong>{{ hunters.length }}</strong><span>Saved searches</span></div>
-      <div><strong>{{ activeCount }}</strong><span>Active schedules</span></div>
-      <div><strong>{{ hunters.reduce((sum, item) => sum + item.lastFoundCount, 0) }}</strong><span>Found in latest runs</span></div>
+    <section class="hunter-summary" :aria-label="t('hunters.summary.ariaLabel')">
+      <div><strong>{{ hunters.length }}</strong><span>{{ t('hunters.summary.savedSearches') }}</span></div>
+      <div><strong>{{ activeCount }}</strong><span>{{ t('hunters.summary.activeSchedules') }}</span></div>
+      <div><strong>{{ hunters.reduce((sum, item) => sum + item.lastFoundCount, 0) }}</strong><span>{{ t('hunters.summary.foundInLatestRuns') }}</span></div>
     </section>
 
     <form v-if="showForm" class="panel form-grid hunter-form" @submit.prevent="save">
-      <div class="full form-intro"><div><p class="eyebrow">{{ editingId ? 'Edit automation' : 'New automation' }}</p><h2>What should your agent look for?</h2></div><span>Search results are parsed by the Job Import Agent before they appear as ready opportunities.</span></div>
-      <label><span>Name</span><input v-model="form.name" required maxlength="120" placeholder="Backend roles in Berlin" /></label>
-      <label><span>Role or occupation</span><input v-model="form.roleQuery" required maxlength="300" placeholder="Senior Backend Engineer" /></label>
-      <label><span>Location</span><input v-model="form.location" maxlength="300" placeholder="Berlin, Germany" /></label>
-      <label><span>Work mode</span><select v-model="form.workMode"><option value="">Any</option><option>Remote</option><option>Hybrid</option><option>On-site</option></select></label>
-      <label><span>Contract type</span><select v-model="form.employmentType"><option value="">Any</option><option>Full-time</option><option>Part-time</option><option>Contract</option><option>Internship</option></select></label>
-      <label><span>Minimum experience</span><input v-model.number="form.experienceYears" type="number" min="0" max="60" placeholder="Years" /></label>
-      <label class="full"><span>Keywords</span><input v-model="form.keywords" maxlength="1000" placeholder="Go, distributed systems, PostgreSQL" /></label>
-      <label class="full"><span>Additional prompt</span><textarea v-model="form.additionalPrompt" rows="4" maxlength="4000" placeholder="For example: Prefer product companies and exclude recruiting agencies." /></label>
-      <label><span>Profile reference <small>Optional</small></span><select v-model="form.profileId"><option value="">No profile reference</option><option v-for="item in profiles" :key="item.id" :value="item.id">{{ item.name }}{{ item.targetRole ? ` · ${item.targetRole}` : '' }}</option></select></label>
-      <label><span>Jobs per run</span><input v-model.number="form.maxResults" type="number" min="1" max="10" required /><small class="field-hint">Up to 10 new opportunities per scheduled run.</small></label>
-      <label><span>Schedule</span><select v-model.number="form.intervalMinutes"><option :value="360">Every 6 hours</option><option :value="720">Every 12 hours</option><option :value="1440">Daily</option><option :value="10080">Weekly</option></select></label>
-      <label><span>LLM provider</span><select v-model="form.connectionId" required @change="discoverModels(true)"><option value="" disabled>Select provider</option><option v-for="item in connections" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
-      <label><span>Model</span><select v-if="models[form.connectionId]?.length" v-model="form.model" required><option value="" disabled>Select model</option><option v-if="form.model && !models[form.connectionId].includes(form.model)" :value="form.model">{{ form.model }}</option><option v-for="model in models[form.connectionId]" :key="model" :value="model">{{ model }}</option></select><input v-else v-model="form.model" required :disabled="loadingModels" :placeholder="loadingModels ? 'Loading models…' : 'Enter model name'" /></label>
-      <label class="enabled-field"><input v-model="form.enabled" type="checkbox" /><span>Enable automatic runs</span></label>
-      <p v-if="!connections.length" class="full notice">Add an <RouterLink to="/settings">LLM provider in Settings</RouterLink> before creating a Job Hunter.</p>
-      <div class="full form-actions"><button class="button primary" :disabled="busy || !connections.length || !form.model">{{ busy ? 'Saving…' : editingId ? 'Save changes' : 'Create and schedule' }}</button></div>
+      <div class="full form-intro"><div><p class="eyebrow">{{ editingId ? t('hunters.form.editTitle') : t('hunters.form.newTitle') }}</p><h2>{{ t('hunters.form.heading') }}</h2></div><span>{{ t('hunters.form.intro') }}</span></div>
+      <label><span>{{ t('hunters.form.nameLabel') }}</span><input v-model="form.name" required maxlength="120" :placeholder="t('hunters.form.namePlaceholder')" /></label>
+      <label><span>{{ t('hunters.form.roleLabel') }}</span><input v-model="form.roleQuery" required maxlength="300" :placeholder="t('hunters.form.rolePlaceholder')" /></label>
+      <label><span>{{ t('hunters.form.locationLabel') }}</span><input v-model="form.location" maxlength="300" :placeholder="t('hunters.form.locationPlaceholder')" /></label>
+      <label><span>{{ t('hunters.form.workModeLabel') }}</span><select v-model="form.workMode"><option value="">{{ t('hunters.form.workModeAny') }}</option><option>{{ t('hunters.form.workModeRemote') }}</option><option>{{ t('hunters.form.workModeHybrid') }}</option><option>{{ t('hunters.form.workModeOnsite') }}</option></select></label>
+      <label><span>{{ t('hunters.form.employmentTypeLabel') }}</span><select v-model="form.employmentType"><option value="">{{ t('hunters.form.employmentTypeAny') }}</option><option>{{ t('hunters.form.employmentTypeFullTime') }}</option><option>{{ t('hunters.form.employmentTypePartTime') }}</option><option>{{ t('hunters.form.employmentTypeContract') }}</option><option>{{ t('hunters.form.employmentTypeInternship') }}</option></select></label>
+      <label><span>{{ t('hunters.form.experienceLabel') }}</span><input v-model.number="form.experienceYears" type="number" min="0" max="60" :placeholder="t('hunters.form.experiencePlaceholder')" /></label>
+      <label class="full"><span>{{ t('hunters.form.keywordsLabel') }}</span><input v-model="form.keywords" maxlength="1000" :placeholder="t('hunters.form.keywordsPlaceholder')" /></label>
+      <label class="full"><span>{{ t('hunters.form.additionalPromptLabel') }}</span><textarea v-model="form.additionalPrompt" rows="4" maxlength="4000" :placeholder="t('hunters.form.additionalPromptPlaceholder')" /></label>
+      <label><span>{{ t('hunters.form.profileLabel') }} <small>{{ t('hunters.form.optional') }}</small></span><select v-model="form.profileId"><option value="">{{ t('hunters.form.noProfileReference') }}</option><option v-for="item in profiles" :key="item.id" :value="item.id">{{ item.name }}{{ item.targetRole ? ` · ${item.targetRole}` : '' }}</option></select></label>
+      <label><span>{{ t('hunters.form.maxResultsLabel') }}</span><input v-model.number="form.maxResults" type="number" min="1" max="10" required /><small class="field-hint">{{ t('hunters.form.maxResultsHint') }}</small></label>
+      <label><span>{{ t('hunters.form.scheduleLabel') }}</span><select v-model.number="form.intervalMinutes"><option :value="360">{{ t('hunters.schedule.every6h') }}</option><option :value="720">{{ t('hunters.schedule.every12h') }}</option><option :value="1440">{{ t('hunters.schedule.daily') }}</option><option :value="10080">{{ t('hunters.schedule.weekly') }}</option></select></label>
+      <label><span>{{ t('hunters.form.providerLabel') }}</span><select v-model="form.connectionId" required @change="discoverModels(true)"><option value="" disabled>{{ t('hunters.form.selectProvider') }}</option><option v-for="item in connections" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
+      <label><span>{{ t('hunters.form.modelLabel') }}</span><select v-if="models[form.connectionId]?.length" v-model="form.model" required><option value="" disabled>{{ t('hunters.form.selectModel') }}</option><option v-if="form.model && !models[form.connectionId].includes(form.model)" :value="form.model">{{ form.model }}</option><option v-for="model in models[form.connectionId]" :key="model" :value="model">{{ model }}</option></select><input v-else v-model="form.model" required :disabled="loadingModels" :placeholder="loadingModels ? t('hunters.form.loadingModels') : t('hunters.form.enterModelName')" /></label>
+      <label class="enabled-field"><input v-model="form.enabled" type="checkbox" /><span>{{ t('hunters.form.enableAutomaticRuns') }}</span></label>
+      <p v-if="!connections.length" class="full notice">{{ t('hunters.form.noticeBefore') }}<RouterLink to="/settings">{{ t('hunters.form.noticeLinkText') }}</RouterLink>{{ t('hunters.form.noticeAfter') }}</p>
+      <div class="full form-actions"><button class="button primary" :disabled="busy || !connections.length || !form.model">{{ busy ? t('common.saving') : editingId ? t('hunters.form.saveChanges') : t('hunters.form.createAndSchedule') }}</button></div>
     </form>
 
     <p v-if="error" class="notice error" role="alert">{{ error }}</p>
-    <div v-if="loading" class="empty-state">Loading Job Hunters…</div>
+    <div v-if="loading" class="empty-state">{{ t('hunters.loadingHunters') }}</div>
     <div v-else-if="hunters.length" class="hunter-grid">
       <article v-for="item in hunters" :key="item.id" class="panel hunter-card">
-        <header><div><p class="eyebrow">{{ scheduleLabel(item.intervalMinutes) }}</p><h2>{{ item.name }}</h2></div><span class="status-pill" :class="item.lastState">{{ item.enabled ? stateLabel(item.lastState) : 'Paused' }}</span></header>
+        <header><div><p class="eyebrow">{{ scheduleLabel(item.intervalMinutes) }}</p><h2>{{ item.name }}</h2></div><span class="status-pill" :class="item.lastState">{{ item.enabled ? stateLabel(item.lastState) : t('hunters.state.paused') }}</span></header>
         <p class="role-query">{{ item.roleQuery }}<span v-if="item.location"> · {{ item.location }}</span></p>
-        <div class="criteria"><span v-if="item.profileId" :title="`Profile: ${profileName(item.profileId)}`">Profile: {{ profileName(item.profileId) }}</span><span :title="`Up to ${item.maxResults} per run`">Up to {{ item.maxResults }} per run</span><span v-if="item.workMode" :title="item.workMode">{{ item.workMode }}</span><span v-if="item.employmentType" :title="item.employmentType">{{ item.employmentType }}</span><span v-if="item.experienceYears !== undefined" :title="`${item.experienceYears}+ years`">{{ item.experienceYears }}+ years</span><span v-if="item.keywords" :title="item.keywords">{{ item.keywords }}</span></div>
-        <RouterLink v-if="item.reviewCount" class="confirmation-link" :to="`/job-hunters/${item.id}/review`"><span class="confirmation-icon">!</span><span><strong>{{ item.reviewCount }} job{{ item.reviewCount === 1 ? '' : 's' }} need your confirmation</strong><small>Review pages that could not be parsed automatically</small></span><span aria-hidden="true">→</span></RouterLink>
+        <div class="criteria"><span v-if="item.profileId" :title="t('hunters.card.profileLabel', { name: profileName(item.profileId) })">{{ t('hunters.card.profileLabel', { name: profileName(item.profileId) }) }}</span><span :title="t('hunters.card.upToPerRun', { count: item.maxResults })">{{ t('hunters.card.upToPerRun', { count: item.maxResults }) }}</span><span v-if="item.workMode" :title="item.workMode">{{ item.workMode }}</span><span v-if="item.employmentType" :title="item.employmentType">{{ item.employmentType }}</span><span v-if="item.experienceYears !== undefined" :title="t('hunters.card.yearsPlus', { years: item.experienceYears })">{{ t('hunters.card.yearsPlus', { years: item.experienceYears }) }}</span><span v-if="item.keywords" :title="item.keywords">{{ item.keywords }}</span></div>
+        <RouterLink v-if="item.reviewCount" class="confirmation-link" :to="`/job-hunters/${item.id}/review`"><span class="confirmation-icon">!</span><span><strong>{{ t('hunters.card.jobsNeedConfirmation', { count: item.reviewCount }, item.reviewCount) }}</strong><small>{{ t('hunters.card.reviewHint') }}</small></span><span aria-hidden="true">→</span></RouterLink>
         <p v-if="item.lastError" class="hunter-error">{{ item.lastError }}</p>
-        <dl><div><dt>Next run</dt><dd>{{ item.enabled ? formatTime(item.nextRunAt) : 'Paused' }}</dd></div><div><dt>Last run</dt><dd>{{ formatTime(item.lastRunAt) }}</dd></div><div><dt>New opportunities</dt><dd>{{ item.lastFoundCount }}</dd></div></dl>
-        <footer><button class="text-button" type="button" :disabled="['queued', 'running'].includes(item.lastState)" @click="runNow(item)">Run now</button><button class="text-button" type="button" @click="openEdit(item)">Edit</button><button class="text-button" type="button" @click="toggle(item)">{{ item.enabled ? 'Pause' : 'Resume' }}</button><button class="text-button danger-text" type="button" @click="pendingDelete = item">Delete</button></footer>
+        <dl><div><dt>{{ t('hunters.card.nextRun') }}</dt><dd>{{ item.enabled ? formatTime(item.nextRunAt) : t('hunters.state.paused') }}</dd></div><div><dt>{{ t('hunters.card.lastRun') }}</dt><dd>{{ formatTime(item.lastRunAt) }}</dd></div><div><dt>{{ t('hunters.card.newOpportunities') }}</dt><dd>{{ item.lastFoundCount }}</dd></div></dl>
+        <footer><button class="text-button" type="button" :disabled="['queued', 'running'].includes(item.lastState)" @click="runNow(item)">{{ t('hunters.card.runNow') }}</button><button class="text-button" type="button" @click="openEdit(item)">{{ t('common.edit') }}</button><button class="text-button" type="button" @click="toggle(item)">{{ item.enabled ? t('hunters.card.pause') : t('hunters.card.resume') }}</button><button class="text-button danger-text" type="button" @click="pendingDelete = item">{{ t('common.delete') }}</button></footer>
       </article>
     </div>
-    <div v-else class="empty-state"><span class="empty-icon">⌖</span><h2>No Job Hunters yet</h2><p>Create a scheduled search and let your agent bring matching opportunities to you.</p><button class="button primary" type="button" @click="openCreate">Create Job Hunter</button></div>
+    <div v-else class="empty-state"><span class="empty-icon">⌖</span><h2>{{ t('hunters.empty.title') }}</h2><p>{{ t('hunters.empty.description') }}</p><button class="button primary" type="button" @click="openCreate">{{ t('hunters.createButton') }}</button></div>
 
-    <ConfirmDialog :open="Boolean(pendingDelete)" title="Delete Job Hunter?" :message="`${pendingDelete?.name || 'This Job Hunter'} and its future scheduled runs will be removed. Opportunities it already found will remain in your list.`" :busy="busy" @cancel="pendingDelete = null" @confirm="remove" />
+    <ConfirmDialog :open="Boolean(pendingDelete)" :title="t('hunters.deleteDialog.title')" :message="t('hunters.deleteDialog.message', { name: pendingDelete?.name || t('hunters.deleteDialog.fallbackName') })" :busy="busy" @cancel="pendingDelete = null" @confirm="remove" />
   </div>
 </template>
 

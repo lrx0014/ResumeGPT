@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 
 import ConfirmDialog from '../components/ConfirmDialog.vue'
@@ -8,6 +9,7 @@ import { api } from '../lib/api'
 import { toast } from '../lib/toast'
 import type { JobHunter, JobHunterReviewItem } from '../lib/types'
 
+const { t } = useI18n()
 const route = useRoute()
 const hunterId = computed(() => String(route.params.hunterId || ''))
 const hunter = ref<JobHunter | null>(null)
@@ -28,7 +30,7 @@ async function load() {
     hunter.value = hunterResult
     items.value = reviewResult.items
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not load jobs awaiting confirmation.'
+    error.value = cause instanceof Error ? cause.message : t('hunters.review.loadFailed')
   } finally {
     loading.value = false
   }
@@ -42,9 +44,9 @@ async function dismiss() {
     await api.dismissJobHunterReviewItem(hunterId.value, item.id)
     items.value = items.value.filter(candidate => candidate.id !== item.id)
     pendingDismiss.value = null
-    toast.success('Job removed from the confirmation list.')
+    toast.success(t('hunters.review.dismissedToast'))
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not dismiss this job.'
+    error.value = cause instanceof Error ? cause.message : t('hunters.review.dismissFailed')
   } finally {
     busy.value = false
   }
@@ -56,7 +58,7 @@ function formatTime(value: string) {
 
 function hostname(value: string) {
   try { return new URL(value).hostname }
-  catch { return 'Job page' }
+  catch { return t('hunters.review.jobPage') }
 }
 
 onMounted(load)
@@ -64,30 +66,30 @@ onMounted(load)
 
 <template>
   <div class="page review-page">
-    <PageHeader :title="hunter ? `${hunter.name}: Jobs to confirm` : 'Jobs to confirm'" description="These job pages could not be parsed automatically. Review the source yourself, then add the role manually if it is useful.">
-      <RouterLink class="button" to="/job-hunters">Back to Job Hunter</RouterLink>
+    <PageHeader :title="hunter ? t('hunters.review.titleWithName', { name: hunter.name }) : t('hunters.review.title')" :description="t('hunters.review.description')">
+      <RouterLink class="button" to="/job-hunters">{{ t('hunters.review.backToHunter') }}</RouterLink>
     </PageHeader>
 
     <p v-if="error" class="notice error" role="alert">{{ error }}</p>
-    <div v-if="loading" class="empty-state">Loading jobs awaiting confirmation…</div>
+    <div v-if="loading" class="empty-state">{{ t('hunters.review.loading') }}</div>
     <div v-else-if="items.length" class="review-list">
       <article v-for="item in items" :key="item.id" class="panel review-item">
         <div class="review-copy">
-          <div class="review-heading"><span class="warning-mark">!</span><div><p class="eyebrow">Needs your confirmation</p><h2>{{ hostname(item.sourceUrl) }}</h2></div></div>
+          <div class="review-heading"><span class="warning-mark">!</span><div><p class="eyebrow">{{ t('hunters.review.needsConfirmation') }}</p><h2>{{ hostname(item.sourceUrl) }}</h2></div></div>
           <a class="job-url" :href="item.sourceUrl" target="_blank" rel="noopener noreferrer">{{ item.sourceUrl }}</a>
-          <p>{{ item.failureMessage || 'ResumeGPT could not read enough information from this page.' }}</p>
-          <small>Found {{ formatTime(item.createdAt) }} · {{ item.failureCode.replaceAll('_', ' ') }}</small>
+          <p>{{ item.failureMessage || t('hunters.review.defaultFailureMessage') }}</p>
+          <small>{{ t('hunters.review.foundAt', { time: formatTime(item.createdAt) }) }} · {{ item.failureCode.replaceAll('_', ' ') }}</small>
         </div>
         <div class="review-actions">
-          <a class="button primary" :href="item.sourceUrl" target="_blank" rel="noopener noreferrer">Open source ↗</a>
-          <RouterLink class="button" :to="{ path: '/jobs', query: { manualUrl: item.sourceUrl, hunterId: item.hunterId, reviewId: item.id } }">Add manually</RouterLink>
-          <button class="text-button danger-text" type="button" @click="pendingDismiss = item">Dismiss</button>
+          <a class="button primary" :href="item.sourceUrl" target="_blank" rel="noopener noreferrer">{{ t('hunters.review.openSource') }}</a>
+          <RouterLink class="button" :to="{ path: '/jobs', query: { manualUrl: item.sourceUrl, hunterId: item.hunterId, reviewId: item.id } }">{{ t('hunters.review.addManually') }}</RouterLink>
+          <button class="text-button danger-text" type="button" @click="pendingDismiss = item">{{ t('hunters.review.dismiss') }}</button>
         </div>
       </article>
     </div>
-    <div v-else class="empty-state"><span class="empty-icon">✓</span><h2>Nothing needs confirmation</h2><p>Any job pages the Hunter can parse successfully will appear in Job Opportunities automatically.</p><RouterLink class="button primary" to="/job-hunters">Back to Job Hunter</RouterLink></div>
+    <div v-else class="empty-state"><span class="empty-icon">✓</span><h2>{{ t('hunters.review.emptyTitle') }}</h2><p>{{ t('hunters.review.emptyDescription') }}</p><RouterLink class="button primary" to="/job-hunters">{{ t('hunters.review.backToHunter') }}</RouterLink></div>
 
-    <ConfirmDialog :open="Boolean(pendingDismiss)" title="Dismiss this job?" message="The URL will be removed from this confirmation list. It may be found again in a future Hunter run." :busy="busy" @cancel="pendingDismiss = null" @confirm="dismiss" />
+    <ConfirmDialog :open="Boolean(pendingDismiss)" :title="t('hunters.review.dismissDialogTitle')" :message="t('hunters.review.dismissDialogMessage')" :busy="busy" @cancel="pendingDismiss = null" @confirm="dismiss" />
   </div>
 </template>
 

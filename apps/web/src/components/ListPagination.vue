@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = withDefaults(defineProps<{
   page: number
@@ -24,13 +27,13 @@ function updatePageSize(event: Event) {
 </script>
 
 <template>
-  <nav class="list-pagination" aria-label="List pagination">
-    <span>{{ firstItem }}–{{ lastItem }} of {{ total }}</span>
+  <nav class="list-pagination" :aria-label="t('common.perPage')">
+    <span>{{ t('common.range', { first: firstItem, last: lastItem, total }) }}</span>
     <div class="page-actions">
-      <label>Per page <select :value="pageSize" aria-label="Items per page" @change="updatePageSize"><option v-for="size in pageSizes" :key="size" :value="size">{{ size }}</option></select></label>
-      <button type="button" aria-label="Previous page" :disabled="page <= 1" @click="emit('update:page', page - 1)">←</button>
+      <label>{{ t('common.perPage') }} <select :value="pageSize" :aria-label="t('common.perPage')" @change="updatePageSize"><option v-for="size in pageSizes" :key="size" :value="size">{{ size }}</option></select></label>
+      <button type="button" :aria-label="t('common.previous')" :disabled="page <= 1" @click="emit('update:page', page - 1)">←</button>
       <strong>{{ Math.min(page, pageCount) }} / {{ pageCount }}</strong>
-      <button type="button" aria-label="Next page" :disabled="page >= pageCount" @click="emit('update:page', page + 1)">→</button>
+      <button type="button" :aria-label="t('common.next')" :disabled="page >= pageCount" @click="emit('update:page', page + 1)">→</button>
     </div>
   </nav>
 </template>

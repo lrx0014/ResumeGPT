@@ -9,12 +9,14 @@ import UnsavedChangesDialog from '../components/UnsavedChangesDialog.vue'
 import { api } from '../lib/api'
 import { applyTheme } from '../lib/preferences'
 import { toast } from '../lib/toast'
+import { interfaceLanguages, normalizeInterfaceLocale, type InterfaceLocale } from '../plugins/i18n'
 import type { AgentDefault, AgentKind, GenerationModelChoice, LLMConnection, LLMConnectionInput, SettingsPreferences } from '../lib/types'
 
-const { locale } = useI18n()
+const { locale, t } = useI18n()
 const router = useRouter()
 const loading = ref(true)
 const savingPreferences = ref(false)
+const switchingLanguage = ref(false)
 const savingConnection = ref(false)
 const savingAgentDefaults = ref(false)
 const loadingAgentModels = ref<AgentKind | ''>('')
@@ -47,14 +49,22 @@ const agentDefaults = reactive<Record<AgentKind, GenerationModelChoice>>({
   job_import: { connectionId: '', model: '' },
   job_hunter: { connectionId: '', model: '' },
 })
-const agentDefinitions: { kind: AgentKind; name: string; summary: string; requirements: string[] }[] = [
-  { kind: 'writer', name: 'Writer Agent', summary: 'Creates tailored CV and cover-letter content from a Profile and Job Opportunity.', requirements: ['Text generation', 'Reliable tool calling', 'Strong writing and instruction following', 'Long context recommended'] },
-  { kind: 'template_applier', name: 'Template Applying Agent', summary: 'Studies template source, writes LaTeX, compiles it, and repairs rendering errors.', requirements: ['Reliable tool calling', 'Strong coding and LaTeX ability', 'Long context', 'Multi-step reasoning'] },
-  { kind: 'document_designer', name: 'Document Designer Agent', summary: 'Designs a polished CV or cover letter with print-ready HTML and CSS when no template is selected.', requirements: ['Reliable tool calling', 'Strong HTML and CSS ability', 'Visual design and typography', 'Multi-step reasoning'] },
-  { kind: 'visual_reviewer', name: 'Visual Reviewer Agent', summary: 'Inspects rendered PDF pages for layout, typography, clipping, and visual quality.', requirements: ['Image input / vision', 'Structured JSON output', 'Layout reasoning'] },
-  { kind: 'job_import', name: 'Job Import Agent', summary: 'Browses a supplied job page, expands dynamic content, and extracts structured job details.', requirements: ['Reliable tool calling', 'HTML and webpage understanding', 'Structured data extraction'] },
-  { kind: 'job_hunter', name: 'Job Hunter Agent', summary: 'Searches the public web and ranks fresh openings against the configured criteria and optional Profile.', requirements: ['Reliable tool calling', 'Web search reasoning', 'Long context recommended'] },
+const agentDefinitions: { kind: AgentKind; requirementCount: number }[] = [
+  { kind: 'writer', requirementCount: 4 },
+  { kind: 'template_applier', requirementCount: 4 },
+  { kind: 'document_designer', requirementCount: 4 },
+  { kind: 'visual_reviewer', requirementCount: 3 },
+  { kind: 'job_import', requirementCount: 3 },
+  { kind: 'job_hunter', requirementCount: 3 },
 ]
+
+function agentDefinitionKey(kind: AgentKind, field: 'name' | 'summary') {
+  return `settings.agents.definitions.${kind}.${field}`
+}
+
+function agentRequirementKey(kind: AgentKind, index: number) {
+  return `settings.agents.definitions.${kind}.requirements.${index}`
+}
 const preferences = reactive<Pick<SettingsPreferences, 'interfaceLanguage' | 'theme'>>({ interfaceLanguage: 'en', theme: 'system' })
 const connectionForm = reactive<LLMConnectionInput>({
   name: '', executionMode: 'local', provider: 'ollama', baseUrl: 'http://host.docker.internal:11434',
@@ -79,11 +89,15 @@ const providerFormDirty = computed(() => baselineReady.value && showConnectionFo
 const hasUnsavedChanges = computed(() => preferencesDirty.value || agentDefaultsDirty.value || providerFormDirty.value)
 
 const providerOptions = computed(() => connectionForm.executionMode === 'cloud'
-  ? [{ value: 'openai', label: 'OpenAI' }, { value: 'openai_compatible', label: 'OpenAI-compatible' }]
-  : [{ value: 'ollama', label: 'Ollama' }, { value: 'openai_compatible', label: 'OpenAI-compatible' }])
+  ? [{ value: 'openai', label: t('settings.connections.providerNames.openai') }, { value: 'openai_compatible', label: t('settings.connections.providerNames.openaiCompatible') }]
+  : [{ value: 'ollama', label: t('settings.connections.providerNames.ollama') }, { value: 'openai_compatible', label: t('settings.connections.providerNames.openaiCompatible') }])
 
 function providerLabel(provider: LLMConnection['provider']) {
-  return ({ openai: 'OpenAI', openai_compatible: 'OpenAI-compatible', ollama: 'Ollama' })[provider]
+  return ({
+    openai: t('settings.connections.providerNames.openai'),
+    openai_compatible: t('settings.connections.providerNames.openaiCompatible'),
+    ollama: t('settings.connections.providerNames.ollama'),
+  })[provider]
 }
 
 function resetConnectionForm() {
@@ -141,14 +155,15 @@ async function load() {
     connections.value = storedConnections.items
     capabilities.value = system.features
     for (const item of storedAgentDefaults.items) Object.assign(agentDefaults[item.agent], { connectionId: item.connectionId, model: item.model })
-    locale.value = storedPreferences.interfaceLanguage
+    locale.value = normalizeInterfaceLocale(storedPreferences.interfaceLanguage)
+    document.documentElement.lang = storedPreferences.interfaceLanguage
     applyTheme(storedPreferences.theme)
     preferencesSnapshot.value = serializePreferences()
     agentDefaultsSnapshot.value = serializeAgentDefaults()
     providerFormSnapshot.value = serializeProviderForm()
     baselineReady.value = true
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not load settings.'
+    error.value = cause instanceof Error ? cause.message : t('settings.errors.loadFailed')
   } finally {
     loading.value = false
   }
@@ -162,7 +177,7 @@ async function loadAgentModels(kind: AgentKind, force = false) {
     if (force || !agentModels[choice.connectionId]) agentModels[choice.connectionId] = (await api.testLLMConnection(choice.connectionId)).models
     if (!choice.model) choice.model = agentModels[choice.connectionId][0] ?? ''
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not load models for this Agent.'
+    error.value = cause instanceof Error ? cause.message : t('settings.errors.loadAgentModelsFailed')
   } finally {
     loadingAgentModels.value = ''
   }
@@ -176,7 +191,7 @@ function changeAgentConnection(kind: AgentKind) {
 async function saveAgentDefaults() {
   const partial = agentDefinitions.find(({ kind }) => Boolean(agentDefaults[kind].connectionId) !== Boolean(agentDefaults[kind].model))
   if (partial) {
-    error.value = `Choose both a provider and model for ${partial.name}, or clear both fields.`
+    error.value = t('settings.agents.validation.missingField', { name: t(agentDefinitionKey(partial.kind, 'name')) })
     return false
   }
   savingAgentDefaults.value = true
@@ -188,10 +203,10 @@ async function saveAgentDefaults() {
     })
     await api.updateAgentDefaults(items)
     agentDefaultsSnapshot.value = serializeAgentDefaults()
-    toast.success('Agent defaults saved.')
+    toast.success(t('settings.agents.savedToast'))
     return true
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not save Agent defaults.'
+    error.value = cause instanceof Error ? cause.message : t('settings.errors.saveAgentDefaultsFailed')
     return false
   } finally {
     savingAgentDefaults.value = false
@@ -203,16 +218,39 @@ async function savePreferences() {
   error.value = ''
   try {
     const saved = await api.updateSettings({ ...preferences })
-    locale.value = saved.interfaceLanguage
+    locale.value = normalizeInterfaceLocale(saved.interfaceLanguage)
+    document.documentElement.lang = saved.interfaceLanguage
     applyTheme(saved.theme)
     preferencesSnapshot.value = serializePreferences()
-    toast.success('Interface settings saved.')
+    toast.success(t('settings.interfaceSaved'))
     return true
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not save interface settings.'
+    error.value = cause instanceof Error ? cause.message : t('settings.interfaceSaveError')
     return false
   } finally {
     savingPreferences.value = false
+  }
+}
+
+async function switchInterfaceLanguage(language: InterfaceLocale) {
+  if (switchingLanguage.value || preferences.interfaceLanguage === language) return
+  const previous = preferences.interfaceLanguage
+  preferences.interfaceLanguage = language
+  locale.value = language
+  document.documentElement.lang = language
+  switchingLanguage.value = true
+  try {
+    const saved = await api.updateSettings({ ...preferences })
+    Object.assign(preferences, { interfaceLanguage: saved.interfaceLanguage, theme: saved.theme })
+    preferencesSnapshot.value = serializePreferences()
+    toast.success(t('settings.languageSaved'))
+  } catch (cause) {
+    preferences.interfaceLanguage = previous
+    locale.value = previous
+    document.documentElement.lang = previous
+    error.value = cause instanceof Error ? cause.message : t('settings.languageError')
+  } finally {
+    switchingLanguage.value = false
   }
 }
 
@@ -220,7 +258,7 @@ async function saveConnection() {
   const assignToAllAgents = !editingId.value && applyToAllAgents.value
   const model = sharedAgentModel.value.trim()
   if (assignToAllAgents && !model) {
-    error.value = 'Enter the model that every Agent should use with this provider.'
+    error.value = t('settings.connections.validation.missingSharedModel')
     return false
   }
   savingConnection.value = true
@@ -243,18 +281,18 @@ async function saveConnection() {
       } catch (cause) {
         closeConnectionForm()
         error.value = cause instanceof Error
-          ? `The LLM provider was saved, but it could not be assigned to all Agents: ${cause.message}`
-          : 'The LLM provider was saved, but it could not be assigned to all Agents.'
+          ? t('settings.connections.assignAgentsError', { reason: cause.message })
+          : t('settings.connections.assignAgentsErrorGeneric')
         return false
       }
-      toast.success('LLM provider saved and assigned to all Agents.')
+      toast.success(t('settings.connections.savedAssignedToast'))
     } else {
-      toast.success('LLM provider saved. Test it before using it for generation.')
+      toast.success(t('settings.connections.savedToast'))
     }
     closeConnectionForm()
     return true
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not save the LLM provider.'
+    error.value = cause instanceof Error ? cause.message : t('settings.connections.saveError')
     return false
   } finally {
     savingConnection.value = false
@@ -266,13 +304,15 @@ async function testConnection(item: LLMConnection) {
   error.value = ''
   try {
     const result = await api.testLLMConnection(item.id, true)
-    connectionResults[item.id] = `Available · ${result.models.length} model${result.models.length === 1 ? '' : 's'}`
+    connectionResults[item.id] = t('settings.connections.testResultAvailable', { count: result.models.length }, result.models.length)
     discoveredModels.value = result.models
     agentModels[item.id] = result.models
-    toast.success(result.models.length ? `Provider test succeeded. Models: ${result.models.slice(0, 8).join(', ')}${result.models.length > 8 ? '…' : ''}` : 'Provider test succeeded, but the endpoint reported no models.')
+    toast.success(result.models.length
+      ? t('settings.connections.testSucceededWithModels', { models: `${result.models.slice(0, 8).join(', ')}${result.models.length > 8 ? '…' : ''}` })
+      : t('settings.connections.testSucceededNoModels'))
   } catch (cause) {
-    connectionResults[item.id] = 'Provider test failed'
-    error.value = cause instanceof Error ? cause.message : 'Could not test the LLM provider.'
+    connectionResults[item.id] = t('settings.connections.testFailed')
+    error.value = cause instanceof Error ? cause.message : t('settings.connections.testError')
   } finally {
     testingId.value = ''
   }
@@ -292,9 +332,9 @@ async function deleteConnection() {
     agentDefaultsSnapshot.value = serializeAgentDefaults()
     pendingDelete.value = null
     if (editingId.value === item.id) closeConnectionForm()
-    toast.success('LLM provider deleted.')
+    toast.success(t('settings.connections.deletedToast'))
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not delete the LLM provider.'
+    error.value = cause instanceof Error ? cause.message : t('settings.connections.deleteError')
   } finally {
     deletingId.value = ''
   }
@@ -346,72 +386,80 @@ onMounted(load)
 
 <template>
   <div class="page settings-page">
-    <PageHeader title="Settings" description="Manage LLM providers, set sensible defaults for each AI Agent, and personalize the interface." />
+    <PageHeader :title="t('settings.title')" :description="t('settings.description')" />
 
     <p v-if="error" class="notice error" role="alert">{{ error }}</p>
-    <div v-if="loading" class="empty-state">Loading settings…</div>
+    <div v-if="loading" class="empty-state">{{ t('settings.loadingSettings') }}</div>
 
     <template v-else>
       <section class="settings-section">
         <div class="section-heading">
-          <div><p class="eyebrow">AI providers</p><h2>LLM providers</h2><p>Store reusable cloud or local endpoints, then assign them to Agent roles below.</p></div>
-          <button class="button primary" type="button" @click="addConnection">Add provider</button>
+          <div><p class="eyebrow">{{ t('settings.connections.eyebrow') }}</p><h2>{{ t('settings.connections.title') }}</h2><p>{{ t('settings.connections.description') }}</p></div>
+          <button class="button primary" type="button" @click="addConnection">{{ t('settings.connections.addButton') }}</button>
         </div>
 
         <form v-if="showConnectionForm" class="panel form-grid connection-form" @submit.prevent="saveConnection">
-          <h3 class="full">{{ editingId ? 'Edit LLM provider' : 'New LLM provider' }}</h3>
-          <label><span>Provider name</span><input v-model="connectionForm.name" required maxlength="120" placeholder="Local Ollama" /></label>
-          <label><span>Execution mode</span><select v-model="connectionForm.executionMode"><option value="local">Local</option><option value="cloud">Cloud</option></select></label>
-          <label><span>Provider</span><select v-model="connectionForm.provider"><option v-for="option in providerOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
-          <label><span>Base URL</span><input v-model="connectionForm.baseUrl" required type="url" maxlength="2048" /></label>
-          <label class="full"><span>API token</span><input v-model="connectionForm.apiToken" type="password" maxlength="8192" autocomplete="new-password" :placeholder="editingId ? 'Leave blank to keep the saved token' : connectionForm.provider === 'ollama' ? 'Optional for Ollama' : 'Enter API token'" /></label>
-          <label v-if="editingId" class="checkbox-field full"><input v-model="connectionForm.clearApiToken" type="checkbox" /><span>Remove the saved API token</span></label>
-          <label v-if="!editingId" class="checkbox-field full"><input v-model="applyToAllAgents" type="checkbox" /><span>Apply to all Agents</span></label>
-          <label v-if="!editingId && applyToAllAgents" class="full"><span>Model for all Agents</span><input v-model="sharedAgentModel" required maxlength="200" placeholder="Enter a model name" /><small>This provider and model will become the default for every Agent. You can customize individual Agents below after saving.</small></label>
-          <p class="field-help full">The Base URL is accessed by the ResumeGPT API container. Local Ollama on the host normally uses <code>http://host.docker.internal:11434</code>.</p>
-          <div class="full form-actions"><button class="button" type="button" @click="closeConnectionForm">Cancel</button><button class="button primary" :disabled="savingConnection">{{ savingConnection ? 'Saving…' : 'Save provider' }}</button></div>
+          <h3 class="full">{{ editingId ? t('settings.connections.form.titleEdit') : t('settings.connections.form.titleNew') }}</h3>
+          <label><span>{{ t('settings.connections.form.nameLabel') }}</span><input v-model="connectionForm.name" required maxlength="120" :placeholder="t('settings.connections.form.namePlaceholder')" /></label>
+          <label><span>{{ t('settings.connections.form.executionModeLabel') }}</span><select v-model="connectionForm.executionMode"><option value="local">{{ t('settings.connections.form.executionModeLocalOption') }}</option><option value="cloud">{{ t('settings.connections.form.executionModeCloudOption') }}</option></select></label>
+          <label><span>{{ t('settings.connections.form.providerLabel') }}</span><select v-model="connectionForm.provider"><option v-for="option in providerOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
+          <label><span>{{ t('settings.connections.form.baseUrlLabel') }}</span><input v-model="connectionForm.baseUrl" required type="url" maxlength="2048" /></label>
+          <label class="full"><span>{{ t('settings.connections.form.apiTokenLabel') }}</span><input v-model="connectionForm.apiToken" type="password" maxlength="8192" autocomplete="new-password" :placeholder="editingId ? t('settings.connections.form.apiTokenPlaceholderEdit') : connectionForm.provider === 'ollama' ? t('settings.connections.form.apiTokenPlaceholderOllama') : t('settings.connections.form.apiTokenPlaceholderDefault')" /></label>
+          <label v-if="editingId" class="checkbox-field full"><input v-model="connectionForm.clearApiToken" type="checkbox" /><span>{{ t('settings.connections.form.clearApiTokenLabel') }}</span></label>
+          <label v-if="!editingId" class="checkbox-field full"><input v-model="applyToAllAgents" type="checkbox" /><span>{{ t('settings.connections.form.applyToAllAgentsLabel') }}</span></label>
+          <label v-if="!editingId && applyToAllAgents" class="full"><span>{{ t('settings.connections.form.sharedModelLabel') }}</span><input v-model="sharedAgentModel" required maxlength="200" :placeholder="t('settings.connections.form.sharedModelPlaceholder')" /><small>{{ t('settings.connections.form.sharedModelHelp') }}</small></label>
+          <p class="field-help full">{{ t('settings.connections.form.baseUrlHelpPrefix') }} <code>http://host.docker.internal:11434</code>{{ t('settings.connections.form.baseUrlHelpSuffix') }}</p>
+          <div class="full form-actions"><button class="button" type="button" @click="closeConnectionForm">{{ t('common.cancel') }}</button><button class="button primary" :disabled="savingConnection">{{ savingConnection ? t('common.saving') : t('settings.connections.form.saveButton') }}</button></div>
         </form>
 
         <TransitionGroup v-if="connections.length" name="card-list" tag="div" class="connection-list">
           <article v-for="item in connections" :key="item.id" class="panel connection-card">
             <div class="connection-icon">{{ item.executionMode === 'local' ? '⌂' : '☁' }}</div>
-            <div><div class="connection-title"><h3>{{ item.name }}</h3><span class="status-pill">{{ item.executionMode }}</span></div><p>{{ providerLabel(item.provider) }} · {{ item.baseUrl }}</p><small>{{ item.apiTokenConfigured ? 'API token configured' : item.provider === 'ollama' ? 'No API token required' : 'API token not configured' }}</small><small v-if="connectionResults[item.id]" class="test-result">{{ connectionResults[item.id] }}</small></div>
-            <div class="connection-actions"><button class="text-button" type="button" :disabled="testingId === item.id" @click="testConnection(item)">{{ testingId === item.id ? 'Testing…' : 'Test provider' }}</button><button class="text-button" type="button" @click="editConnection(item)">Edit</button><button class="text-button danger-text" type="button" @click="pendingDelete=item">Delete</button></div>
+            <div><div class="connection-title"><h3>{{ item.name }}</h3><span class="status-pill">{{ item.executionMode }}</span></div><p>{{ providerLabel(item.provider) }} · {{ item.baseUrl }}</p><small>{{ item.apiTokenConfigured ? t('settings.connections.tokenConfigured') : item.provider === 'ollama' ? t('settings.connections.tokenNotRequired') : t('settings.connections.tokenNotConfigured') }}</small><small v-if="connectionResults[item.id]" class="test-result">{{ connectionResults[item.id] }}</small></div>
+            <div class="connection-actions"><button class="text-button" type="button" :disabled="testingId === item.id" @click="testConnection(item)">{{ testingId === item.id ? t('settings.connections.testingButton') : t('settings.connections.testButton') }}</button><button class="text-button" type="button" @click="editConnection(item)">{{ t('common.edit') }}</button><button class="text-button danger-text" type="button" @click="pendingDelete=item">{{ t('common.delete') }}</button></div>
           </article>
         </TransitionGroup>
-        <div v-else class="empty-state compact"><span class="empty-icon">✦</span><h2>No LLM providers</h2><p>Add a cloud provider or local Ollama endpoint before configuring Agent defaults.</p></div>
+        <div v-else class="empty-state compact"><span class="empty-icon">✦</span><h2>{{ t('settings.connections.empty.title') }}</h2><p>{{ t('settings.connections.empty.description') }}</p></div>
       </section>
 
       <section class="settings-section">
-        <div class="section-heading"><div><p class="eyebrow">Agent routing</p><h2>Default models</h2><p>Choose the provider and model each Agent should use automatically. These defaults prefill new workflows and can still be overridden for an individual task.</p></div></div>
+        <div class="section-heading"><div><p class="eyebrow">{{ t('settings.agents.eyebrow') }}</p><h2>{{ t('settings.agents.title') }}</h2><p>{{ t('settings.agents.description') }}</p></div></div>
         <form class="agent-defaults" @submit.prevent="saveAgentDefaults">
           <article v-for="definition in agentDefinitions" :key="definition.kind" class="panel agent-default-card">
-            <div class="agent-copy"><div><h3>{{ definition.name }}</h3></div><p>{{ definition.summary }}</p></div>
+            <div class="agent-copy"><div><h3>{{ t(agentDefinitionKey(definition.kind, 'name')) }}</h3></div><p>{{ t(agentDefinitionKey(definition.kind, 'summary')) }}</p></div>
             <div class="agent-fields">
-              <label><span>Provider</span><select v-model="agentDefaults[definition.kind].connectionId" @change="changeAgentConnection(definition.kind)"><option value="">Choose each time</option><option v-for="item in connections" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
-              <label><span>Model</span><div class="model-input-row"><select v-if="agentModels[agentDefaults[definition.kind].connectionId]?.length" v-model="agentDefaults[definition.kind].model"><option value="" disabled>Select model</option><option v-if="agentDefaults[definition.kind].model && !agentModels[agentDefaults[definition.kind].connectionId].includes(agentDefaults[definition.kind].model)" :value="agentDefaults[definition.kind].model">{{ agentDefaults[definition.kind].model }}</option><option v-for="model in agentModels[agentDefaults[definition.kind].connectionId]" :key="model" :value="model">{{ model }}</option></select><input v-else v-model="agentDefaults[definition.kind].model" :disabled="!agentDefaults[definition.kind].connectionId || loadingAgentModels === definition.kind" :placeholder="loadingAgentModels === definition.kind ? 'Loading models…' : 'Enter model name'" maxlength="200" /><button class="button compact-button" type="button" :disabled="!agentDefaults[definition.kind].connectionId || loadingAgentModels === definition.kind" @click="loadAgentModels(definition.kind, true)">{{ loadingAgentModels === definition.kind ? 'Loading…' : 'Refresh' }}</button></div></label>
+              <label><span>{{ t('settings.connections.form.providerLabel') }}</span><select v-model="agentDefaults[definition.kind].connectionId" @change="changeAgentConnection(definition.kind)"><option value="">{{ t('settings.agents.chooseEachTime') }}</option><option v-for="item in connections" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
+              <label><span>{{ t('settings.agents.modelLabel') }}</span><div class="model-input-row"><select v-if="agentModels[agentDefaults[definition.kind].connectionId]?.length" v-model="agentDefaults[definition.kind].model"><option value="" disabled>{{ t('settings.agents.selectModelOption') }}</option><option v-if="agentDefaults[definition.kind].model && !agentModels[agentDefaults[definition.kind].connectionId].includes(agentDefaults[definition.kind].model)" :value="agentDefaults[definition.kind].model">{{ agentDefaults[definition.kind].model }}</option><option v-for="model in agentModels[agentDefaults[definition.kind].connectionId]" :key="model" :value="model">{{ model }}</option></select><input v-else v-model="agentDefaults[definition.kind].model" :disabled="!agentDefaults[definition.kind].connectionId || loadingAgentModels === definition.kind" :placeholder="loadingAgentModels === definition.kind ? t('settings.agents.loadingModelsPlaceholder') : t('settings.agents.modelNamePlaceholder')" maxlength="200" /><button class="button compact-button" type="button" :disabled="!agentDefaults[definition.kind].connectionId || loadingAgentModels === definition.kind" @click="loadAgentModels(definition.kind, true)">{{ loadingAgentModels === definition.kind ? t('common.loading') : t('common.refresh') }}</button></div></label>
             </div>
-            <aside class="agent-tip"><strong>Model capability tips</strong><div><span v-for="requirement in definition.requirements" :key="requirement">{{ requirement }}</span></div></aside>
+            <aside class="agent-tip"><strong>{{ t('settings.agents.capabilityTips') }}</strong><div><span v-for="index in definition.requirementCount" :key="index">{{ t(agentRequirementKey(definition.kind, index - 1)) }}</span></div></aside>
           </article>
-          <div class="form-actions"><button class="button primary" :disabled="savingAgentDefaults || !connections.length">{{ savingAgentDefaults ? 'Saving…' : 'Save Agent defaults' }}</button></div>
+          <div class="form-actions"><button class="button primary" :disabled="savingAgentDefaults || !connections.length">{{ savingAgentDefaults ? t('common.saving') : t('settings.agents.saveButton') }}</button></div>
         </form>
       </section>
 
       <section class="settings-section panel">
-        <div class="section-heading"><div><p class="eyebrow">Personalization</p><h2>Interface</h2><p>These choices affect only the ResumeGPT interface, not generated documents.</p></div></div>
+        <div class="section-heading"><div><p class="eyebrow">{{ t('settings.interfaceEyebrow') }}</p><h2>{{ t('settings.interface') }}</h2><p>{{ t('settings.interfaceHelp') }}</p></div></div>
         <form class="form-grid" @submit.prevent="savePreferences">
-          <label><span>Interface language</span><select v-model="preferences.interfaceLanguage"><option value="en">English</option><option value="de">Deutsch</option></select></label>
-          <label><span>Theme</span><select v-model="preferences.theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
-          <div class="full form-actions"><button class="button primary" :disabled="savingPreferences">{{ savingPreferences ? 'Saving…' : 'Save interface settings' }}</button></div>
+          <label><span>{{ t('settings.theme') }}</span><select v-model="preferences.theme"><option value="system">{{ t('settings.system') }}</option><option value="light">{{ t('settings.light') }}</option><option value="dark">{{ t('settings.dark') }}</option></select></label>
+          <div class="full form-actions"><button class="button primary" :disabled="savingPreferences">{{ savingPreferences ? t('common.saving') : t('settings.saveInterface') }}</button></div>
         </form>
       </section>
 
       <section class="settings-section">
-        <div class="section-heading"><div><p class="eyebrow">Read only</p><h2>System status</h2><p>Availability reported by the current API deployment.</p></div></div>
-        <div class="status-grid"><div v-for="(label, key) in { profiles: 'Profiles', jobs: 'Job opportunities', documents: 'Document extraction', jobImports: 'Job import', settings: 'Settings API' }" :key="key" class="panel status-card"><span>{{ label }}</span><strong :class="capabilities[key] ? 'available' : 'unavailable'">{{ capabilities[key] ? 'Available' : 'Unavailable' }}</strong></div><div class="panel status-card"><span>LLM providers</span><strong :class="connections.length ? 'available' : 'unavailable'">{{ connections.length ? `${connections.length} configured` : 'Not configured' }}</strong></div></div>
+        <div class="section-heading"><div><p class="eyebrow">{{ t('settings.status.eyebrow') }}</p><h2>{{ t('settings.status.title') }}</h2><p>{{ t('settings.status.description') }}</p></div></div>
+        <div class="status-grid"><div v-for="(label, key) in { profiles: t('settings.status.labels.profiles'), jobs: t('settings.status.labels.jobs'), documents: t('settings.status.labels.documents'), jobImports: t('settings.status.labels.jobImports'), settings: t('settings.status.labels.settings') }" :key="key" class="panel status-card"><span>{{ label }}</span><strong :class="capabilities[key] ? 'available' : 'unavailable'">{{ capabilities[key] ? t('settings.status.available') : t('settings.status.unavailable') }}</strong></div><div class="panel status-card"><span>{{ t('settings.status.llmProvidersLabel') }}</span><strong :class="connections.length ? 'available' : 'unavailable'">{{ connections.length ? t('settings.status.configured', { count: connections.length }) : t('settings.status.notConfigured') }}</strong></div></div>
+      </section>
+
+      <section class="settings-section panel language-switcher">
+        <div class="section-heading"><div><p class="eyebrow">{{ t('settings.languageEyebrow') }}</p><h2>{{ t('settings.languageTitle') }}</h2><p>{{ t('settings.languageHelp') }}</p></div><span v-if="switchingLanguage" class="language-saving">{{ t('settings.languageSaving') }}</span></div>
+        <div class="language-options" role="radiogroup" :aria-label="t('settings.languageTitle')">
+          <button v-for="language in interfaceLanguages" :key="language.code" class="language-option" :class="{ active: preferences.interfaceLanguage === language.code }" type="button" role="radio" :aria-checked="preferences.interfaceLanguage === language.code" :disabled="switchingLanguage" @click="switchInterfaceLanguage(language.code)">
+            <span>{{ language.shortName }}</span><strong>{{ language.nativeName }}</strong><small v-if="preferences.interfaceLanguage === language.code">✓</small>
+          </button>
+        </div>
       </section>
     </template>
-    <ConfirmDialog :open="Boolean(pendingDelete)" title="Delete LLM provider?" :message="`“${pendingDelete?.name ?? ''}” will no longer be available for generation. This action cannot be undone.`" :busy="deletingId===pendingDelete?.id" @cancel="pendingDelete=null" @confirm="deleteConnection" />
+    <ConfirmDialog :open="Boolean(pendingDelete)" :title="t('settings.connections.deleteConfirmTitle')" :message="t('settings.connections.deleteConfirmMessage', { name: pendingDelete?.name ?? '' })" :busy="deletingId===pendingDelete?.id" @cancel="pendingDelete=null" @confirm="deleteConnection" />
     <UnsavedChangesDialog :open="showUnsavedDialog" :busy="savingBeforeLeave" @cancel="keepEditing" @discard="discardBeforeLeaving" @save="saveBeforeLeaving" />
   </div>
 </template>
@@ -456,7 +504,16 @@ onMounted(load)
 .status-card strong { font-size: .95rem; }
 .available { color: var(--accent); }
 .unavailable { color: var(--muted); }
+.language-switcher { margin-bottom: 0; }
+.language-saving { color: var(--muted); font-size: .78rem; white-space: nowrap; }
+.language-options { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .7rem; }
+.language-option { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: .65rem; padding: .85rem; border: 1px solid var(--line); border-radius: 11px; background: var(--surface-soft); color: var(--ink); text-align: left; cursor: pointer; transition: border-color .18s ease, background .18s ease, transform .18s ease; }
+.language-option:hover:not(:disabled) { border-color: var(--accent); transform: translateY(-1px); }
+.language-option.active { border-color: var(--accent); background: var(--accent-pale); }
+.language-option > span { display: grid; width: 31px; height: 31px; place-items: center; border-radius: 8px; background: var(--surface); color: var(--accent-dark); font-size: .68rem; font-weight: 800; }
+.language-option strong { font-size: .82rem; }
+.language-option small { color: var(--accent); font-weight: 900; }
 @media (max-width: 1000px) { .agent-default-card { grid-template-columns: 1fr 1.5fr; } .agent-tip { grid-column: 1 / -1; } }
-@media (max-width: 760px) { .section-heading, .connection-card, .agent-default-card { align-items: stretch; grid-template-columns: 1fr; flex-direction: column; } .agent-tip { grid-column: auto; } .agent-fields { grid-template-columns: 1fr; } .connection-actions { flex-wrap: wrap; } .status-grid { grid-template-columns: 1fr 1fr; } }
-@media (max-width: 480px) { .status-grid { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .section-heading, .connection-card, .agent-default-card { align-items: stretch; grid-template-columns: 1fr; flex-direction: column; } .agent-tip { grid-column: auto; } .agent-fields { grid-template-columns: 1fr; } .connection-actions { flex-wrap: wrap; } .status-grid, .language-options { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 480px) { .status-grid, .language-options { grid-template-columns: 1fr; } }
 </style>

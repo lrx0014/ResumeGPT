@@ -134,7 +134,7 @@ export interface APIError {
 
 export interface SettingsPreferences {
   workspaceId: string
-  interfaceLanguage: 'en' | 'de'
+  interfaceLanguage: 'en' | 'de' | 'fr' | 'es' | 'ja' | 'zh-CN' | 'zh-TW'
   theme: 'system' | 'light' | 'dark'
   updatedAt: string
 }

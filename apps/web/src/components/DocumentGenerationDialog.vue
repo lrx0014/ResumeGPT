@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { api } from '../lib/api'
 import type { AgentDefault, GenerationInput, GenerationModelChoice, Job, LLMConnection, Profile, Template, TemplateKind } from '../lib/types'
 
+const { t } = useI18n()
 const props = defineProps<{
   open: boolean
   opportunities: Job[]
@@ -39,7 +41,7 @@ const reviewerDefault = ref<GenerationModelChoice | null>(null)
 const selectedOpportunities = computed(() => activeOpportunityIds.value.map(id => props.opportunities.find(item => item.id === id)).filter((item): item is Job => Boolean(item)))
 const matchingTemplates = computed(() => templates.value.filter(item => item.state === 'ready' && item.format === 'latex' && item.kind === form.documentType))
 const ready = computed(() => Boolean(activeOpportunityIds.value.length && form.profileId && form.writer.connectionId && form.writer.model && (form.pipelineMode === 'single' || (form.renderer.connectionId && form.renderer.model && form.reviewer.connectionId && form.reviewer.model))))
-const documentLabel = computed(() => form.documentType === 'resume' ? 'CV' : 'cover letter')
+const documentLabel = computed(() => form.documentType === 'resume' ? t('generate.dialog.documentLabelCv') : t('generate.dialog.documentLabelCoverLetter'))
 
 async function discover(choice: GenerationModelChoice) {
   const connectionId = choice.connectionId
@@ -53,7 +55,7 @@ async function discover(choice: GenerationModelChoice) {
     models[connectionId] = (await api.testLLMConnection(connectionId)).models
     if (choice.connectionId === connectionId && !choice.model) choice.model = models[connectionId][0] ?? ''
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not load models.'
+    error.value = cause instanceof Error ? cause.message : t('generate.errors.loadModels')
   } finally {
     loadingModelConnections[connectionId] = false
   }
@@ -91,7 +93,7 @@ async function prepare() {
     form.reviewer = { ...(reviewerDefault.value ?? fallback) }
     await Promise.all([discover(form.writer), discover(form.renderer), discover(form.reviewer)])
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not load generation options.'
+    error.value = cause instanceof Error ? cause.message : t('generate.dialog.errors.loadOptions')
   } finally {
     loading.value = false
   }
@@ -118,8 +120,8 @@ async function submit() {
   if (failedOpportunityIds.length) {
     activeOpportunityIds.value = failedOpportunityIds
     const firstFailure = results.find(result => result.status === 'rejected') as PromiseRejectedResult | undefined
-    const detail = firstFailure?.reason instanceof Error ? firstFailure.reason.message : 'Some generation tasks could not be created.'
-    error.value = `${createdOpportunityIds.length} queued, ${failedOpportunityIds.length} failed. ${detail}`
+    const detail = firstFailure?.reason instanceof Error ? firstFailure.reason.message : t('generate.dialog.errors.someTasksFailed')
+    error.value = t('generate.dialog.errors.partialFailure', { created: createdOpportunityIds.length, failed: failedOpportunityIds.length, detail })
   } else {
     emit('close')
   }
@@ -154,30 +156,30 @@ watch(useSpecifiedModel, value => {
   <div v-if="open" class="modal-backdrop" @click.self="close">
     <section class="panel generation-modal batch-generation-modal" role="dialog" aria-modal="true" aria-labelledby="batch-generation-title">
       <header class="modal-header">
-        <div><p class="eyebrow">{{ activeOpportunityIds.length > 1 ? 'Batch generation' : 'Quick generation' }}</p><h2 id="batch-generation-title">Create {{ documentLabel }}{{ activeOpportunityIds.length > 1 ? 's' : '' }}</h2></div>
-        <button class="modal-close" type="button" aria-label="Close" :disabled="submitting" @click="close">×</button>
+        <div><p class="eyebrow">{{ activeOpportunityIds.length > 1 ? t('generate.dialog.eyebrowBatch') : t('generate.dialog.eyebrowQuick') }}</p><h2 id="batch-generation-title">{{ t('generate.dialog.createTitle', { label: documentLabel }, activeOpportunityIds.length) }}</h2></div>
+        <button class="modal-close" type="button" :aria-label="t('common.close')" :disabled="submitting" @click="close">×</button>
       </header>
-      <p class="dialog-intro">The same Profile, Template, and model settings will be used for {{ activeOpportunityIds.length }} {{ activeOpportunityIds.length === 1 ? 'job opportunity' : 'job opportunities' }}. Each one creates a separate tracked document generation.</p>
-      <div class="target-list" aria-label="Selected job opportunities">
+      <p class="dialog-intro">{{ t('generate.dialog.intro', { count: activeOpportunityIds.length }, activeOpportunityIds.length) }}</p>
+      <div class="target-list" :aria-label="t('generate.dialog.selectedOpportunities')">
         <span v-for="item in selectedOpportunities.slice(0, 5)" :key="item.id">{{ item.title }}<small>{{ item.company }}</small></span>
-        <span v-if="selectedOpportunities.length > 5">+{{ selectedOpportunities.length - 5 }} more</span>
+        <span v-if="selectedOpportunities.length > 5">{{ t('generate.dialog.moreCount', { count: selectedOpportunities.length - 5 }) }}</span>
       </div>
       <p v-if="error" class="notice error" role="alert">{{ error }}</p>
-      <div v-if="loading" class="empty-state compact">Loading generation options…</div>
+      <div v-if="loading" class="empty-state compact">{{ t('generate.dialog.loadingOptions') }}</div>
       <form v-else @submit.prevent="submit">
-        <p v-if="!profiles.length" class="notice">Create a Profile with saved content before generating documents.</p>
-        <p v-else-if="!connections.length" class="notice">Add an LLM provider in Settings before generating documents.</p>
+        <p v-if="!profiles.length" class="notice">{{ t('generate.dialog.noProfilesNotice') }}</p>
+        <p v-else-if="!connections.length" class="notice">{{ t('generate.dialog.noConnectionsNotice') }}</p>
         <div class="form-grid">
-          <label><span>Document type</span><select v-model="form.documentType"><option value="resume">CV</option><option value="cover_letter">Cover letter</option></select></label>
-          <label><span>Output language</span><input v-model="form.language" required maxlength="40" /></label>
-          <label><span>Profile</span><select v-model="form.profileId" required><option value="" disabled>Select a profile</option><option v-for="item in profiles" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
-          <label><span>Template</span><select v-model="form.templateId"><option value="">No template — let AI design it</option><option v-for="item in matchingTemplates" :key="item.id" :value="item.id">{{ item.name }}</option></select><small v-if="!form.templateId">The Document Designer will create a print-ready HTML/CSS layout.</small></label>
-          <label><span>Page target</span><select v-model="form.pageTarget"><option value="one_page">One page</option><option value="two_pages">Two pages</option><option value="flexible">Flexible</option></select></label>
-          <label class="full"><span>Custom instructions</span><textarea v-model="form.customInstructions" rows="3" maxlength="4000" placeholder="Optional emphasis or tone shared by these documents." /></label>
-          <div class="full model-routing"><label class="model-switch"><input v-model="useSpecifiedModel" type="checkbox" role="switch" /><span class="model-switch-track" aria-hidden="true"><span /></span><span>Use a specific model</span></label><p v-if="!useSpecifiedModel">Each agent uses its default model from System Settings. <RouterLink to="/settings">Configure agent models →</RouterLink></p><p v-else>The selected model will handle writing, document creation, and visual review for every document in this batch.</p></div>
-          <fieldset v-if="useSpecifiedModel" class="full model-card"><legend>Model for every agent</legend><div class="model-row"><label><span>Provider</span><select v-model="form.writer.connectionId" @change="changeConnection(form.writer)"><option value="" disabled>Select provider</option><option v-for="item in connections" :key="item.id" :value="item.id">{{ item.name }}</option></select></label><label><span>Model</span><select v-if="models[form.writer.connectionId]?.length" v-model="form.writer.model" required><option value="" disabled>Select model</option><option v-for="model in models[form.writer.connectionId]" :key="model" :value="model">{{ model }}</option></select><input v-else v-model="form.writer.model" required :disabled="loadingModelConnections[form.writer.connectionId]" :placeholder="loadingModelConnections[form.writer.connectionId] ? 'Loading models…' : 'Enter model name'" /></label></div><small>A text-only model can still generate a PDF; visual QA will be skipped with a warning.</small></fieldset>
+          <label><span>{{ t('generate.modal.documentTypeLabel') }}</span><select v-model="form.documentType"><option value="resume">{{ t('generate.dialog.documentTypeCv') }}</option><option value="cover_letter">{{ t('generate.modal.documentTypeCoverLetter') }}</option></select></label>
+          <label><span>{{ t('generate.modal.languageLabel') }}</span><input v-model="form.language" required maxlength="40" /></label>
+          <label><span>{{ t('generate.modal.profileLabel') }}</span><select v-model="form.profileId" required><option value="" disabled>{{ t('generate.modal.profilePlaceholder') }}</option><option v-for="item in profiles" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
+          <label><span>{{ t('generate.modal.templateLabel') }}</span><select v-model="form.templateId"><option value="">{{ t('generate.modal.templateNone') }}</option><option v-for="item in matchingTemplates" :key="item.id" :value="item.id">{{ item.name }}</option></select><small v-if="!form.templateId">{{ t('generate.modal.templateHelp') }}</small></label>
+          <label><span>{{ t('generate.modal.pageTargetLabel') }}</span><select v-model="form.pageTarget"><option value="one_page">{{ t('generate.pageTarget.onePage') }}</option><option value="two_pages">{{ t('generate.pageTarget.twoPages') }}</option><option value="flexible">{{ t('generate.pageTarget.flexible') }}</option></select></label>
+          <label class="full"><span>{{ t('generate.modal.customInstructionsLabel') }}</span><textarea v-model="form.customInstructions" rows="3" maxlength="4000" :placeholder="t('generate.dialog.customInstructionsPlaceholder')" /></label>
+          <div class="full model-routing"><label class="model-switch"><input v-model="useSpecifiedModel" type="checkbox" role="switch" /><span class="model-switch-track" aria-hidden="true"><span /></span><span>{{ t('generate.modal.useSpecificModel') }}</span></label><p v-if="!useSpecifiedModel">{{ t('generate.modal.defaultModelsHelp') }} <RouterLink to="/settings">{{ t('generate.modal.configureAgentModels') }}</RouterLink></p><p v-else>{{ t('generate.dialog.specificModelHelp') }}</p></div>
+          <fieldset v-if="useSpecifiedModel" class="full model-card"><legend>{{ t('generate.modal.modelForEveryAgent') }}</legend><div class="model-row"><label><span>{{ t('generate.modal.providerLabel') }}</span><select v-model="form.writer.connectionId" @change="changeConnection(form.writer)"><option value="" disabled>{{ t('generate.modal.providerPlaceholder') }}</option><option v-for="item in connections" :key="item.id" :value="item.id">{{ item.name }}</option></select></label><label><span>{{ t('generate.modal.modelLabel') }}</span><select v-if="models[form.writer.connectionId]?.length" v-model="form.writer.model" required><option value="" disabled>{{ t('generate.modal.modelPlaceholder') }}</option><option v-for="model in models[form.writer.connectionId]" :key="model" :value="model">{{ model }}</option></select><input v-else v-model="form.writer.model" required :disabled="loadingModelConnections[form.writer.connectionId]" :placeholder="loadingModelConnections[form.writer.connectionId] ? t('generate.modal.loadingModels') : t('generate.modal.enterModelName')" /></label></div><small>{{ t('generate.modal.textOnlyModelHelp') }}</small></fieldset>
         </div>
-        <div class="modal-actions"><button class="button" type="button" :disabled="submitting" @click="close">Cancel</button><button class="button primary" :disabled="!ready || submitting">{{ submitting ? 'Queuing…' : `Create ${activeOpportunityIds.length} ${documentLabel}${activeOpportunityIds.length === 1 ? '' : 's'}` }}</button></div>
+        <div class="modal-actions"><button class="button" type="button" :disabled="submitting" @click="close">{{ t('common.cancel') }}</button><button class="button primary" :disabled="!ready || submitting">{{ submitting ? t('generate.queuing') : t('generate.dialog.submitCount', { count: activeOpportunityIds.length, label: documentLabel }, activeOpportunityIds.length) }}</button></div>
       </form>
     </section>
   </div>

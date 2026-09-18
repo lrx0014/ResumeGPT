@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
+
+const { t } = useI18n()
 
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import PageHeader from '../components/PageHeader.vue'
@@ -12,7 +15,7 @@ const route = useRoute()
 const router = useRouter()
 const profileId = computed(() => String(route.params.profileId))
 const profile = ref<Profile>()
-const form = reactive({ name: '', targetRole: '', defaultLanguage: 'en-US', content: '', avatarObjectId: '' })
+const form = reactive({ name: '', targetRole: '', defaultLanguage: 'English', content: '', avatarObjectId: '' })
 const loading = ref(true)
 const saving = ref(false)
 const extracting = ref(false)
@@ -41,11 +44,11 @@ async function load() {
       try {
         avatarUrl.value = (await api.profileAvatar(selected.id)).url
       } catch {
-        toast.warning('The profile loaded, but its avatar is currently unavailable.')
+        toast.warning(t('profiles.toasts.avatarUnavailable'))
       }
     }
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not load the profile.'
+    error.value = cause instanceof Error ? cause.message : t('profiles.errors.loadOne')
   } finally {
     loading.value = false
   }
@@ -56,9 +59,9 @@ async function save() {
   error.value = ''
   try {
     profile.value = await api.updateProfile(profileId.value, { ...form })
-    toast.success('Profile saved.')
+    toast.success(t('profiles.toasts.saved'))
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not save the profile.'
+    error.value = cause instanceof Error ? cause.message : t('profiles.errors.save')
   } finally {
     saving.value = false
   }
@@ -69,7 +72,7 @@ async function extractDocument(event: Event) {
   const file = element.files?.[0]
   if (!file) return
   if (file.size > 10 * 1024 * 1024) {
-    error.value = 'Choose a document no larger than 10 MiB.'
+    error.value = t('profiles.errors.documentTooLarge')
     element.value = ''
     return
   }
@@ -85,12 +88,12 @@ async function extractDocument(event: Event) {
       extraction.value = await api.documentUpload(profileId.value, staged.upload.id)
     }
     if (extraction.value.state !== 'ready' || !extraction.value.extractedText) {
-      throw new Error(extraction.value.errorMessage || 'Document extraction did not complete.')
+      throw new Error(extraction.value.errorMessage || t('profiles.errors.extractionIncomplete'))
     }
     form.content = extraction.value.extractedText
-    toast.success('Extracted text loaded into the editor. Review it and click Save profile when ready.')
+    toast.success(t('profiles.toasts.extracted'))
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not extract the document.'
+    error.value = cause instanceof Error ? cause.message : t('profiles.errors.extract')
   } finally {
     extracting.value = false
     element.value = ''
@@ -102,7 +105,7 @@ async function uploadAvatar(event: Event) {
   const file = element.files?.[0]
   if (!file) return
   if (!['image/jpeg', 'image/png'].includes(file.type) || file.size > 5 * 1024 * 1024) {
-    error.value = 'Choose a JPEG or PNG image no larger than 5 MiB.'
+    error.value = t('profiles.errors.avatarInvalid')
     element.value = ''
     return
   }
@@ -115,9 +118,9 @@ async function uploadAvatar(event: Event) {
     if (localAvatarUrl) URL.revokeObjectURL(localAvatarUrl)
     localAvatarUrl = URL.createObjectURL(file)
     avatarUrl.value = localAvatarUrl
-    toast.info('Avatar uploaded. Click Save profile to keep this change.')
+    toast.info(t('profiles.toasts.avatarUploaded'))
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not upload the avatar.'
+    error.value = cause instanceof Error ? cause.message : t('profiles.errors.avatarUpload')
   } finally {
     saving.value = false
     element.value = ''
@@ -127,12 +130,12 @@ async function uploadAvatar(event: Event) {
 function removeAvatar() {
   form.avatarObjectId = ''
   avatarUrl.value = ''
-  toast.info('Avatar removed from the editor. Click Save profile to keep this change.')
+  toast.info(t('profiles.toasts.avatarRemoved'))
 }
 
 function handleAvatarError() {
   avatarUrl.value = ''
-  toast.warning('The saved avatar is currently unavailable. Upload another image or remove the avatar and save.')
+  toast.warning(t('profiles.toasts.avatarUnavailableSaved'))
 }
 
 async function removeProfile() {
@@ -140,10 +143,10 @@ async function removeProfile() {
   error.value = ''
   try {
     await api.deleteProfile(profileId.value)
-    toast.success('Profile deleted.')
+    toast.success(t('profiles.toasts.deleted'))
     await router.push('/profiles')
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not delete the profile.'
+    error.value = cause instanceof Error ? cause.message : t('profiles.errors.delete')
     deleting.value = false
   }
 }
@@ -154,46 +157,46 @@ onBeforeUnmount(() => { if (localAvatarUrl) URL.revokeObjectURL(localAvatarUrl) 
 
 <template>
   <div class="page profile-editor">
-    <RouterLink to="/profiles">← All profiles</RouterLink>
-    <PageHeader :title="profile?.name ?? 'Profile'" description="Edit the profile text that ResumeGPT will use for future generation.">
-      <button class="button" type="button" :disabled="loading || saving || extracting" @click="load">Discard changes</button>
-      <button class="button primary" type="button" :disabled="loading || saving || extracting" @click="save">{{ saving ? 'Saving…' : 'Save profile' }}</button>
+    <RouterLink to="/profiles">{{ t('profiles.backToProfiles') }}</RouterLink>
+    <PageHeader :title="profile?.name ?? t('profiles.untitled')" :description="t('profiles.editDescription')">
+      <button class="button" type="button" :disabled="loading || saving || extracting" @click="load">{{ t('profiles.discardChanges') }}</button>
+      <button class="button primary" type="button" :disabled="loading || saving || extracting" @click="save">{{ saving ? t('common.saving') : t('profiles.saveProfile') }}</button>
     </PageHeader>
 
     <p v-if="error" class="notice error" role="alert">{{ error }}</p>
-    <div v-if="loading" class="empty-state">Loading profile…</div>
+    <div v-if="loading" class="empty-state">{{ t('profiles.loadingProfile') }}</div>
 
     <template v-else-if="profile">
       <section class="panel form-grid">
-        <h2 class="full">Profile details</h2>
-        <label><span>Name</span><input v-model="form.name" required maxlength="200" /></label>
-        <label><span>Target role</span><input v-model="form.targetRole" maxlength="200" placeholder="Senior Backend Engineer" /></label>
-        <label><span>Primary language</span><select v-model="form.defaultLanguage"><option value="en-US">English</option><option value="de-DE">German</option></select></label>
+        <h2 class="full">{{ t('profiles.detailsHeading') }}</h2>
+        <label><span>{{ t('profiles.form.nameLabel') }}</span><input v-model="form.name" required maxlength="200" /></label>
+        <label><span>{{ t('profiles.form.targetRoleLabel') }}</span><input v-model="form.targetRole" maxlength="200" :placeholder="t('profiles.form.targetRolePlaceholder')" /></label>
+        <label><span>{{ t('profiles.form.languageLabel') }}</span><input v-model="form.defaultLanguage" required :placeholder="t('profiles.form.languagePlaceholder')" /></label>
         <div class="avatar-field">
-          <img v-if="avatarUrl" :src="avatarUrl" alt="Profile avatar preview" @error="handleAvatarError" />
+          <img v-if="avatarUrl" :src="avatarUrl" :alt="t('profiles.form.avatarAlt')" @error="handleAvatarError" />
           <div>
-            <label><span>Optional avatar</span><input type="file" accept="image/jpeg,image/png" :disabled="saving" @change="uploadAvatar" /></label>
-            <button v-if="avatarUrl" class="text-button" type="button" @click="removeAvatar">Remove avatar</button>
+            <label><span>{{ t('profiles.form.avatarLabel') }}</span><input type="file" accept="image/jpeg,image/png" :disabled="saving" @change="uploadAvatar" /></label>
+            <button v-if="avatarUrl" class="text-button" type="button" @click="removeAvatar">{{ t('profiles.form.removeAvatar') }}</button>
           </div>
         </div>
       </section>
 
       <section class="panel">
         <div class="editor-heading">
-          <div><h2>Profile text</h2><p>Paste or write Markdown-style text. Include the experience, education, skills, projects, and achievements that may be used later.</p></div>
-          <label class="file-action"><span>{{ extracting ? 'Extracting…' : 'Load from file' }}</span><input type="file" accept=".pdf,.doc,.docx,.tex,.md,.txt,.png,.jpg,.jpeg" :disabled="extracting || saving" @change="extractDocument" /></label>
+          <div><h2>{{ t('profiles.contentHeading') }}</h2><p>{{ t('profiles.contentDescription') }}</p></div>
+          <label class="file-action"><span>{{ extracting ? t('profiles.extracting') : t('profiles.loadFromFile') }}</span><input type="file" accept=".pdf,.doc,.docx,.tex,.md,.txt,.png,.jpg,.jpeg" :disabled="extracting || saving" @change="extractDocument" /></label>
         </div>
         <p v-if="extraction">{{ extraction.name }} · {{ extraction.state }}<template v-if="extraction.errorCode"> · {{ extraction.errorCode }}</template></p>
-        <textarea v-model="form.content" rows="26" maxlength="1048576" placeholder="# Professional summary&#10;&#10;Write or paste your profile here…" />
-        <p class="character-count">{{ form.content.length.toLocaleString() }} characters</p>
+        <textarea v-model="form.content" rows="26" maxlength="1048576" :placeholder="t('profiles.form.contentPlaceholder')" />
+        <p class="character-count">{{ t('profiles.characterCount', { count: form.content.length.toLocaleString() }) }}</p>
       </section>
 
       <section class="danger-zone">
-        <div><h2>Delete profile</h2><p>This removes the profile from the active database.</p></div>
-        <button class="button" type="button" :disabled="deleting" @click="confirmDelete = true">Delete profile</button>
+        <div><h2>{{ t('profiles.deleteProfile') }}</h2><p>{{ t('profiles.deleteProfileDescription') }}</p></div>
+        <button class="button" type="button" :disabled="deleting" @click="confirmDelete = true">{{ t('profiles.deleteProfile') }}</button>
       </section>
     </template>
-    <ConfirmDialog :open="confirmDelete" title="Delete profile?" :message="`“${profile?.name ?? 'This profile'}” and its saved content will be removed. This action cannot be undone.`" :busy="deleting" @cancel="confirmDelete = false" @confirm="removeProfile" />
+    <ConfirmDialog :open="confirmDelete" :title="t('profiles.deleteConfirmTitle')" :message="t('profiles.deleteConfirmMessage', { name: profile?.name ?? t('profiles.thisProfile') })" :busy="deleting" @cancel="confirmDelete = false" @confirm="removeProfile" />
   </div>
 </template>
 

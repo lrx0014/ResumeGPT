@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 import ListFilters from '../components/ListFilters.vue'
 import ListPagination from '../components/ListPagination.vue'
@@ -22,17 +25,17 @@ const error = ref('')
 let pollTimer: number | undefined
 let searchTimer: number | undefined
 
-const kinds = [
-  { value: 'job.page.import.v1', label: 'Job imports' },
-  { value: 'job.hunt.v1', label: 'Job Hunter runs' },
-  { value: 'profile.document.extract.v1', label: 'Profile documents' },
-  { value: 'template.extract.v1', label: 'Templates' },
-  { value: 'generation.run.v1', label: 'Generations' },
-]
+const kinds = computed(() => [
+  { value: 'job.page.import.v1', label: t('tasks.kinds.jobImports') },
+  { value: 'job.hunt.v1', label: t('tasks.kinds.jobHunterRuns') },
+  { value: 'profile.document.extract.v1', label: t('tasks.kinds.profileDocuments') },
+  { value: 'template.extract.v1', label: t('tasks.kinds.templates') },
+  { value: 'generation.run.v1', label: t('tasks.kinds.generations') },
+])
 const activeCount = computed(() => (counts.value.queued ?? 0) + (counts.value.running ?? 0) + (counts.value.retry_wait ?? 0))
 
 function kindLabel(kind: string) {
-  return kinds.find(item => item.value === kind)?.label.replace(/s$/, '') ?? kind
+  return kinds.value.find(item => item.value === kind)?.label.replace(/s$/, '') ?? kind
 }
 
 function formatTime(value?: string) {
@@ -40,7 +43,7 @@ function formatTime(value?: string) {
 }
 
 function stateLabel(state: BackgroundTaskState) {
-  return ({ queued: 'Queued', running: 'Running', retry_wait: 'Waiting to retry', succeeded: 'Completed', failed: 'Failed', cancelled: 'Cancelled' } as Record<string, string>)[state]
+  return ({ queued: t('tasks.states.queued'), running: t('tasks.states.running'), retry_wait: t('tasks.states.retryWait'), succeeded: t('tasks.states.succeeded'), failed: t('tasks.states.failed'), cancelled: t('tasks.states.cancelled') } as Record<string, string>)[state]
 }
 
 async function load(showLoading = true) {
@@ -58,7 +61,7 @@ async function load(showLoading = true) {
       if (current && current.updatedAt !== selected.value.updatedAt) await openTask(current, false)
     }
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not load background tasks.'
+    error.value = cause instanceof Error ? cause.message : t('tasks.errors.loadTasks')
   } finally {
     loading.value = false
   }
@@ -69,7 +72,7 @@ async function openTask(task: BackgroundTask, showLoading = true) {
   try {
     selected.value = await api.getTask(task.id)
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not load task details.'
+    error.value = cause instanceof Error ? cause.message : t('tasks.errors.loadTaskDetails')
   } finally {
     detailLoading.value = false
   }
@@ -99,50 +102,50 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="page task-monitor-page">
-    <PageHeader title="Task Monitor" description="Monitor background imports, document processing, templates, and AI generation from one place." />
+    <PageHeader :title="t('pages.tasks.title')" :description="t('pages.tasks.description')" />
 
-    <section class="task-metrics" aria-label="Task status summary">
-      <article><span>Active</span><strong>{{ activeCount }}</strong><small>Queued, running, or retrying</small></article>
-      <article><span>Completed</span><strong>{{ counts.succeeded ?? 0 }}</strong><small>Finished successfully</small></article>
-      <article :class="{ attention: (counts.failed ?? 0) > 0 }"><span>Failed</span><strong>{{ counts.failed ?? 0 }}</strong><small>Needs attention</small></article>
+    <section class="task-metrics" :aria-label="t('tasks.metrics.label')">
+      <article><span>{{ t('tasks.metrics.active') }}</span><strong>{{ activeCount }}</strong><small>{{ t('tasks.metrics.activeHint') }}</small></article>
+      <article><span>{{ t('tasks.states.succeeded') }}</span><strong>{{ counts.succeeded ?? 0 }}</strong><small>{{ t('tasks.metrics.completedHint') }}</small></article>
+      <article :class="{ attention: (counts.failed ?? 0) > 0 }"><span>{{ t('tasks.states.failed') }}</span><strong>{{ counts.failed ?? 0 }}</strong><small>{{ t('common.needsAttention') }}</small></article>
     </section>
 
-    <ListFilters v-model:search="search" :total="total" search-placeholder="Search task ID, type, or error…">
-      <label>Status <select v-model="stateFilter"><option value="all">All statuses</option><option value="queued">Queued</option><option value="running">Running</option><option value="retry_wait">Waiting to retry</option><option value="succeeded">Completed</option><option value="failed">Failed</option><option value="cancelled">Cancelled</option></select></label>
-      <label>Type <select v-model="kindFilter"><option value="all">All task types</option><option v-for="kind in kinds" :key="kind.value" :value="kind.value">{{ kind.label }}</option></select></label>
+    <ListFilters v-model:search="search" :total="total" :search-placeholder="t('tasks.filters.searchPlaceholder')">
+      <label>{{ t('tasks.filters.status') }} <select v-model="stateFilter"><option value="all">{{ t('tasks.filters.allStatuses') }}</option><option value="queued">{{ t('tasks.states.queued') }}</option><option value="running">{{ t('tasks.states.running') }}</option><option value="retry_wait">{{ t('tasks.states.retryWait') }}</option><option value="succeeded">{{ t('tasks.states.succeeded') }}</option><option value="failed">{{ t('tasks.states.failed') }}</option><option value="cancelled">{{ t('tasks.states.cancelled') }}</option></select></label>
+      <label>{{ t('tasks.filters.type') }} <select v-model="kindFilter"><option value="all">{{ t('tasks.filters.allTypes') }}</option><option v-for="kind in kinds" :key="kind.value" :value="kind.value">{{ kind.label }}</option></select></label>
     </ListFilters>
 
     <p v-if="error" class="notice error" role="alert">{{ error }}</p>
-    <div v-if="loading" class="empty-state compact">Loading background tasks…</div>
+    <div v-if="loading" class="empty-state compact">{{ t('tasks.loadingList') }}</div>
     <div v-else class="task-layout">
-      <section class="list-panel task-list" aria-label="Background tasks">
+      <section class="list-panel task-list" :aria-label="t('tasks.list.ariaLabel')">
         <button v-for="task in tasks" :key="task.id" class="task-row" :class="{ selected: selected?.id === task.id }" type="button" @click="openTask(task)">
           <span class="task-kind-icon">{{ kindLabel(task.kind).slice(0, 1) }}</span>
           <span class="task-summary"><strong>{{ kindLabel(task.kind) }}</strong><small>{{ task.id }}</small><em v-if="task.errorMessage">{{ task.errorMessage }}</em></span>
           <span><span class="status-pill" :class="task.state">{{ stateLabel(task.state) }}</span><small>{{ formatTime(task.updatedAt) }}</small></span>
         </button>
-        <div v-if="!tasks.length" class="empty-state compact"><h2>No matching tasks</h2><p>Try another status, type, or search term.</p></div>
+        <div v-if="!tasks.length" class="empty-state compact"><h2>{{ t('tasks.empty.title') }}</h2><p>{{ t('tasks.empty.description') }}</p></div>
       </section>
 
       <aside class="panel task-detail" aria-live="polite">
-        <div v-if="detailLoading" class="empty-state compact">Loading task details…</div>
+        <div v-if="detailLoading" class="empty-state compact">{{ t('tasks.loadingDetail') }}</div>
         <template v-else-if="selected">
-          <header><div><p class="eyebrow">{{ kindLabel(selected.kind) }}</p><h2>Task details</h2></div><span class="status-pill" :class="selected.state">{{ stateLabel(selected.state) }}</span></header>
+          <header><div><p class="eyebrow">{{ kindLabel(selected.kind) }}</p><h2>{{ t('tasks.detail.title') }}</h2></div><span class="status-pill" :class="selected.state">{{ stateLabel(selected.state) }}</span></header>
           <dl class="task-facts">
-            <div><dt>Task ID</dt><dd>{{ selected.id }}</dd></div>
-            <div><dt>Attempts</dt><dd>{{ selected.attempt }} / {{ selected.maxAttempts }}</dd></div>
-            <div><dt>Created</dt><dd>{{ formatTime(selected.createdAt) }}</dd></div>
-            <div><dt>Updated</dt><dd>{{ formatTime(selected.updatedAt) }}</dd></div>
-            <div><dt>Available from</dt><dd>{{ formatTime(selected.availableAt) }}</dd></div>
-            <div v-if="selected.deadlineAt"><dt>Deadline</dt><dd>{{ formatTime(selected.deadlineAt) }}</dd></div>
-            <div v-if="selected.heartbeatAt"><dt>Last heartbeat</dt><dd>{{ formatTime(selected.heartbeatAt) }}</dd></div>
-            <div v-if="selected.errorClass"><dt>Error class</dt><dd class="error-text">{{ selected.errorClass }}</dd></div>
-            <div v-if="selected.errorMessage"><dt>Error</dt><dd class="error-text">{{ selected.errorMessage }}</dd></div>
+            <div><dt>{{ t('tasks.detail.fields.taskId') }}</dt><dd>{{ selected.id }}</dd></div>
+            <div><dt>{{ t('tasks.detail.fields.attempts') }}</dt><dd>{{ selected.attempt }} / {{ selected.maxAttempts }}</dd></div>
+            <div><dt>{{ t('tasks.detail.fields.created') }}</dt><dd>{{ formatTime(selected.createdAt) }}</dd></div>
+            <div><dt>{{ t('tasks.detail.fields.updated') }}</dt><dd>{{ formatTime(selected.updatedAt) }}</dd></div>
+            <div><dt>{{ t('tasks.detail.fields.availableFrom') }}</dt><dd>{{ formatTime(selected.availableAt) }}</dd></div>
+            <div v-if="selected.deadlineAt"><dt>{{ t('tasks.detail.fields.deadline') }}</dt><dd>{{ formatTime(selected.deadlineAt) }}</dd></div>
+            <div v-if="selected.heartbeatAt"><dt>{{ t('tasks.detail.fields.lastHeartbeat') }}</dt><dd>{{ formatTime(selected.heartbeatAt) }}</dd></div>
+            <div v-if="selected.errorClass"><dt>{{ t('tasks.detail.fields.errorClass') }}</dt><dd class="error-text">{{ selected.errorClass }}</dd></div>
+            <div v-if="selected.errorMessage"><dt>{{ t('tasks.detail.fields.error') }}</dt><dd class="error-text">{{ selected.errorMessage }}</dd></div>
           </dl>
-          <section><h3>Task input</h3><pre>{{ JSON.stringify(selected.payload, null, 2) }}</pre></section>
-          <section><h3>Activity log</h3><ol class="task-events"><li v-for="event in selected.events" :key="event.id" :class="event.eventType"><span /><div><strong>{{ event.eventType.replace('_', ' ') }}</strong><p>{{ event.message }}</p><small>{{ formatTime(event.occurredAt) }} · Attempt {{ event.attempt }}<template v-if="event.errorClass"> · {{ event.errorClass }}</template></small></div></li></ol></section>
+          <section><h3>{{ t('tasks.detail.input') }}</h3><pre>{{ JSON.stringify(selected.payload, null, 2) }}</pre></section>
+          <section><h3>{{ t('tasks.detail.activityLog') }}</h3><ol class="task-events"><li v-for="event in selected.events" :key="event.id" :class="event.eventType"><span /><div><strong>{{ t(`tasks.eventType.${event.eventType}`) }}</strong><p>{{ event.message }}</p><small>{{ formatTime(event.occurredAt) }} · {{ t('tasks.detail.eventAttempt', { attempt: event.attempt }) }}<template v-if="event.errorClass"> · {{ event.errorClass }}</template></small></div></li></ol></section>
         </template>
-        <div v-else class="empty-state compact"><span class="empty-icon">◴</span><h2>Select a task</h2><p>Choose a task to inspect its input, attempts, errors, and lifecycle log.</p></div>
+        <div v-else class="empty-state compact"><span class="empty-icon">◴</span><h2>{{ t('tasks.emptyDetail.title') }}</h2><p>{{ t('tasks.emptyDetail.description') }}</p></div>
       </aside>
     </div>
     <ListPagination v-if="total" v-model:page="page" v-model:page-size="pageSize" :total="total" :page-sizes="[20, 50, 100]" />

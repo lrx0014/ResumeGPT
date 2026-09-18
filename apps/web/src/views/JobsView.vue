@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
+
+const { t } = useI18n()
 
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import AttentionNotice from '../components/AttentionNotice.vue'
@@ -73,7 +76,7 @@ function canGenerate(item: Job) {
 }
 
 function jobLocation(item: Job) {
-  return item.location || [item.city, item.country].filter(Boolean).join(', ') || 'Not specified'
+  return item.location || [item.city, item.country].filter(Boolean).join(', ') || t('jobs.notSpecified')
 }
 
 async function openJobPreview(item: Job) {
@@ -83,7 +86,7 @@ async function openJobPreview(item: Job) {
     const detail = await api.getJob(item.id)
     if (previewJob.value?.id === item.id) previewJob.value = detail
   } catch (cause) {
-    toast.warning(cause instanceof Error ? cause.message : 'Could not load the job details.')
+    toast.warning(cause instanceof Error ? cause.message : t('jobs.errors.loadDetails'))
   } finally {
     if (previewJob.value?.id === item.id) previewLoading.value = false
   }
@@ -96,11 +99,11 @@ function handleKeydown(event: KeyboardEvent) {
 function openGeneration(items: Job[], documentType: TemplateKind) {
   generationTargets.value = items.filter(canGenerate)
   if (!generationTargets.value.length) {
-    toast.warning('Finish importing or add a job description before creating documents.')
+    toast.warning(t('jobs.errors.finishImportFirst'))
     return
   }
   if (generationTargets.value.length > 50) {
-    toast.warning('Select no more than 50 job opportunities for one batch.')
+    toast.warning(t('jobs.errors.tooManySelected'))
     return
   }
   generationDocumentType.value = documentType
@@ -118,10 +121,10 @@ function selectAllFiltered() {
 function handleGenerationQueued(result: { createdOpportunityIds: string[]; failedOpportunityIds: string[] }) {
   for (const id of result.createdOpportunityIds) selection.toggle(id, false)
   if (result.createdOpportunityIds.length) {
-    const label = generationDocumentType.value === 'resume' ? 'CV' : 'cover letter'
-    toast.success(`${result.createdOpportunityIds.length} ${label}${result.createdOpportunityIds.length === 1 ? '' : 's'} queued.`)
+    const key = generationDocumentType.value === 'resume' ? 'jobs.toast.cvsQueued' : 'jobs.toast.coverLettersQueued'
+    toast.success(t(key, { count: result.createdOpportunityIds.length }, result.createdOpportunityIds.length))
   }
-  if (result.failedOpportunityIds.length) toast.warning(`${result.failedOpportunityIds.length} generation task${result.failedOpportunityIds.length === 1 ? '' : 's'} could not be queued.`)
+  if (result.failedOpportunityIds.length) toast.warning(t('jobs.toast.generationFailed', { count: result.failedOpportunityIds.length }, result.failedOpportunityIds.length))
 }
 
 async function load(showLoading = true) {
@@ -129,7 +132,7 @@ async function load(showLoading = true) {
   try {
     jobs.value = (await api.listJobs()).items
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not load job opportunities.'
+    error.value = cause instanceof Error ? cause.message : t('jobs.errors.load')
   } finally {
     loading.value = false
   }
@@ -147,9 +150,9 @@ async function importURLs(urls: string[]) {
   try {
     const result = await api.importJobs({ urls, aiAssisted: aiAssisted.value, connectionId: aiAssisted.value ? importConnectionId.value : undefined, model: aiAssisted.value ? importModel.value : undefined })
     mergeJobs(result.items)
-    toast.success(result.items.length === 1 ? 'Job opportunity added or already tracked.' : `${result.items.length} job opportunities added or already tracked.`)
+    toast.success(t('jobs.toast.imported', { count: result.items.length }, result.items.length))
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not queue job opportunity imports.'
+    error.value = cause instanceof Error ? cause.message : t('jobs.errors.queueImports')
   } finally {
     busy.value = false
   }
@@ -168,7 +171,7 @@ async function discoverImportModels(resetModel = false) {
     importModels[connectionId] = (await api.testLLMConnection(connectionId)).models
     if (importConnectionId.value === connectionId && (!importModel.value || !importModels[connectionId].includes(importModel.value))) importModel.value = importModels[connectionId][0] ?? ''
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not load models for AI-assisted import.'
+    error.value = cause instanceof Error ? cause.message : t('jobs.errors.loadImportModels')
   } finally {
     loadingImportModels.value = false
   }
@@ -190,7 +193,7 @@ async function openBatchImport() {
       importModel.value = ''
     }
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not load LLM providers.'
+    error.value = cause instanceof Error ? cause.message : t('jobs.errors.loadProviders')
   }
 }
 
@@ -213,23 +216,24 @@ async function createManual() {
       try {
         await api.dismissJobHunterReviewItem(manualReviewHunterId.value, manualReviewId.value)
       } catch {
-        toast.warning('The opportunity was added, but its confirmation reminder could not be dismissed.')
+        toast.warning(t('jobs.errors.reviewDismissFailed'))
       }
       manualReviewHunterId.value = ''
       manualReviewId.value = ''
     }
     Object.assign(manual, { title: '', company: '', location: '', country: '', city: '', workMode: '', employmentType: '', sourceUrl: '', description: '', status: 'interested' })
     showManual.value = false
-    toast.success('Job opportunity added manually.')
+    toast.success(t('jobs.toast.addedManually'))
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not create the job opportunity.'
+    error.value = cause instanceof Error ? cause.message : t('jobs.errors.create')
   } finally {
     busy.value = false
   }
 }
 
 function importLabel(item: Job) {
-  return ({ queued: 'Queued', fetching: 'Importing', analyzing: 'AI is analyzing this page', needs_user_action: 'Needs editing', failed: 'Import failed' } as Record<string, string>)[item.importState]
+  const key = ({ queued: 'jobs.importStates.queued', fetching: 'jobs.importStates.fetching', analyzing: 'jobs.importStates.analyzing', needs_user_action: 'jobs.importStates.needsUserAction', failed: 'jobs.importStates.failed' } as Record<string, string>)[item.importState]
+  return key ? t(key) : undefined
 }
 
 watch(aiAssisted, value => { if (value && importConnectionId.value && !importModel.value) void discoverImportModels(false) })
@@ -244,9 +248,9 @@ async function removeJob() {
     await api.deleteJob(item.id)
     jobs.value = jobs.value.filter(candidate => candidate.id !== item.id)
     pendingDelete.value = null
-    toast.success('Job opportunity deleted.')
+    toast.success(t('jobs.toast.deleted'))
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not delete the job opportunity.'
+    error.value = cause instanceof Error ? cause.message : t('jobs.errors.delete')
   } finally {
     deletingId.value = ''
   }
@@ -261,11 +265,11 @@ async function updateStatus(item: Job, event: Event) {
   item.status = nextStatus
   try {
     await api.updateJobStatus(item.id, nextStatus)
-    toast.success(`Status updated to ${jobStatusLabel(nextStatus)}.`)
+    toast.success(t('jobs.statusUpdated', { status: jobStatusLabel(nextStatus) }))
   } catch (cause) {
     item.status = previousStatus
     select.value = previousStatus
-    toast.warning(cause instanceof Error ? cause.message : 'Could not update the job status.')
+    toast.warning(cause instanceof Error ? cause.message : t('jobs.errors.updateStatus'))
   } finally {
     updatingStatusId.value = ''
   }
@@ -292,101 +296,101 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="page jobs-page">
-    <PageHeader title="Job Opportunities" description="Explore your next career move and manage every job opportunity in one place.">
+    <PageHeader :title="t('pages.jobs.title')" :description="t('pages.jobs.description')">
       <div class="header-actions">
-        <button class="button" type="button" @click="showManual = !showManual; showBatch = false">{{ showManual ? 'Close' : 'Add manually' }}</button>
-        <button v-if="importsAvailable" class="button primary" type="button" @click="openBatchImport">{{ showBatch ? 'Close import' : 'Import via URLs' }}</button>
+        <button class="button" type="button" @click="showManual = !showManual; showBatch = false">{{ showManual ? t('common.close') : t('jobs.addManually') }}</button>
+        <button v-if="importsAvailable" class="button primary" type="button" @click="openBatchImport">{{ showBatch ? t('jobs.closeImport') : t('jobs.importViaUrls') }}</button>
       </div>
     </PageHeader>
 
     <form v-if="showBatch" class="panel form-grid" @submit.prevent="importBatch">
       <div class="full ai-import-toggle">
-        <label class="switch-row"><input v-model="aiAssisted" type="checkbox" /><span class="switch-track" aria-hidden="true"><span /></span><span>Enable AI assistance</span></label>
-        <span class="help-tooltip" tabindex="0" aria-label="About AI-assisted import">?<span role="tooltip">Uses an AI agent to open public job pages, reveal expandable content, and extract job details. It may take longer and use your selected LLM provider. Sign-in pages, CAPTCHAs, and restricted content cannot be bypassed.</span></span>
+        <label class="switch-row"><input v-model="aiAssisted" type="checkbox" /><span class="switch-track" aria-hidden="true"><span /></span><span>{{ t('jobs.batchForm.enableAi') }}</span></label>
+        <span class="help-tooltip" tabindex="0" :aria-label="t('jobs.batchForm.aiInfoAriaLabel')">?<span role="tooltip">{{ t('jobs.batchForm.aiInfoTooltip') }}</span></span>
       </div>
-      <p class="full import-mode-help">{{ aiAssisted ? 'The Job Import Agent will analyze each publicly accessible HTTPS page from the beginning.' : 'Fast import for public LinkedIn and Indeed job pages.' }}</p>
+      <p class="full import-mode-help">{{ aiAssisted ? t('jobs.batchForm.aiModeHelp') : t('jobs.batchForm.standardModeHelp') }}</p>
       <template v-if="aiAssisted">
-        <p v-if="!connections.length" class="full notice setup-notice">Add an <RouterLink to="/settings">LLM provider in Settings</RouterLink> before using AI-assisted import.</p>
-        <label><span>LLM provider</span><select v-model="importConnectionId" required><option value="" disabled>Select provider</option><option v-for="item in connections" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
-        <label><span>Model</span><select v-if="importModels[importConnectionId]?.length" v-model="importModel" required><option value="" disabled>Select model</option><option v-for="model in importModels[importConnectionId]" :key="model" :value="model">{{ model }}</option></select><input v-else v-model="importModel" required :disabled="loadingImportModels" :placeholder="loadingImportModels ? 'Loading models…' : 'Enter model name'" /></label>
+        <p v-if="!connections.length" class="full notice setup-notice">{{ t('jobs.batchForm.setupNoticeBefore') }}<RouterLink to="/settings">{{ t('jobs.batchForm.setupNoticeLink') }}</RouterLink>{{ t('jobs.batchForm.setupNoticeAfter') }}</p>
+        <label><span>{{ t('jobs.batchForm.providerLabel') }}</span><select v-model="importConnectionId" required><option value="" disabled>{{ t('jobs.batchForm.selectProvider') }}</option><option v-for="item in connections" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
+        <label><span>{{ t('jobs.batchForm.modelLabel') }}</span><select v-if="importModels[importConnectionId]?.length" v-model="importModel" required><option value="" disabled>{{ t('jobs.batchForm.selectModel') }}</option><option v-for="model in importModels[importConnectionId]" :key="model" :value="model">{{ model }}</option></select><input v-else v-model="importModel" required :disabled="loadingImportModels" :placeholder="loadingImportModels ? t('jobs.batchForm.loadingModels') : t('jobs.batchForm.enterModelName')" /></label>
       </template>
-      <label class="full"><span>Job opportunity URLs</span><textarea v-model="batchText" required rows="8" :placeholder="aiAssisted ? 'Paste up to 50 public HTTPS job page URLs, one per line. A single URL works too.' : 'Paste up to 50 LinkedIn or Indeed URLs, one per line. A single URL works too.'" /></label>
-      <div class="full form-actions"><button class="button primary" :disabled="busy || (aiAssisted && (!importConnectionId || !importModel))">{{ busy ? 'Queuing…' : 'Import job opportunities' }}</button></div>
+      <label class="full"><span>{{ t('jobs.batchForm.urlsLabel') }}</span><textarea v-model="batchText" required rows="8" :placeholder="aiAssisted ? t('jobs.batchForm.urlsPlaceholderAi') : t('jobs.batchForm.urlsPlaceholderStandard')" /></label>
+      <div class="full form-actions"><button class="button primary" :disabled="busy || (aiAssisted && (!importConnectionId || !importModel))">{{ busy ? t('jobs.batchForm.queuing') : t('jobs.batchForm.submit') }}</button></div>
     </form>
 
     <form v-if="showManual" class="panel form-grid" @submit.prevent="createManual">
-      <label><span>Job title</span><input v-model="manual.title" required maxlength="300" /></label>
-      <label><span>Company</span><input v-model="manual.company" required maxlength="300" /></label>
-      <label><span>City</span><input v-model="manual.city" maxlength="150" /></label>
-      <label><span>Country</span><input v-model="manual.country" maxlength="100" /></label>
-      <label><span>Work mode</span><input v-model="manual.workMode" maxlength="100" placeholder="Remote, hybrid, or on-site" /></label>
-      <label><span>Employment type</span><input v-model="manual.employmentType" maxlength="100" placeholder="Full-time" /></label>
-      <label class="full"><span>Source URL</span><input v-model="manual.sourceUrl" type="url" maxlength="2048" placeholder="https://…" /></label>
-      <label class="full"><span>Description</span><textarea v-model="manual.description" rows="8" /></label>
-      <div class="full form-actions"><button class="button primary" :disabled="busy">Add job opportunity</button></div>
+      <label><span>{{ t('jobs.manualForm.titleLabel') }}</span><input v-model="manual.title" required maxlength="300" /></label>
+      <label><span>{{ t('jobs.manualForm.companyLabel') }}</span><input v-model="manual.company" required maxlength="300" /></label>
+      <label><span>{{ t('jobs.manualForm.cityLabel') }}</span><input v-model="manual.city" maxlength="150" /></label>
+      <label><span>{{ t('jobs.manualForm.countryLabel') }}</span><input v-model="manual.country" maxlength="100" /></label>
+      <label><span>{{ t('jobs.manualForm.workModeLabel') }}</span><input v-model="manual.workMode" maxlength="100" :placeholder="t('jobs.manualForm.workModePlaceholder')" /></label>
+      <label><span>{{ t('jobs.manualForm.employmentTypeLabel') }}</span><input v-model="manual.employmentType" maxlength="100" :placeholder="t('jobs.manualForm.employmentTypePlaceholder')" /></label>
+      <label class="full"><span>{{ t('jobs.manualForm.sourceUrlLabel') }}</span><input v-model="manual.sourceUrl" type="url" maxlength="2048" :placeholder="t('jobs.manualForm.sourceUrlPlaceholder')" /></label>
+      <label class="full"><span>{{ t('jobs.manualForm.descriptionLabel') }}</span><textarea v-model="manual.description" rows="8" /></label>
+      <div class="full form-actions"><button class="button primary" :disabled="busy">{{ t('jobs.manualForm.submit') }}</button></div>
     </form>
 
     <p v-if="error" class="notice error" role="alert">{{ error }}</p>
-    <div v-if="loading" class="empty-state">Loading job opportunities…</div>
+    <div v-if="loading" class="empty-state">{{ t('jobs.loading') }}</div>
     <template v-else-if="jobs.length">
-      <ListFilters v-model:search="search" :total="filteredJobs.length" search-placeholder="Search roles, companies, or locations…">
-        <label>Status <select v-model="statusFilter"><option value="all">All statuses</option><option v-for="status in statusOptions" :key="status.value" :value="status.value">{{ status.label }}</option></select></label>
-        <label>Source <select v-model="originFilter"><option value="all">All sources</option><option value="manual">Added manually</option><option value="url_import">Imported via URL</option><option value="hunter">Found by Job Hunter</option></select></label>
+      <ListFilters v-model:search="search" :total="filteredJobs.length" :search-placeholder="t('jobs.filters.searchPlaceholder')">
+        <label>{{ t('jobs.filters.statusLabel') }} <select v-model="statusFilter"><option value="all">{{ t('jobs.filters.allStatuses') }}</option><option v-for="status in statusOptions" :key="status.value" :value="status.value">{{ t(status.labelKey) }}</option></select></label>
+        <label>{{ t('jobs.filters.sourceLabel') }} <select v-model="originFilter"><option value="all">{{ t('jobs.filters.allSources') }}</option><option value="manual">{{ t('jobs.filters.addedManually') }}</option><option value="url_import">{{ t('jobs.filters.importedViaUrl') }}</option><option value="hunter">{{ t('jobs.filters.foundByHunter') }}</option></select></label>
       </ListFilters>
     <BulkSelectionBar :selected-count="selection.selectedCount.value" :all-count="selectableFilteredJobs.length" :all-selected="allFilteredSelected" @select-all="selectAllFiltered" @clear="selection.clear">
-      <button class="button primary" type="button" @click="openSelectedGeneration('resume')">Create CVs</button>
-      <button class="button" type="button" @click="openSelectedGeneration('cover_letter')">Create cover letters</button>
+      <button class="button primary" type="button" @click="openSelectedGeneration('resume')">{{ t('jobs.createCvs') }}</button>
+      <button class="button" type="button" @click="openSelectedGeneration('cover_letter')">{{ t('jobs.createCoverLetters') }}</button>
     </BulkSelectionBar>
     <TransitionGroup v-if="visibleJobs.length" name="card-list" tag="div" class="list-panel">
       <article v-for="item in visibleJobs" :key="item.id" class="job-row" :class="{ selected: selection.isSelected(item.id) }">
-        <input class="row-selector" type="checkbox" :checked="selection.isSelected(item.id)" :disabled="!canGenerate(item)" :aria-label="`Select ${item.title || 'job opportunity'}`" :title="canGenerate(item) ? 'Select for a batch action' : 'Add a job description before creating documents'" @change="selection.toggle(item.id)" />
-        <button class="company-mark company-preview-button" type="button" :aria-label="`Preview ${item.title || 'job opportunity'}`" @click="openJobPreview(item)">{{ (item.company || '?').slice(0, 2).toUpperCase() }}</button>
-        <div class="job-main job-preview-trigger" role="button" tabindex="0" :aria-label="`Preview ${item.title || 'job opportunity'}`" @click="openJobPreview(item)" @keydown.enter="openJobPreview(item)" @keydown.space.prevent="openJobPreview(item)">
-          <h2>{{ item.title || 'Importing job details…' }}</h2>
-          <p>{{ item.company || 'Company pending' }}<span v-if="item.location"> · {{ item.location }}</span><span v-else-if="item.city || item.country"> · {{ [item.city, item.country].filter(Boolean).join(', ') }}</span></p>
+        <input class="row-selector" type="checkbox" :checked="selection.isSelected(item.id)" :disabled="!canGenerate(item)" :aria-label="t('jobs.selectAriaLabel', { title: item.title || t('jobs.genericTitle') })" :title="canGenerate(item) ? t('jobs.selectForBatchTitle') : t('jobs.addDescriptionTitle')" @change="selection.toggle(item.id)" />
+        <button class="company-mark company-preview-button" type="button" :aria-label="t('jobs.previewAriaLabel', { title: item.title || t('jobs.genericTitle') })" @click="openJobPreview(item)">{{ (item.company || '?').slice(0, 2).toUpperCase() }}</button>
+        <div class="job-main job-preview-trigger" role="button" tabindex="0" :aria-label="t('jobs.previewAriaLabel', { title: item.title || t('jobs.genericTitle') })" @click="openJobPreview(item)" @keydown.enter="openJobPreview(item)" @keydown.space.prevent="openJobPreview(item)">
+          <h2>{{ item.title || t('jobs.importingDetails') }}</h2>
+          <p>{{ item.company || t('jobs.companyPending') }}<span v-if="item.location"> · {{ item.location }}</span><span v-else-if="item.city || item.country"> · {{ [item.city, item.country].filter(Boolean).join(', ') }}</span></p>
           <small v-if="importLabel(item)" :class="{ 'import-warning': item.importState === 'needs_user_action' || item.importState === 'failed' }">{{ importLabel(item) }}</small>
-          <small v-if="item.origin === 'hunter'" class="hunter-source">Found by Job Hunter</small>
-          <AttentionNotice v-if="item.importState === 'needs_user_action' || item.importState === 'failed'" compact :message="item.importError || 'ResumeGPT could not extract complete job details from this page. Open the job opportunity to enter or correct the missing information.'" />
+          <small v-if="item.origin === 'hunter'" class="hunter-source">{{ t('jobs.filters.foundByHunter') }}</small>
+          <AttentionNotice v-if="item.importState === 'needs_user_action' || item.importState === 'failed'" compact :message="item.importError || t('jobs.importErrorFallback')" />
         </div>
-        <label class="status-control" :class="item.status" :aria-label="`Change status for ${item.title}`"><select :value="item.status" :disabled="updatingStatusId === item.id" @change="updateStatus(item, $event)"><option v-for="status in jobStatuses" :key="status.value" :value="status.value">{{ status.label }}</option></select><span aria-hidden="true">⌄</span></label>
-        <div class="row-actions"><button class="text-button" type="button" :disabled="!canGenerate(item)" @click="openGeneration([item], 'resume')">Create CV</button><button class="text-button" type="button" :disabled="!canGenerate(item)" @click="openGeneration([item], 'cover_letter')">Create cover letter</button><RouterLink class="text-button" :to="`/jobs/${item.id}`">Edit</RouterLink><a v-if="item.sourceUrl" class="source-link" :href="item.sourceUrl" target="_blank" rel="noopener noreferrer">Source ↗</a><button class="text-button danger-text" type="button" @click="pendingDelete = item">Delete</button></div>
+        <label class="status-control" :class="item.status" :aria-label="t('jobs.changeStatusAriaLabel', { title: item.title })"><select :value="item.status" :disabled="updatingStatusId === item.id" @change="updateStatus(item, $event)"><option v-for="status in jobStatuses" :key="status.value" :value="status.value">{{ t(status.labelKey) }}</option></select><span aria-hidden="true">⌄</span></label>
+        <div class="row-actions"><button class="text-button" type="button" :disabled="!canGenerate(item)" @click="openGeneration([item], 'resume')">{{ t('jobs.createCv') }}</button><button class="text-button" type="button" :disabled="!canGenerate(item)" @click="openGeneration([item], 'cover_letter')">{{ t('jobs.createCoverLetter') }}</button><RouterLink class="text-button" :to="`/jobs/${item.id}`">{{ t('common.edit') }}</RouterLink><a v-if="item.sourceUrl" class="source-link" :href="item.sourceUrl" target="_blank" rel="noopener noreferrer">{{ t('jobs.sourceLink') }}</a><button class="text-button danger-text" type="button" @click="pendingDelete = item">{{ t('common.delete') }}</button></div>
       </article>
     </TransitionGroup>
-    <div v-else class="empty-state compact"><h2>No matching job opportunities</h2><p>Try another keyword or status.</p></div>
+    <div v-else class="empty-state compact"><h2>{{ t('jobs.emptyFiltered.title') }}</h2><p>{{ t('jobs.emptyFiltered.message') }}</p></div>
     <ListPagination v-if="filteredJobs.length" v-model:page="page" v-model:page-size="pageSize" :total="filteredJobs.length" :page-sizes="[10, 20, 50]" />
     </template>
     <div v-else class="empty-state">
-      <span class="empty-icon">◇</span><h2>No job opportunities yet</h2><p>Import a LinkedIn or Indeed URL, or add a role manually.</p>
+      <span class="empty-icon">◇</span><h2>{{ t('jobs.empty.title') }}</h2><p>{{ t('jobs.empty.message') }}</p>
     </div>
-    <ConfirmDialog :open="Boolean(pendingDelete)" title="Delete job opportunity?" :message="`${[pendingDelete?.title, pendingDelete?.company].filter(Boolean).join(' at ') || 'This job opportunity'} will be removed from your tracked roles. This action cannot be undone.`" :busy="deletingId === pendingDelete?.id" @cancel="pendingDelete = null" @confirm="removeJob" />
+    <ConfirmDialog :open="Boolean(pendingDelete)" :title="t('jobs.deleteConfirm.title')" :message="t('jobs.deleteConfirm.message', { name: [pendingDelete?.title, pendingDelete?.company].filter(Boolean).join(' at ') || t('jobs.deleteConfirm.defaultName') })" :busy="deletingId === pendingDelete?.id" @cancel="pendingDelete = null" @confirm="removeJob" />
     <DocumentGenerationDialog :open="showGeneration" :opportunities="generationTargets" :initial-document-type="generationDocumentType" @close="showGeneration = false" @queued="handleGenerationQueued" />
     <Teleport to="body">
       <Transition name="job-preview">
         <div v-if="previewJob" class="modal-backdrop job-preview-backdrop" @click.self="previewJob = null">
           <section class="panel job-preview-modal" role="dialog" aria-modal="true" aria-labelledby="job-preview-title">
             <header class="modal-header job-preview-header">
-              <div><p class="eyebrow">Job opportunity</p><h2 id="job-preview-title">{{ previewJob.title || 'Job details pending' }}</h2><p>{{ previewJob.company || 'Company pending' }}</p></div>
-              <button class="modal-close" type="button" aria-label="Close job preview" @click="previewJob = null">×</button>
+              <div><p class="eyebrow">{{ t('jobs.preview.eyebrow') }}</p><h2 id="job-preview-title">{{ previewJob.title || t('jobs.preview.titlePending') }}</h2><p>{{ previewJob.company || t('jobs.companyPending') }}</p></div>
+              <button class="modal-close" type="button" :aria-label="t('jobs.preview.closeAriaLabel')" @click="previewJob = null">×</button>
             </header>
 
             <div class="job-preview-meta">
-              <div><span>Location</span><strong>{{ jobLocation(previewJob) }}</strong></div>
-              <div><span>Work mode</span><strong>{{ previewJob.workMode || 'Not specified' }}</strong></div>
-              <div><span>Employment type</span><strong>{{ previewJob.employmentType || 'Not specified' }}</strong></div>
-              <div><span>Tracking status</span><strong>{{ jobStatusLabel(previewJob.status) }}</strong></div>
+              <div><span>{{ t('jobs.preview.locationLabel') }}</span><strong>{{ jobLocation(previewJob) }}</strong></div>
+              <div><span>{{ t('jobs.preview.workModeLabel') }}</span><strong>{{ previewJob.workMode || t('jobs.notSpecified') }}</strong></div>
+              <div><span>{{ t('jobs.preview.employmentTypeLabel') }}</span><strong>{{ previewJob.employmentType || t('jobs.notSpecified') }}</strong></div>
+              <div><span>{{ t('jobs.preview.trackingStatusLabel') }}</span><strong>{{ jobStatusLabel(previewJob.status) }}</strong></div>
             </div>
 
-            <AttentionNotice v-if="previewJob.importState === 'needs_user_action' || previewJob.importState === 'failed'" :message="previewJob.importError || 'ResumeGPT could not extract complete job details from this page.'" />
+            <AttentionNotice v-if="previewJob.importState === 'needs_user_action' || previewJob.importState === 'failed'" :message="previewJob.importError || t('jobs.preview.importErrorFallback')" />
 
             <section class="job-preview-description">
-              <div><p class="eyebrow">Role details</p><h3>Job description</h3></div>
-              <p>{{ previewLoading ? 'Loading job details…' : previewJob.description || 'No job description is available yet.' }}</p>
+              <div><p class="eyebrow">{{ t('jobs.preview.roleDetailsEyebrow') }}</p><h3>{{ t('jobs.preview.descriptionTitle') }}</h3></div>
+              <p>{{ previewLoading ? t('jobs.preview.loadingDetails') : previewJob.description || t('jobs.preview.noDescription') }}</p>
             </section>
 
             <footer class="modal-actions job-preview-actions">
-              <button class="button" type="button" @click="previewJob = null">Close</button>
-              <a v-if="previewJob.sourceUrl" class="button" :href="previewJob.sourceUrl" target="_blank" rel="noopener noreferrer">Open source ↗</a>
-              <RouterLink class="button primary" :to="`/jobs/${previewJob.id}`" @click="previewJob = null">Edit job</RouterLink>
+              <button class="button" type="button" @click="previewJob = null">{{ t('common.close') }}</button>
+              <a v-if="previewJob.sourceUrl" class="button" :href="previewJob.sourceUrl" target="_blank" rel="noopener noreferrer">{{ t('jobs.preview.openSource') }}</a>
+              <RouterLink class="button primary" :to="`/jobs/${previewJob.id}`" @click="previewJob = null">{{ t('jobs.preview.editJob') }}</RouterLink>
             </footer>
           </section>
         </div>

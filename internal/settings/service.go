@@ -36,7 +36,8 @@ func (s *Service) GetPreferences(ctx context.Context, workspaceID string) (Prefe
 
 func (s *Service) SavePreferences(ctx context.Context, workspaceID string, input PreferencesInput) (Preferences, error) {
 	language, theme := strings.TrimSpace(input.InterfaceLanguage), strings.TrimSpace(input.Theme)
-	if language != "en" && language != "de" || theme != "system" && theme != "light" && theme != "dark" {
+	validLanguages := map[string]bool{"en": true, "de": true, "fr": true, "es": true, "ja": true, "zh-CN": true, "zh-TW": true}
+	if !validLanguages[language] || theme != "system" && theme != "light" && theme != "dark" {
 		return Preferences{}, ErrInvalid
 	}
 	return s.repository.SavePreferences(ctx, Preferences{WorkspaceID: workspaceID, InterfaceLanguage: language,

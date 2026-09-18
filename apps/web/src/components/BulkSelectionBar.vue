@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 defineProps<{
   selectedCount: number
   allCount: number
@@ -16,12 +19,12 @@ defineEmits<{
     <section v-if="selectedCount" class="bulk-selection-bar" aria-live="polite">
       <div class="selection-summary">
         <span class="selection-count">{{ selectedCount }}</span>
-        <div><strong>{{ selectedCount === 1 ? 'item selected' : 'items selected' }}</strong><small>Apply one action and shared settings to every selected item.</small></div>
+        <div><strong>{{ selectedCount }} selected</strong><small>{{ t('common.selectionHelp') }}</small></div>
       </div>
       <div class="selection-actions">
-        <button v-if="allCount && !allSelected" class="text-button" type="button" @click="$emit('selectAll')">Select all</button>
+        <button v-if="allCount && !allSelected" class="text-button" type="button" @click="$emit('selectAll')">{{ t('common.selectAll') }}</button>
         <slot />
-        <button class="text-button" type="button" @click="$emit('clear')">Clear selection</button>
+        <button class="text-button" type="button" @click="$emit('clear')">{{ t('common.clearSelection') }}</button>
       </div>
     </section>
   </Transition>

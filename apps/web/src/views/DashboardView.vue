@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 import PageHeader from '../components/PageHeader.vue'
 import { api } from '../lib/api'
+import { jobStatusLabel } from '../lib/jobStatus'
 import type { GenerationRun, Job, LLMConnection, Profile, Template } from '../lib/types'
 
 const profiles = ref<Profile[]>([])
@@ -25,28 +29,28 @@ const prerequisitesReady = computed(() => preparedProfiles.value > 0 && readyOpp
 const readyGenerations = computed(() => generations.value.filter(item => item.state === 'ready').length)
 
 const setupSteps = computed(() => [
-  { number: '01', title: 'Prepare your profile', description: preparedProfiles.value ? `${preparedProfiles.value} profile${preparedProfiles.value === 1 ? '' : 's'} with saved content.` : 'Add or import the experience, education, skills, and achievements you want the model to use.', to: '/profiles', complete: preparedProfiles.value > 0 },
-  { number: '02', title: 'Track a job opportunity', description: readyOpportunities.value ? `${readyOpportunities.value} job ${readyOpportunities.value === 1 ? 'opportunity' : 'opportunities'} ready to target.` : 'Import a LinkedIn or Indeed URL, or enter the role manually.', to: '/jobs', complete: readyOpportunities.value > 0 },
-  { number: '03', title: 'Choose a document template', description: readyTemplates.value ? `${readyTemplates.value} résumé or cover-letter template${readyTemplates.value === 1 ? '' : 's'} ready.` : 'Use the built-in LaTeX template or upload a TeX or Word file.', to: '/templates', complete: readyTemplates.value > 0 },
-  { number: '04', title: 'Choose an LLM provider', description: connections.value.length ? `${connections.value.length} cloud or local provider${connections.value.length === 1 ? '' : 's'} configured.` : 'Add an OpenAI, compatible, or local Ollama provider in Settings.', to: '/settings', complete: connections.value.length > 0 },
-  { number: '05', title: 'Generate for a job opportunity', description: readyGenerations.value ? `${readyGenerations.value} visually reviewed PDF${readyGenerations.value === 1 ? '' : 's'} ready.` : capabilities.value.generation ? 'Select the prepared inputs and create a tailored résumé or cover letter.' : 'Generation is the next milestone. Your prepared inputs will be used here.', to: '/generate', complete: readyGenerations.value > 0, planned: !capabilities.value.generation },
+  { number: '01', title: t('overview.setup.steps.profile.title'), description: preparedProfiles.value ? t('overview.setup.steps.profile.detail', { count: preparedProfiles.value }, preparedProfiles.value) : t('overview.setup.steps.profile.empty'), to: '/profiles', complete: preparedProfiles.value > 0 },
+  { number: '02', title: t('overview.setup.steps.opportunity.title'), description: readyOpportunities.value ? t('overview.setup.steps.opportunity.detail', { count: readyOpportunities.value }, readyOpportunities.value) : t('overview.setup.steps.opportunity.empty'), to: '/jobs', complete: readyOpportunities.value > 0 },
+  { number: '03', title: t('overview.setup.steps.template.title'), description: readyTemplates.value ? t('overview.setup.steps.template.detail', { count: readyTemplates.value }, readyTemplates.value) : t('overview.setup.steps.template.empty'), to: '/templates', complete: readyTemplates.value > 0 },
+  { number: '04', title: t('overview.setup.steps.provider.title'), description: connections.value.length ? t('overview.setup.steps.provider.detail', { count: connections.value.length }, connections.value.length) : t('overview.setup.steps.provider.empty'), to: '/settings', complete: connections.value.length > 0 },
+  { number: '05', title: t('overview.setup.steps.generate.title'), description: readyGenerations.value ? t('overview.setup.steps.generate.detail', { count: readyGenerations.value }, readyGenerations.value) : capabilities.value.generation ? t('overview.setup.steps.generate.readyCapability') : t('overview.setup.steps.generate.pendingCapability'), to: '/generate', complete: readyGenerations.value > 0, planned: !capabilities.value.generation },
 ])
 
 const firstIncomplete = computed(() => setupSteps.value.find(step => !step.complete && !step.planned))
 const primaryAction = computed(() => firstIncomplete.value
-  ? { label: `Continue: ${firstIncomplete.value.title}`, to: firstIncomplete.value.to }
-  : { label: capabilities.value.generation ? 'Create CV or Cover Letter' : 'Review generation setup', to: '/generate' })
+  ? { label: t('overview.actions.continue', { title: firstIncomplete.value.title }), to: firstIncomplete.value.to }
+  : { label: capabilities.value.generation ? t('overview.actions.createDocument') : t('overview.actions.reviewSetup'), to: '/generate' })
 
 function metricDetail(kind: 'profiles' | 'opportunities' | 'templates' | 'connections') {
-  if (loading.value) return 'Loading workspace data…'
-  if (kind === 'profiles') return preparedProfiles.value ? `${preparedProfiles.value} with saved content` : 'Create or complete a profile'
+  if (loading.value) return t('overview.metrics.loading')
+  if (kind === 'profiles') return preparedProfiles.value ? t('overview.metrics.profilesDetail', { count: preparedProfiles.value }, preparedProfiles.value) : t('overview.metrics.profilesEmpty')
   if (kind === 'opportunities') {
-    if (attentionOpportunities.value) return `${attentionOpportunities.value} need${attentionOpportunities.value === 1 ? 's' : ''} attention`
-    if (pendingOpportunities.value) return `${pendingOpportunities.value} import${pendingOpportunities.value === 1 ? '' : 's'} in progress`
-    return opportunities.value.length ? `${readyOpportunities.value} ready for generation` : 'Add a role manually or by URL'
+    if (attentionOpportunities.value) return t('overview.metrics.opportunitiesAttention', { count: attentionOpportunities.value }, attentionOpportunities.value)
+    if (pendingOpportunities.value) return t('overview.metrics.opportunitiesPending', { count: pendingOpportunities.value }, pendingOpportunities.value)
+    return opportunities.value.length ? t('overview.metrics.opportunitiesReady', { count: readyOpportunities.value }, readyOpportunities.value) : t('overview.metrics.opportunitiesEmpty')
   }
-  if (kind === 'templates') return customTemplates.value ? `${customTemplates.value} custom · built-in included` : 'Built-in Rezume included'
-  return connections.value.length ? 'Cloud and local providers supported' : 'Required before generation'
+  if (kind === 'templates') return customTemplates.value ? t('overview.metrics.templatesCustom', { count: customTemplates.value }, customTemplates.value) : t('overview.metrics.templatesEmpty')
+  return connections.value.length ? t('overview.metrics.providersSupported') : t('overview.metrics.providersRequired')
 }
 
 async function load() {
@@ -60,7 +64,7 @@ async function load() {
   if (results[3].status === 'fulfilled') connections.value = results[3].value.items
   if (results[4].status === 'fulfilled') capabilities.value = results[4].value.features
   if (results[5].status === 'fulfilled') generations.value = results[5].value.items
-  if (results.some(result => result.status === 'rejected')) error.value = 'Some workspace data could not be loaded. Available sections are still shown.'
+  if (results.some(result => result.status === 'rejected')) error.value = t('overview.errors.partialLoad')
   loading.value = false
 }
 
@@ -70,45 +74,45 @@ onMounted(load)
 <template>
   <div class="page dashboard-page">
     <PageHeader
-      eyebrow="Workspace overview"
-      title="Make your CV smarter."
-      description="Tailor your CV and cover letter to each job opportunity, and track your job search in one place."
+      :eyebrow="t('pages.overview.eyebrow')"
+      :title="t('pages.overview.title')"
+      :description="t('pages.overview.description')"
     >
       <RouterLink class="button primary" :to="primaryAction.to">{{ primaryAction.label }}</RouterLink>
     </PageHeader>
 
     <p v-if="error" class="notice error" role="alert">{{ error }}</p>
 
-    <section class="metric-grid overview-metrics" aria-label="Workspace metrics">
-      <RouterLink class="metric-card" to="/profiles"><span>Profiles</span><strong>{{ loading ? '—' : profiles.length }}</strong><small>{{ metricDetail('profiles') }}</small></RouterLink>
-      <RouterLink class="metric-card" to="/jobs"><span>Job opportunities</span><strong>{{ loading ? '—' : opportunities.length }}</strong><small>{{ metricDetail('opportunities') }}</small></RouterLink>
-      <RouterLink class="metric-card" to="/templates"><span>Ready templates</span><strong>{{ loading ? '—' : readyTemplates }}</strong><small>{{ metricDetail('templates') }}</small></RouterLink>
-      <RouterLink class="metric-card" to="/settings"><span>LLM providers</span><strong>{{ loading ? '—' : connections.length }}</strong><small>{{ metricDetail('connections') }}</small></RouterLink>
-      <RouterLink class="metric-card" to="/generate"><span>Generated PDFs</span><strong>{{ loading ? '—' : readyGenerations }}</strong><small>{{ generations.some(item => item.state === 'running' || item.state === 'queued') ? 'Generation in progress' : 'Visually reviewed outputs' }}</small></RouterLink>
+    <section class="metric-grid overview-metrics" :aria-label="t('overview.metrics.ariaLabel')">
+      <RouterLink class="metric-card" to="/profiles"><span>{{ t('overview.metrics.profiles') }}</span><strong>{{ loading ? '—' : profiles.length }}</strong><small>{{ metricDetail('profiles') }}</small></RouterLink>
+      <RouterLink class="metric-card" to="/jobs"><span>{{ t('overview.metrics.jobOpportunities') }}</span><strong>{{ loading ? '—' : opportunities.length }}</strong><small>{{ metricDetail('opportunities') }}</small></RouterLink>
+      <RouterLink class="metric-card" to="/templates"><span>{{ t('overview.metrics.readyTemplates') }}</span><strong>{{ loading ? '—' : readyTemplates }}</strong><small>{{ metricDetail('templates') }}</small></RouterLink>
+      <RouterLink class="metric-card" to="/settings"><span>{{ t('overview.metrics.llmProviders') }}</span><strong>{{ loading ? '—' : connections.length }}</strong><small>{{ metricDetail('connections') }}</small></RouterLink>
+      <RouterLink class="metric-card" to="/generate"><span>{{ t('overview.metrics.generatedPdfs') }}</span><strong>{{ loading ? '—' : readyGenerations }}</strong><small>{{ generations.some(item => item.state === 'running' || item.state === 'queued') ? t('overview.metrics.generationInProgress') : t('overview.metrics.generationReviewed') }}</small></RouterLink>
     </section>
 
     <div class="dashboard-grid">
       <section v-if="recentOpportunities.length" class="panel recent-panel">
-        <div class="panel-heading"><div><p class="eyebrow">Live workspace</p><h2>Recent job opportunities</h2></div><RouterLink class="text-button" to="/jobs">View all</RouterLink></div>
+        <div class="panel-heading"><div><p class="eyebrow">{{ t('overview.recent.eyebrow') }}</p><h2>{{ t('overview.recent.title') }}</h2></div><RouterLink class="text-button" to="/jobs">{{ t('overview.recent.viewAll') }}</RouterLink></div>
         <div class="recent-list">
           <RouterLink v-for="item in recentOpportunities" :key="item.id" class="recent-item" :to="`/jobs/${item.id}`">
             <span class="company-mark">{{ (item.company || '?').slice(0, 2).toUpperCase() }}</span>
-            <div><strong>{{ item.title || 'Job details pending' }}</strong><p>{{ item.company || 'Company pending' }}</p></div>
-            <span class="status-pill">{{ item.status }}</span>
+            <div><strong>{{ item.title || t('overview.recent.titlePending') }}</strong><p>{{ item.company || t('overview.recent.companyPending') }}</p></div>
+            <span class="status-pill">{{ jobStatusLabel(item.status) }}</span>
           </RouterLink>
         </div>
       </section>
 
       <section class="panel setup-panel">
         <div class="panel-heading">
-          <div><p class="eyebrow">Getting started</p><h2>Your tailored-document workflow</h2></div>
-          <span class="status-pill">{{ prerequisitesReady ? 'Inputs ready' : 'Setup in progress' }}</span>
+          <div><p class="eyebrow">{{ t('overview.setup.eyebrow') }}</p><h2>{{ t('overview.setup.title') }}</h2></div>
+          <span class="status-pill">{{ prerequisitesReady ? t('overview.setup.inputsReady') : t('overview.setup.inProgress') }}</span>
         </div>
         <div class="steps">
           <RouterLink v-for="step in setupSteps" :key="step.number" class="step" :class="{ complete: step.complete, planned: step.planned }" :to="step.to">
             <span class="step-number">{{ step.complete ? '✓' : step.number }}</span>
             <div><strong>{{ step.title }}</strong><p>{{ step.description }}</p></div>
-            <span v-if="step.planned" class="step-state">Coming soon</span><span v-else class="arrow">→</span>
+            <span v-if="step.planned" class="step-state">{{ t('overview.setup.comingSoon') }}</span><span v-else class="arrow">→</span>
           </RouterLink>
         </div>
       </section>

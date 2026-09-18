@@ -38,7 +38,7 @@ The default Docker Compose deployment includes the web application, API, backgro
 - Task Monitor
 - Settings
 
-The frontend uses Vue Router for navigation, Pinia and Vue state for client state, and polling for background workflow progress. Collection endpoints return compact read models rather than complete domain records. Large profile, opportunity, and generation fields are fetched from detail endpoints only when the user opens an item. List pages currently perform their search, filtering, and pagination in the browser, except the Task Monitor, which uses server-side filtering and pagination.
+The frontend uses Vue Router for navigation, Pinia and Vue state for client state, Vue I18n for localized interface copy, and polling for background workflow progress. English, German, French, Spanish, Japanese, Simplified Chinese, and Traditional Chinese locale catalogs are bundled with the application. The active locale is stored in workspace preferences, applied when the application starts, and can be changed immediately from Settings. Collection endpoints return compact read models rather than complete domain records. Large profile, opportunity, and generation fields are fetched from detail endpoints only when the user opens an item. List pages currently perform their search, filtering, and pagination in the browser, except the Task Monitor, which uses server-side filtering and pagination.
 
 ### 2.2 Go API
 

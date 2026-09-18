@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 withDefaults(defineProps<{
   search: string
   total: number
@@ -9,13 +12,13 @@ const emit = defineEmits<{ 'update:search': [value: string] }>()
 </script>
 
 <template>
-  <section class="list-filters" aria-label="List search and filters">
+  <section class="list-filters" :aria-label="t('common.search')">
     <label class="search-field">
       <span aria-hidden="true">⌕</span>
-      <input :value="search" type="search" :placeholder="searchPlaceholder" aria-label="Search list" @input="emit('update:search', ($event.target as HTMLInputElement).value)" />
+      <input :value="search" type="search" :placeholder="searchPlaceholder" :aria-label="t('common.search')" @input="emit('update:search', ($event.target as HTMLInputElement).value)" />
     </label>
     <div class="filter-fields"><slot /></div>
-    <span class="result-count">{{ total }} {{ total === 1 ? 'result' : 'results' }}</span>
+    <span class="result-count">{{ t('common.results', { count: total }, total) }}</span>
   </section>
 </template>
 

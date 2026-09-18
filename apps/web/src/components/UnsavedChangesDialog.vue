@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = withDefaults(defineProps<{
   open: boolean
@@ -27,14 +30,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown))
         <section class="unsaved-panel" role="alertdialog" aria-modal="true" aria-labelledby="unsaved-title" aria-describedby="unsaved-message">
           <span class="unsaved-icon" aria-hidden="true">●</span>
           <div>
-            <p class="eyebrow">Unsaved settings</p>
-            <h2 id="unsaved-title">Save your changes?</h2>
-            <p id="unsaved-message">You changed one or more settings. Save them before leaving, or discard the changes.</p>
+            <p class="eyebrow">{{ t('dialogs.unsaved') }}</p>
+            <h2 id="unsaved-title">{{ t('dialogs.saveChanges') }}</h2>
+            <p id="unsaved-message">{{ t('dialogs.message') }}</p>
           </div>
           <div class="unsaved-actions">
-            <button class="button" type="button" :disabled="busy" @click="cancel">Keep editing</button>
-            <button class="text-button danger-text" type="button" :disabled="busy" @click="emit('discard')">Discard changes</button>
-            <button class="button primary" type="button" :disabled="busy" @click="emit('save')">{{ busy ? 'Saving…' : 'Save changes' }}</button>
+            <button class="button" type="button" :disabled="busy" @click="cancel">{{ t('dialogs.keepEditing') }}</button>
+            <button class="text-button danger-text" type="button" :disabled="busy" @click="emit('discard')">{{ t('dialogs.discard') }}</button>
+            <button class="button primary" type="button" :disabled="busy" @click="emit('save')">{{ busy ? t('common.saving') : t('common.save') }}</button>
           </div>
         </section>
       </div>

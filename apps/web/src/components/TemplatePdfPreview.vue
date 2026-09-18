@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { api } from '../lib/api'
 
+const { t } = useI18n()
 const props = defineProps<{ templateId: string }>()
 const loading = ref(true)
 const error = ref('')
@@ -20,7 +22,7 @@ async function loadPreview() {
   try {
     previewUrl.value = URL.createObjectURL(await api.templatePreview(props.templateId))
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not load the PDF preview.'
+    error.value = cause instanceof Error ? cause.message : t('templates.preview.error')
   } finally {
     loading.value = false
   }
@@ -32,10 +34,10 @@ onBeforeUnmount(releasePreview)
 
 <template>
   <div class="pdf-preview">
-    <div v-if="loading" class="preview-message"><span class="preview-spinner" aria-hidden="true" /><strong>Loading PDF preview…</strong><p>TeX and Word templates use the same stored PDF preview.</p></div>
-    <div v-else-if="error" class="preview-message error-message"><strong>Preview unavailable</strong><p>{{ error }}</p><button class="button" type="button" @click="loadPreview">Try again</button></div>
-    <object v-else :data="previewUrl" type="application/pdf" class="preview-frame" aria-label="Template PDF preview">
-      <div class="preview-message"><strong>Your browser cannot display embedded PDFs.</strong><a class="button" :href="previewUrl" target="_blank" rel="noopener">Open preview</a></div>
+    <div v-if="loading" class="preview-message"><span class="preview-spinner" aria-hidden="true" /><strong>{{ t('templates.preview.loading') }}</strong><p>{{ t('templates.preview.loadingHint') }}</p></div>
+    <div v-else-if="error" class="preview-message error-message"><strong>{{ t('templates.preview.unavailable') }}</strong><p>{{ error }}</p><button class="button" type="button" @click="loadPreview">{{ t('common.retry') }}</button></div>
+    <object v-else :data="previewUrl" type="application/pdf" class="preview-frame" :aria-label="t('templates.preview.ariaLabel')">
+      <div class="preview-message"><strong>{{ t('templates.preview.unsupported') }}</strong><a class="button" :href="previewUrl" target="_blank" rel="noopener">{{ t('templates.preview.openPreview') }}</a></div>
     </object>
   </div>
 </template>

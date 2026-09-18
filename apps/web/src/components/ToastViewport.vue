@@ -1,5 +1,8 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { toast } from '../lib/toast'
+
+const { t } = useI18n()
 
 const icon = { success: '✓', info: 'i', warning: '!' }
 </script>
@@ -10,7 +13,7 @@ const icon = { success: '✓', info: 'i', warning: '!' }
       <div v-for="item in toast.messages" :key="item.id" class="toast" :class="item.tone" role="status">
         <span class="toast-icon" aria-hidden="true">{{ icon[item.tone] }}</span>
         <p>{{ item.message }}</p>
-        <button type="button" aria-label="Dismiss notification" @click="toast.dismiss(item.id)">×</button>
+        <button type="button" :aria-label="t('toast.dismiss')" @click="toast.dismiss(item.id)">×</button>
         <span class="toast-timer" aria-hidden="true" />
       </div>
     </TransitionGroup>

@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = withDefaults(defineProps<{
   open: boolean
@@ -30,13 +33,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown))
         <section class="confirm-panel" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-message">
           <span class="confirm-icon" aria-hidden="true">!</span>
           <div>
-            <p class="eyebrow">Confirm deletion</p>
+            <p class="eyebrow">{{ t('common.confirmDeletion') }}</p>
             <h2 id="confirm-title">{{ title }}</h2>
             <p id="confirm-message">{{ message }}</p>
           </div>
           <div class="confirm-actions">
-            <button class="button" type="button" :disabled="busy" autofocus @click="cancel">Cancel</button>
-            <button class="button danger" type="button" :disabled="busy" @click="emit('confirm')">{{ busy ? 'Deleting…' : confirmLabel }}</button>
+            <button class="button" type="button" :disabled="busy" autofocus @click="cancel">{{ t('common.cancel') }}</button>
+            <button class="button danger" type="button" :disabled="busy" @click="emit('confirm')">{{ busy ? t('common.deleting') : confirmLabel }}</button>
           </div>
         </section>
       </div>

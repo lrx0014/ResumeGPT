@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
+
+const { t } = useI18n()
 
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import PageHeader from '../components/PageHeader.vue'
@@ -33,7 +36,7 @@ async function load() {
       sourceUrl: selected.sourceUrl ?? '', description: selected.description ?? '', status: selected.status,
     })
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not load the job.'
+    error.value = cause instanceof Error ? cause.message : t('jobs.detail.errors.load')
   } finally {
     loading.value = false
   }
@@ -44,9 +47,9 @@ async function save() {
   error.value = ''
   try {
     job.value = await api.updateJob(jobId.value, { ...form })
-    toast.success('Job saved.')
+    toast.success(t('jobs.detail.toast.saved'))
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not save the job.'
+    error.value = cause instanceof Error ? cause.message : t('jobs.detail.errors.save')
   } finally {
     saving.value = false
   }
@@ -56,10 +59,10 @@ async function removeJob() {
   deleting.value = true
   try {
     await api.deleteJob(jobId.value)
-    toast.success('Job opportunity deleted.')
+    toast.success(t('jobs.toast.deleted'))
     await router.push('/jobs')
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not delete the job.'
+    error.value = cause instanceof Error ? cause.message : t('jobs.detail.errors.delete')
     deleting.value = false
   }
 }
@@ -69,37 +72,37 @@ watch(jobId, () => void load(), { immediate: true })
 
 <template>
   <div class="page job-editor">
-    <RouterLink to="/jobs">← All job opportunities</RouterLink>
-    <PageHeader :title="job?.title || 'Job opportunity details'" description="Review the role, update its details, and keep your application status current.">
+    <RouterLink to="/jobs">{{ t('jobs.detail.backLink') }}</RouterLink>
+    <PageHeader :title="job?.title || t('jobs.detail.defaultTitle')" :description="t('jobs.detail.description')">
       <div class="header-actions">
-        <a v-if="job?.sourceUrl" class="button" :href="job.sourceUrl" target="_blank" rel="noopener noreferrer">Open source ↗</a>
-        <button class="button" type="button" :disabled="loading" @click="load">Refresh</button>
-        <button class="button primary" type="button" :disabled="loading || saving" @click="save">{{ saving ? 'Saving…' : 'Save job' }}</button>
+        <a v-if="job?.sourceUrl" class="button" :href="job.sourceUrl" target="_blank" rel="noopener noreferrer">{{ t('jobs.preview.openSource') }}</a>
+        <button class="button" type="button" :disabled="loading" @click="load">{{ t('common.refresh') }}</button>
+        <button class="button primary" type="button" :disabled="loading || saving" @click="save">{{ saving ? t('common.saving') : t('jobs.detail.save') }}</button>
       </div>
     </PageHeader>
 
     <p v-if="error" class="notice error" role="alert">{{ error }}</p>
-    <p v-if="importing" class="notice" role="status">ResumeGPT is importing this public job page. Use Refresh to load the latest details without losing edits in progress.</p>
+    <p v-if="importing" class="notice" role="status">{{ t('jobs.detail.importingNotice') }}</p>
     <p v-if="job?.importError" class="notice error">{{ job.importError }}</p>
-    <div v-if="loading" class="empty-state">Loading job…</div>
+    <div v-if="loading" class="empty-state">{{ t('jobs.detail.loading') }}</div>
 
     <template v-else-if="job">
       <form class="panel form-grid" @submit.prevent="save">
-        <label><span>Job title</span><input v-model="form.title" required maxlength="300" /></label>
-        <label><span>Company</span><input v-model="form.company" required maxlength="300" /></label>
-        <label><span>Application status</span><select v-model="form.status"><option v-for="status in jobStatuses" :key="status.value" :value="status.value">{{ status.label }}</option></select></label>
-        <label><span>Location</span><input v-model="form.location" maxlength="300" /></label>
-        <label><span>City</span><input v-model="form.city" maxlength="150" /></label>
-        <label><span>Country</span><input v-model="form.country" maxlength="100" /></label>
-        <label><span>Work mode</span><input v-model="form.workMode" maxlength="100" /></label>
-        <label><span>Employment type</span><input v-model="form.employmentType" maxlength="100" /></label>
-        <label class="full"><span>Source URL</span><input v-model="form.sourceUrl" type="url" maxlength="2048" /></label>
-        <label class="full"><span>Job description</span><textarea v-model="form.description" rows="18" maxlength="1048576" /></label>
-        <div class="full form-actions"><button class="button primary" :disabled="saving">Save job</button></div>
+        <label><span>{{ t('jobs.detail.titleLabel') }}</span><input v-model="form.title" required maxlength="300" /></label>
+        <label><span>{{ t('jobs.detail.companyLabel') }}</span><input v-model="form.company" required maxlength="300" /></label>
+        <label><span>{{ t('jobs.detail.statusLabel') }}</span><select v-model="form.status"><option v-for="status in jobStatuses" :key="status.value" :value="status.value">{{ t(status.labelKey) }}</option></select></label>
+        <label><span>{{ t('jobs.detail.locationLabel') }}</span><input v-model="form.location" maxlength="300" /></label>
+        <label><span>{{ t('jobs.detail.cityLabel') }}</span><input v-model="form.city" maxlength="150" /></label>
+        <label><span>{{ t('jobs.detail.countryLabel') }}</span><input v-model="form.country" maxlength="100" /></label>
+        <label><span>{{ t('jobs.detail.workModeLabel') }}</span><input v-model="form.workMode" maxlength="100" /></label>
+        <label><span>{{ t('jobs.detail.employmentTypeLabel') }}</span><input v-model="form.employmentType" maxlength="100" /></label>
+        <label class="full"><span>{{ t('jobs.detail.sourceUrlLabel') }}</span><input v-model="form.sourceUrl" type="url" maxlength="2048" /></label>
+        <label class="full"><span>{{ t('jobs.detail.descriptionLabel') }}</span><textarea v-model="form.description" rows="18" maxlength="1048576" /></label>
+        <div class="full form-actions"><button class="button primary" :disabled="saving">{{ t('jobs.detail.save') }}</button></div>
       </form>
-      <section class="danger-zone"><div><h2>Delete job</h2><p>This removes the job from the active database.</p></div><button class="button" type="button" :disabled="deleting" @click="confirmDelete = true">Delete job</button></section>
+      <section class="danger-zone"><div><h2>{{ t('jobs.detail.dangerZoneTitle') }}</h2><p>{{ t('jobs.detail.dangerZoneMessage') }}</p></div><button class="button" type="button" :disabled="deleting" @click="confirmDelete = true">{{ t('jobs.detail.deleteSubmit') }}</button></section>
     </template>
-    <ConfirmDialog :open="confirmDelete" title="Delete job opportunity?" :message="`${[job?.title, job?.company].filter(Boolean).join(' at ') || 'This job opportunity'} will be removed. This action cannot be undone.`" :busy="deleting" @cancel="confirmDelete = false" @confirm="removeJob" />
+    <ConfirmDialog :open="confirmDelete" :title="t('jobs.deleteConfirm.title')" :message="t('jobs.detail.deleteConfirmMessage', { name: [job?.title, job?.company].filter(Boolean).join(' at ') || t('jobs.deleteConfirm.defaultName') })" :busy="deleting" @cancel="confirmDelete = false" @confirm="removeJob" />
   </div>
 </template>
 

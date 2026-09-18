@@ -76,6 +76,7 @@ Then open [http://localhost:5173](http://localhost:5173). The Compose stack supp
 - Assign default providers and models independently to the Writer, Template Applying, Document Designer, Visual Reviewer, Job Import, and Job Hunter Agents.
 - Override the default routing with a single model for an individual generation.
 - Configure the interface language and System, Light, or Dark theme.
+- Switch the interface between English, German, French, Spanish, Japanese, Simplified Chinese, and Traditional Chinese from Settings.
 
 ### Background Processing and Operations
 

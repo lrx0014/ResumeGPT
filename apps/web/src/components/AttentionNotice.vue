@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
+
 withDefaults(defineProps<{
   message: string
   code?: string
@@ -9,7 +13,7 @@ withDefaults(defineProps<{
 <template>
   <div class="attention-notice" :class="{ compact }" role="alert">
     <span class="attention-icon" aria-hidden="true">!</span>
-    <div><strong>Needs attention</strong><p>{{ message }}</p><small v-if="code">Reference: {{ code.replaceAll('_', ' ') }}</small></div>
+    <div><strong>{{ t('common.needsAttention') }}</strong><p>{{ message }}</p><small v-if="code">{{ t('attentionNotice.reference', { code: code.replaceAll('_', ' ') }) }}</small></div>
   </div>
 </template>
 

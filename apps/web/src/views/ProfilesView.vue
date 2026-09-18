@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+
+const { t } = useI18n()
 
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import ListFilters from '../components/ListFilters.vue'
@@ -19,20 +22,16 @@ const pendingDelete = ref<Profile | null>(null)
 const error = ref('')
 const showForm = ref(false)
 const search = ref('')
-const languageFilter = ref('all')
 const page = ref(1)
 const pageSize = ref(8)
-const form = reactive({ name: '', targetRole: '', defaultLanguage: 'en-US', content: '', avatarObjectId: '' })
+const form = reactive({ name: '', targetRole: '', defaultLanguage: 'English', content: '', avatarObjectId: '' })
 
 const filteredProfiles = computed(() => {
   const query = search.value.trim().toLocaleLowerCase()
-  return profiles.value.filter(profile => {
-    const matchesSearch = !query || [profile.name, profile.targetRole, profile.contentPreview].some(value => value?.toLocaleLowerCase().includes(query))
-    return matchesSearch && (languageFilter.value === 'all' || profile.defaultLanguage === languageFilter.value)
-  })
+  return profiles.value.filter(profile => !query || [profile.name, profile.targetRole, profile.contentPreview].some(value => value?.toLocaleLowerCase().includes(query)))
 })
 const visibleProfiles = computed(() => filteredProfiles.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
-watch([search, languageFilter, pageSize], () => { page.value = 1 })
+watch([search, pageSize], () => { page.value = 1 })
 watch(() => filteredProfiles.value.length, total => { page.value = Math.min(page.value, Math.max(1, Math.ceil(total / pageSize.value))) })
 
 async function load() {
@@ -41,7 +40,7 @@ async function load() {
   try {
     profiles.value = (await api.listProfiles()).items
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not load profiles.'
+    error.value = cause instanceof Error ? cause.message : t('profiles.errors.load')
   } finally {
     loading.value = false
   }
@@ -52,10 +51,10 @@ async function createProfile() {
   error.value = ''
   try {
     const created = await api.createProfile(form)
-    toast.success('Profile created.')
+    toast.success(t('profiles.toasts.created'))
     await router.push(`/profiles/${created.id}`)
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not create the profile.'
+    error.value = cause instanceof Error ? cause.message : t('profiles.errors.create')
   } finally {
     saving.value = false
   }
@@ -70,9 +69,9 @@ async function removeProfile() {
     await api.deleteProfile(profile.id)
     profiles.value = profiles.value.filter(candidate => candidate.id !== profile.id)
     pendingDelete.value = null
-    toast.success('Profile deleted.')
+    toast.success(t('profiles.toasts.deleted'))
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not delete the profile.'
+    error.value = cause instanceof Error ? cause.message : t('profiles.errors.delete')
   } finally {
     deletingId.value = ''
   }
@@ -83,41 +82,39 @@ onMounted(load)
 
 <template>
   <div class="page">
-    <PageHeader title="Profiles" description="Create a focused profile for each role or career direction.">
+    <PageHeader :title="t('pages.profiles.title')" :description="t('pages.profiles.description')">
       <button class="button primary" type="button" @click="showForm = !showForm">
-        {{ showForm ? 'Close' : 'New profile' }}
+        {{ showForm ? t('common.close') : t('profiles.newProfile') }}
       </button>
     </PageHeader>
 
     <form v-if="showForm" class="panel form-grid" @submit.prevent="createProfile">
-      <label><span>Name</span><input v-model="form.name" required placeholder="Backend Engineering" /></label>
-      <label><span>Target role</span><input v-model="form.targetRole" placeholder="Senior Backend Engineer" /></label>
+      <label><span>{{ t('profiles.form.nameLabel') }}</span><input v-model="form.name" required :placeholder="t('profiles.form.namePlaceholder')" /></label>
+      <label><span>{{ t('profiles.form.targetRoleLabel') }}</span><input v-model="form.targetRole" :placeholder="t('profiles.form.targetRolePlaceholder')" /></label>
       <label>
-        <span>Primary language</span>
-        <select v-model="form.defaultLanguage"><option value="en-US">English</option><option value="de-DE">German</option></select>
+        <span>{{ t('profiles.form.languageLabel') }}</span>
+        <input v-model="form.defaultLanguage" required :placeholder="t('profiles.form.languagePlaceholder')" />
       </label>
-      <div class="full form-actions"><button class="button primary" :disabled="saving">{{ saving ? 'Saving…' : 'Create profile' }}</button></div>
+      <div class="full form-actions"><button class="button primary" :disabled="saving">{{ saving ? t('common.saving') : t('profiles.form.createButton') }}</button></div>
     </form>
 
     <p v-if="error" class="notice error">{{ error }}</p>
-    <div v-if="loading" class="empty-state">Loading profiles…</div>
+    <div v-if="loading" class="empty-state">{{ t('profiles.loading') }}</div>
     <template v-else-if="profiles.length">
-      <ListFilters v-model:search="search" :total="filteredProfiles.length" search-placeholder="Search profiles, roles, or content…">
-        <label>Language <select v-model="languageFilter"><option value="all">All languages</option><option value="en-US">English</option><option value="de-DE">German</option></select></label>
-      </ListFilters>
+      <ListFilters v-model:search="search" :total="filteredProfiles.length" :search-placeholder="t('profiles.searchPlaceholder')" />
     <TransitionGroup v-if="visibleProfiles.length" name="card-list" tag="div" class="card-grid">
       <article v-for="profile in visibleProfiles" :key="profile.id" class="entity-card">
         <span class="entity-icon">◎</span>
-        <div><p class="eyebrow">{{ profile.targetRole || 'General profile' }}</p><h2>{{ profile.name }}</h2><p>{{ profile.hasContent ? `${profile.contentPreview || ''}${(profile.contentPreview?.length || 0) >= 140 ? '…' : ''}` : 'Add your experience, education, skills, and achievements.' }}</p></div>
-        <footer><span>{{ profile.defaultLanguage }}</span><div class="card-actions"><button class="text-button danger-text" type="button" @click="pendingDelete = profile">Delete</button><RouterLink class="text-button" :to="`/profiles/${profile.id}`">Open →</RouterLink></div></footer>
+        <div><p class="eyebrow">{{ profile.targetRole || t('profiles.generalProfile') }}</p><h2>{{ profile.name }}</h2><p>{{ profile.hasContent ? `${profile.contentPreview || ''}${(profile.contentPreview?.length || 0) >= 140 ? '…' : ''}` : t('profiles.contentPlaceholder') }}</p></div>
+        <footer><span>{{ profile.defaultLanguage }}</span><div class="card-actions"><button class="text-button danger-text" type="button" @click="pendingDelete = profile">{{ t('common.delete') }}</button><RouterLink class="text-button" :to="`/profiles/${profile.id}`">{{ t('profiles.openProfile') }}</RouterLink></div></footer>
       </article>
     </TransitionGroup>
-    <div v-else class="empty-state compact"><h2>No matching profiles</h2><p>Try another keyword or language.</p></div>
+    <div v-else class="empty-state compact"><h2>{{ t('profiles.emptyFiltered.title') }}</h2><p>{{ t('profiles.emptyFiltered.message') }}</p></div>
     <ListPagination v-if="filteredProfiles.length" v-model:page="page" v-model:page-size="pageSize" :total="filteredProfiles.length" />
     </template>
     <div v-else class="empty-state">
-      <span class="empty-icon">◎</span><h2>No profiles yet</h2><p>Create a profile to organize experience for a role or career direction.</p>
+      <span class="empty-icon">◎</span><h2>{{ t('profiles.emptyState.title') }}</h2><p>{{ t('profiles.emptyState.message') }}</p>
     </div>
-    <ConfirmDialog :open="Boolean(pendingDelete)" title="Delete profile?" :message="`“${pendingDelete?.name ?? ''}” and its saved content will be removed. This action cannot be undone.`" :busy="deletingId === pendingDelete?.id" @cancel="pendingDelete = null" @confirm="removeProfile" />
+    <ConfirmDialog :open="Boolean(pendingDelete)" :title="t('profiles.deleteConfirmTitle')" :message="t('profiles.deleteConfirmMessage', { name: pendingDelete?.name ?? '' })" :busy="deletingId === pendingDelete?.id" @cancel="pendingDelete = null" @confirm="removeProfile" />
   </div>
 </template>
