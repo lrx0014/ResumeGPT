@@ -10,6 +10,7 @@ import (
 
 	"github.com/lrx0014/ResumeGPT/internal/job"
 	"github.com/lrx0014/ResumeGPT/internal/settings"
+	"github.com/lrx0014/ResumeGPT/internal/shared/jsonclean"
 	"github.com/tmc/langchaingo/agents"
 	"github.com/tmc/langchaingo/chains"
 	"github.com/tmc/langchaingo/llms"
@@ -161,7 +162,7 @@ func (t *webSearchTool) Call(ctx context.Context, input string) (string, error) 
 	var value struct {
 		Query string `json:"query"`
 	}
-	if json.Unmarshal([]byte(cleanJSON(input)), &value) != nil {
+	if json.Unmarshal([]byte(jsonclean.ExtractJSONObject(input)), &value) != nil {
 		value.Query = strings.Trim(strings.TrimSpace(input), "\"`")
 	}
 	if value.Query == "" {
@@ -216,7 +217,7 @@ func (t *finishHuntTool) Call(_ context.Context, input string) (string, error) {
 	var value struct {
 		URLs []string `json:"urls"`
 	}
-	if json.Unmarshal([]byte(cleanJSON(input)), &value) != nil {
+	if json.Unmarshal([]byte(jsonclean.ExtractJSONObject(input)), &value) != nil {
 		return `{"status":"invalid","reason":"Submit one JSON object with a urls array."}`, nil
 	}
 	seen := make(map[string]bool)
@@ -254,15 +255,6 @@ func agentIterationsExhausted(err error) bool {
 	}
 	message := strings.ToLower(err.Error())
 	return strings.Contains(message, "max iterations") || strings.Contains(message, "not finished before")
-}
-
-func cleanJSON(value string) string {
-	value = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(strings.TrimPrefix(strings.TrimSpace(value), "```json"), "```"), "```"))
-	start, end := strings.Index(value, "{"), strings.LastIndex(value, "}")
-	if start >= 0 && end > start {
-		return value[start : end+1]
-	}
-	return value
 }
 
 func looksLikeIndividualJobURL(raw string) bool {

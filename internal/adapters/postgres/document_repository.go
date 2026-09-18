@@ -116,15 +116,13 @@ func (r *DocumentRepository) DownloadAllowed(ctx context.Context, workspaceID, o
 	return allowed, err
 }
 
-type rowScanner interface{ Scan(...any) error }
-
 func uploadFields(upload *document.Upload) []any {
 	return []any{&upload.ID, &upload.WorkspaceID, &upload.ProfileID, &upload.ObjectID, &upload.Name,
 		&upload.DeclaredMediaType, &upload.State, &upload.JobID, &upload.ExtractedText, &upload.ErrorCode,
 		&upload.ErrorMessage, &upload.CreatedAt, &upload.UpdatedAt}
 }
 
-func scanUpload(row rowScanner, upload *document.Upload) error {
+func scanUpload(row scanner, upload *document.Upload) error {
 	return row.Scan(uploadFields(upload)...)
 }
 

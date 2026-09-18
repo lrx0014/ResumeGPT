@@ -15,6 +15,7 @@ import PageHeader from '../components/PageHeader.vue'
 import { api } from '../lib/api'
 import { jobStatuses, jobStatusLabel } from '../lib/jobStatus'
 import { useListSelection } from '../lib/listSelection'
+import { usePagedList } from '../lib/pagination'
 import { toast } from '../lib/toast'
 import type { AgentDefault, Job, JobInput, LLMConnection, TemplateKind } from '../lib/types'
 
@@ -41,8 +42,6 @@ const importsAvailable = ref(true)
 const search = ref('')
 const statusFilter = ref('all')
 const originFilter = ref('all')
-const page = ref(1)
-const pageSize = ref(10)
 const showGeneration = ref(false)
 const generationTargets = ref<Job[]>([])
 const generationDocumentType = ref<TemplateKind>('resume')
@@ -64,11 +63,9 @@ const filteredJobs = computed(() => {
     return matchesSearch && (statusFilter.value === 'all' || item.status === statusFilter.value) && (originFilter.value === 'all' || item.origin === originFilter.value)
   })
 })
-const visibleJobs = computed(() => filteredJobs.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
+const { page, pageSize, visible: visibleJobs } = usePagedList(filteredJobs, [search, statusFilter, originFilter], 10)
 const selectableFilteredJobs = computed(() => filteredJobs.value.filter(canGenerate))
 const allFilteredSelected = computed(() => Boolean(selectableFilteredJobs.value.length) && selectableFilteredJobs.value.every(item => selection.isSelected(item.id)))
-watch([search, statusFilter, originFilter, pageSize], () => { page.value = 1 })
-watch(() => filteredJobs.value.length, total => { page.value = Math.min(page.value, Math.max(1, Math.ceil(total / pageSize.value))) })
 watch(() => jobs.value.map(item => item.id).join(','), () => selection.retain(jobs.value.filter(canGenerate).map(item => item.id)))
 
 function canGenerate(item: Job) {

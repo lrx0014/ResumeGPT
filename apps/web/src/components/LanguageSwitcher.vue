@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 
 import { api } from '../lib/api'
 import { toast } from '../lib/toast'
-import { interfaceLanguages, normalizeInterfaceLocale, type InterfaceLocale } from '../plugins/i18n'
+import { interfaceLanguages, loadLocaleMessages, normalizeInterfaceLocale, type InterfaceLocale } from '../plugins/i18n'
 
 const { locale, t } = useI18n()
 const switching = ref(false)
@@ -13,10 +13,11 @@ async function switchLanguage(event: Event) {
   const language = normalizeInterfaceLocale((event.target as HTMLSelectElement).value)
   if (switching.value || language === locale.value) return
   const previous = locale.value as InterfaceLocale
-  locale.value = language
-  document.documentElement.lang = language
   switching.value = true
   try {
+    await loadLocaleMessages(language)
+    locale.value = language
+    document.documentElement.lang = language
     const current = await api.getSettings()
     await api.updateSettings({ interfaceLanguage: language, theme: current.theme })
     toast.success(t('settings.languageSaved'))

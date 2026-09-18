@@ -1,35 +1,15 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { api } from '../lib/api'
+import { usePdfObjectUrl } from '../lib/pdfPreview'
 
 const { t } = useI18n()
 const props = defineProps<{ templateId: string }>()
-const loading = ref(true)
-const error = ref('')
-const previewUrl = ref('')
-
-function releasePreview() {
-  if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
-  previewUrl.value = ''
-}
-
-async function loadPreview() {
-  loading.value = true
-  error.value = ''
-  releasePreview()
-  try {
-    previewUrl.value = URL.createObjectURL(await api.templatePreview(props.templateId))
-  } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : t('templates.preview.error')
-  } finally {
-    loading.value = false
-  }
-}
-
-onMounted(loadPreview)
-onBeforeUnmount(releasePreview)
+const { loading, error, previewUrl, load: loadPreview } = usePdfObjectUrl(
+  () => api.templatePreview(props.templateId),
+  () => t('templates.preview.error'),
+)
 </script>
 
 <template>

@@ -214,8 +214,6 @@ func (r *TemplateRepository) RecordFailure(ctx context.Context, job workqueue.Jo
 	})
 }
 
-type templateScanner interface{ Scan(...any) error }
-
-func scanTemplate(row templateScanner, item *resumetemplate.Template) error {
+func scanTemplate(row scanner, item *resumetemplate.Template) error {
 	return row.Scan(&item.ID, &item.WorkspaceID, &item.Name, &item.Kind, &item.Format, &item.Description, &item.SourceName, &item.EntryFile, &item.DeclaredMediaType, &item.ObjectID, &item.PreviewObjectID, &item.Content, &item.State, &item.JobID, &item.ErrorCode, &item.ErrorMessage, &item.CreatedAt, &item.UpdatedAt)
 }

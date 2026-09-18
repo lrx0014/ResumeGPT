@@ -6,6 +6,7 @@ import { useRoute } from 'vue-router'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { api } from '../lib/api'
+import { formatDateTime } from '../lib/formatDate'
 import { toast } from '../lib/toast'
 import type { JobHunter, JobHunterReviewItem } from '../lib/types'
 
@@ -53,7 +54,7 @@ async function dismiss() {
 }
 
 function formatTime(value: string) {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+  return formatDateTime(value)
 }
 
 function hostname(value: string) {

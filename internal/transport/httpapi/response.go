@@ -37,3 +37,13 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, target any) error {
 	decoder.DisallowUnknownFields()
 	return decoder.Decode(target)
 }
+
+// decodeOrBadRequest decodes the request body into target, writing a 400
+// invalid_request response and returning false on failure.
+func decodeOrBadRequest(w http.ResponseWriter, r *http.Request, target any) bool {
+	if err := decodeJSON(w, r, target); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", "The request body is not valid JSON.")
+		return false
+	}
+	return true
+}

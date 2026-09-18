@@ -11,6 +11,9 @@ import (
 	"github.com/lrx0014/ResumeGPT/internal/shared/id"
 )
 
+// scanner abstracts over pgx.Row/pgx.Rows so scan helpers work with either.
+type scanner interface{ Scan(...any) error }
+
 func withWorkspaceTx(ctx context.Context, pool *pgxpool.Pool, workspaceID string, fn func(pgx.Tx) error) error {
 	tx, err := pool.Begin(ctx)
 	if err != nil {

@@ -270,5 +270,3 @@ func validateTemplateSource(sourceName, contentType, entryFile string) (string, 
 	}
 	return format, entryFile, true
 }
-
-func MaxTemplateBytes() int64 { return maxTemplateBytes }

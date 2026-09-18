@@ -34,8 +34,7 @@ func (a *API) listAgentDefaults(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) updateAgentDefaults(w http.ResponseWriter, r *http.Request) {
 	var input settings.AgentDefaultsInput
-	if err := decodeJSON(w, r, &input); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", "The request body is not valid JSON.")
+	if !decodeOrBadRequest(w, r, &input) {
 		return
 	}
 	items, err := a.settings.SaveAgentDefaults(r.Context(), workspaceID(r), input)
@@ -61,8 +60,7 @@ func (a *API) getSettings(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) updateSettings(w http.ResponseWriter, r *http.Request) {
 	var input settings.PreferencesInput
-	if err := decodeJSON(w, r, &input); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", "The request body is not valid JSON.")
+	if !decodeOrBadRequest(w, r, &input) {
 		return
 	}
 	value, err := a.settings.SavePreferences(r.Context(), workspaceID(r), input)
@@ -88,8 +86,7 @@ func (a *API) listLLMConnections(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) createLLMConnection(w http.ResponseWriter, r *http.Request) {
 	var input settings.LLMConnectionInput
-	if err := decodeJSON(w, r, &input); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", "The request body is not valid JSON.")
+	if !decodeOrBadRequest(w, r, &input) {
 		return
 	}
 	value, err := a.settings.CreateConnection(r.Context(), workspaceID(r), input)
@@ -101,8 +98,7 @@ func (a *API) createLLMConnection(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) updateLLMConnection(w http.ResponseWriter, r *http.Request) {
 	var input settings.LLMConnectionInput
-	if err := decodeJSON(w, r, &input); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", "The request body is not valid JSON.")
+	if !decodeOrBadRequest(w, r, &input) {
 		return
 	}
 	value, err := a.settings.UpdateConnection(r.Context(), workspaceID(r), r.PathValue("connectionID"), input)

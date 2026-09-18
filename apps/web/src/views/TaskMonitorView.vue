@@ -8,6 +8,7 @@ import ListFilters from '../components/ListFilters.vue'
 import ListPagination from '../components/ListPagination.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { api } from '../lib/api'
+import { formatDateTime } from '../lib/formatDate'
 import type { BackgroundTask, BackgroundTaskState } from '../lib/types'
 
 const tasks = ref<BackgroundTask[]>([])
@@ -39,7 +40,7 @@ function kindLabel(kind: string) {
 }
 
 function formatTime(value?: string) {
-  return value ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'medium' }).format(new Date(value)) : '—'
+  return value ? formatDateTime(value, { dateStyle: 'medium', timeStyle: 'medium' }) : '—'
 }
 
 function stateLabel(state: BackgroundTaskState) {

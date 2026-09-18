@@ -10,14 +10,8 @@ import (
 	"github.com/lrx0014/ResumeGPT/internal/platform/workqueue"
 )
 
-type ProcessorQueue interface {
-	ClaimKind(context.Context, string, string, time.Duration) (workqueue.Job, error)
-	Retry(context.Context, workqueue.Job, string, string, string, time.Duration) error
-	Fail(context.Context, string, string, string, string) error
-}
-
 type ImportProcessor struct {
-	Queue        ProcessorQueue
+	Queue        workqueue.ClaimQueue
 	Repository   ImportRepository
 	Fetcher      Fetcher
 	AgentFetcher AgentFetcher
@@ -26,23 +20,8 @@ type ImportProcessor struct {
 }
 
 func (p *ImportProcessor) Run(ctx context.Context) error {
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-	for {
-		task, err := p.Queue.ClaimKind(ctx, p.WorkerID, ImportJobKind, 3*time.Minute)
-		if err == nil {
-			taskContext, cancel := context.WithTimeout(ctx, 2*time.Minute)
-			p.handle(taskContext, task)
-			cancel()
-		} else if !errors.Is(err, workqueue.ErrEmpty) {
-			p.Logger.Error("claim job import", "error", err)
-		}
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-ticker.C:
-		}
-	}
+	return workqueue.RunLoop(ctx, p.Queue, p.WorkerID, ImportJobKind, 3*time.Minute, 2*time.Minute,
+		p.Logger, "claim job import", p.handle)
 }
 
 func (p *ImportProcessor) handle(ctx context.Context, task workqueue.Job) {

@@ -12,17 +12,19 @@ type createUploadRequest struct {
 	ContentType string `json:"contentType"`
 }
 
+// presignTTL is how long a presigned upload/download URL remains valid.
+const presignTTL = 15 * time.Minute
+
 func (a *API) createUpload(w http.ResponseWriter, r *http.Request) {
 	var input createUploadRequest
-	if err := decodeJSON(w, r, &input); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", "The request body is not valid JSON.")
+	if !decodeOrBadRequest(w, r, &input) {
 		return
 	}
 	if strings.TrimSpace(input.ContentType) == "" {
 		writeError(w, http.StatusUnprocessableEntity, "content_type_required", "Content type is required.")
 		return
 	}
-	result, err := a.blobs.PresignUpload(r.Context(), workspaceID(r), blobstore.NewObjectID(), input.ContentType, 15*time.Minute)
+	result, err := a.blobs.PresignUpload(r.Context(), workspaceID(r), blobstore.NewObjectID(), input.ContentType, presignTTL)
 	if err != nil {
 		a.logger.Error("presign upload", "error", err)
 		writeError(w, http.StatusInternalServerError, "upload_signing_failed", "Could not create an upload URL.")
@@ -43,7 +45,7 @@ func (a *API) createDownload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	result, err := a.blobs.PresignDownload(r.Context(), workspaceID(r), r.PathValue("objectID"), 15*time.Minute)
+	result, err := a.blobs.PresignDownload(r.Context(), workspaceID(r), r.PathValue("objectID"), presignTTL)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_object_id", "The object identifier is invalid.")
 		return

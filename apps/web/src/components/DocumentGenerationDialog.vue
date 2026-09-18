@@ -3,6 +3,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { api } from '../lib/api'
+import { useModelDiscovery } from '../lib/modelDiscovery'
 import type { AgentDefault, GenerationInput, GenerationModelChoice, Job, LLMConnection, Profile, Template, TemplateKind } from '../lib/types'
 
 const { t } = useI18n()
@@ -20,8 +21,6 @@ const emit = defineEmits<{
 const profiles = ref<Profile[]>([])
 const templates = ref<Template[]>([])
 const connections = ref<LLMConnection[]>([])
-const models = reactive<Record<string, string[]>>({})
-const loadingModelConnections = reactive<Record<string, boolean>>({})
 const activeOpportunityIds = ref<string[]>([])
 const loading = ref(false)
 const submitting = ref(false)
@@ -43,28 +42,10 @@ const matchingTemplates = computed(() => templates.value.filter(item => item.sta
 const ready = computed(() => Boolean(activeOpportunityIds.value.length && form.profileId && form.writer.connectionId && form.writer.model && (form.pipelineMode === 'single' || (form.renderer.connectionId && form.renderer.model && form.reviewer.connectionId && form.reviewer.model))))
 const documentLabel = computed(() => form.documentType === 'resume' ? t('generate.dialog.documentLabelCv') : t('generate.dialog.documentLabelCoverLetter'))
 
-async function discover(choice: GenerationModelChoice) {
-  const connectionId = choice.connectionId
-  if (!connectionId) return
-  if (models[connectionId]) {
-    if (!choice.model) choice.model = models[connectionId][0] ?? ''
-    return
-  }
-  loadingModelConnections[connectionId] = true
-  try {
-    models[connectionId] = (await api.testLLMConnection(connectionId)).models
-    if (choice.connectionId === connectionId && !choice.model) choice.model = models[connectionId][0] ?? ''
-  } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : t('generate.errors.loadModels')
-  } finally {
-    loadingModelConnections[connectionId] = false
-  }
-}
-
-function changeConnection(choice: GenerationModelChoice) {
-  choice.model = ''
-  void discover(choice)
-}
+const { models, loadingModelConnections, discover, changeConnection } = useModelDiscovery(
+  message => { error.value = message },
+  () => t('generate.errors.loadModels'),
+)
 
 async function prepare() {
   loading.value = true

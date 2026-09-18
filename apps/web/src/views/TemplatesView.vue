@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 const { t } = useI18n()
 import ConfirmDialog from '../components/ConfirmDialog.vue'
@@ -8,6 +8,7 @@ import ListFilters from '../components/ListFilters.vue'
 import ListPagination from '../components/ListPagination.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { api } from '../lib/api'
+import { usePagedList } from '../lib/pagination'
 import { toast } from '../lib/toast'
 import type { Template, TemplateKind, TemplateState } from '../lib/types'
 
@@ -21,8 +22,6 @@ const uploadsEnabled = ref(false)
 const error = ref('')
 const search = ref('')
 const kindFilter = ref('all')
-const page = ref(1)
-const pageSize = ref(8)
 const file = ref<File | null>(null)
 const form = reactive({ name: '', kind: 'resume' as TemplateKind, description: '', entryFile: '' })
 let pollTimer: number | undefined
@@ -34,9 +33,7 @@ const filteredItems = computed(() => {
     return matchesSearch && (kindFilter.value === 'all' || item.kind === kindFilter.value)
   })
 })
-const visibleItems = computed(() => filteredItems.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
-watch([search, kindFilter, pageSize], () => { page.value = 1 })
-watch(() => filteredItems.value.length, total => { page.value = Math.min(page.value, Math.max(1, Math.ceil(total / pageSize.value))) })
+const { page, pageSize, visible: visibleItems } = usePagedList(filteredItems, [search, kindFilter])
 
 function kindLabel(kind: TemplateKind) { return kind === 'resume' ? t('templates.kindResume') : t('templates.kindCoverLetter') }
 function formatLabel(item: Template) { return item.sourceName.toLowerCase().endsWith('.zip') ? t('templates.formatLatexZip') : item.format === 'latex' ? t('templates.formatTex') : item.format.toUpperCase() }

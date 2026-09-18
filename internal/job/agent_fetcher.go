@@ -8,6 +8,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/lrx0014/ResumeGPT/internal/settings"
+	"github.com/lrx0014/ResumeGPT/internal/shared/jsonclean"
+	"github.com/lrx0014/ResumeGPT/internal/shared/llmtext"
 	"github.com/tmc/langchaingo/agents"
 	"github.com/tmc/langchaingo/chains"
 	"github.com/tmc/langchaingo/llms"
@@ -100,18 +102,8 @@ func (m *jobAgentModel) GenerateContent(ctx context.Context, messages []llms.Mes
 	for _, option := range options {
 		option(&callOptions)
 	}
-	var prompt strings.Builder
-	for _, message := range messages {
-		for _, part := range message.Parts {
-			if value, ok := part.(llms.TextContent); ok {
-				if prompt.Len() > 0 {
-					prompt.WriteString("\n\n")
-				}
-				prompt.WriteString(value.Text)
-			}
-		}
-	}
-	content, err := m.gateway.Complete(ctx, m.runtime, m.model, m.systemPrompt, prompt.String(), nil, callOptions.MaxTokens)
+	prompt := llmtext.FlattenMessages(messages)
+	content, err := m.gateway.Complete(ctx, m.runtime, m.model, m.systemPrompt, prompt, nil, callOptions.MaxTokens)
 	if err != nil {
 		return nil, err
 	}
@@ -269,7 +261,7 @@ func (*finishExtractionTool) Description() string {
 	return "Submit the final evidence-based job fields as one JSON object. Required keys: title, company, location, country, city, workMode, employmentType, description."
 }
 func (t *finishExtractionTool) Call(_ context.Context, input string) (string, error) {
-	input = cleanAgentJSON(input)
+	input = jsonclean.ExtractJSONObject(input)
 	var value struct {
 		Title          string `json:"title"`
 		Company        string `json:"company"`
@@ -292,18 +284,6 @@ func (t *finishExtractionTool) Call(_ context.Context, input string) (string, er
 	}
 	t.result, t.succeeded = result, true
 	return `{"status":"accepted"}`, nil
-}
-
-func cleanAgentJSON(value string) string {
-	value = strings.TrimSpace(value)
-	value = strings.TrimPrefix(value, "```json")
-	value = strings.TrimPrefix(value, "```")
-	value = strings.TrimSuffix(value, "```")
-	start, end := strings.Index(value, "{"), strings.LastIndex(value, "}")
-	if start >= 0 && end > start {
-		value = value[start : end+1]
-	}
-	return strings.TrimSpace(value)
 }
 
 func cleanAgentField(value string, maximum int) string {

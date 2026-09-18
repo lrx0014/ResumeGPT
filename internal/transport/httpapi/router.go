@@ -160,8 +160,7 @@ func (a *API) getProfile(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) createProfile(w http.ResponseWriter, r *http.Request) {
 	var input profile.CreateInput
-	if err := decodeJSON(w, r, &input); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", "The request body is not valid JSON.")
+	if !decodeOrBadRequest(w, r, &input) {
 		return
 	}
 	item, err := a.profiles.Create(r.Context(), workspaceID(r), input)
@@ -178,8 +177,7 @@ func (a *API) createProfile(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) updateProfile(w http.ResponseWriter, r *http.Request) {
 	var input profile.UpdateInput
-	if err := decodeJSON(w, r, &input); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", "The request body is not valid JSON.")
+	if !decodeOrBadRequest(w, r, &input) {
 		return
 	}
 	item, err := a.profiles.Update(r.Context(), workspaceID(r), r.PathValue("profileID"), input)
@@ -235,8 +233,7 @@ func (a *API) getJob(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) createJob(w http.ResponseWriter, r *http.Request) {
 	var input job.CreateInput
-	if err := decodeJSON(w, r, &input); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", "The request body is not valid JSON.")
+	if !decodeOrBadRequest(w, r, &input) {
 		return
 	}
 	item, err := a.jobs.Create(r.Context(), workspaceID(r), input)
@@ -257,8 +254,7 @@ func (a *API) createJob(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) updateJob(w http.ResponseWriter, r *http.Request) {
 	var input job.UpdateInput
-	if err := decodeJSON(w, r, &input); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", "The request body is not valid JSON.")
+	if !decodeOrBadRequest(w, r, &input) {
 		return
 	}
 	item, err := a.jobs.Update(r.Context(), workspaceID(r), r.PathValue("jobID"), input)
@@ -276,8 +272,7 @@ func (a *API) updateJob(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) updateJobStatus(w http.ResponseWriter, r *http.Request) {
 	var input job.StatusInput
-	if err := decodeJSON(w, r, &input); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", "The request body is not valid JSON.")
+	if !decodeOrBadRequest(w, r, &input) {
 		return
 	}
 	err := a.jobs.UpdateStatus(r.Context(), workspaceID(r), r.PathValue("jobID"), input)
@@ -308,8 +303,7 @@ func (a *API) deleteJob(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) importJobs(w http.ResponseWriter, r *http.Request) {
 	var input job.ImportInput
-	if err := decodeJSON(w, r, &input); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", "The request body is not valid JSON.")
+	if !decodeOrBadRequest(w, r, &input) {
 		return
 	}
 	items, err := a.jobImports.Create(r.Context(), workspaceID(r), input)

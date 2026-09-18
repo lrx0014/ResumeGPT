@@ -79,6 +79,9 @@ h1, h2, .brand { font-family: 'Avenir Next', 'Segoe UI', system-ui, sans-serif; 
 .nav a.active { border-color: #3b4d45; background: linear-gradient(90deg, #30443b, #273630); color: #fff; box-shadow: 0 8px 22px rgba(0, 0, 0, .12); }
 .nav a.active::before { position: absolute; left: -7px; width: 3px; height: 20px; border-radius: 99px; background: var(--warm); content: ''; }
 .nav-icon { width: 20px; color: #cdd7d1; text-align: center; }
+.task-indicator { position: absolute; top: 9px; right: 11px; width: 8px; height: 8px; border-radius: 50%; background: var(--warm); animation: task-indicator-pulse 1.6s ease-in-out infinite; }
+@keyframes task-indicator-pulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--warm) 55%, transparent); opacity: 1; } 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--warm) 0%, transparent); opacity: .5; } }
+@media (prefers-reduced-motion: reduce) { .task-indicator { animation-duration: 3.2s; } }
 .workflow-nav { position: relative; }
 .workflow-nav::before { position: absolute; top: 43px; bottom: 21px; left: 23px; width: 1px; background: #394740; content: ''; }
 .workflow-number { z-index: 1; display: grid; width: 20px; height: 20px; place-items: center; flex: 0 0 20px; border: 1px solid #52625a; border-radius: 50%; background: #17201d; color: #96a49d; font-size: 9px; font-weight: 800; }

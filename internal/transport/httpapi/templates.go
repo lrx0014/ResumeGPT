@@ -26,25 +26,24 @@ func (a *API) registerTemplates(mux *http.ServeMux) {
 
 func (a *API) replaceTemplateSource(w http.ResponseWriter, r *http.Request) {
 	var input resumetemplate.SourceInput
-	if decodeJSON(w, r, &input) != nil {
-		writeError(w, 400, "invalid_request", "The request body is not valid JSON.")
+	if !decodeOrBadRequest(w, r, &input) {
 		return
 	}
 	result, err := a.templates.ReplaceSource(r.Context(), workspaceID(r), r.PathValue("templateID"), input)
 	switch {
 	case errors.Is(err, resumetemplate.ErrInvalid):
-		writeError(w, 422, "invalid_template_source", "Choose a TeX, LaTeX ZIP, DOC, or DOCX file and provide a valid optional ZIP entry file.")
+		writeError(w, http.StatusUnprocessableEntity, "invalid_template_source", "Choose a TeX, LaTeX ZIP, DOC, or DOCX file and provide a valid optional ZIP entry file.")
 	case errors.Is(err, resumetemplate.ErrBuiltIn):
-		writeError(w, 409, "built_in_template", "The built-in template source cannot be replaced.")
+		writeError(w, http.StatusConflict, "built_in_template", "The built-in template source cannot be replaced.")
 	case errors.Is(err, resumetemplate.ErrNotFound):
-		writeError(w, 404, "template_not_found", "The requested template does not exist.")
+		writeError(w, http.StatusNotFound, "template_not_found", "The requested template does not exist.")
 	case errors.Is(err, resumetemplate.ErrState):
-		writeError(w, 503, "template_uploads_unavailable", "Template uploads are unavailable in this deployment.")
+		writeError(w, http.StatusServiceUnavailable, "template_uploads_unavailable", "Template uploads are unavailable in this deployment.")
 	case err != nil:
 		a.logger.Error("replace template source", "error", err)
-		writeError(w, 500, "template_source_staging_failed", "Could not stage the replacement template source.")
+		writeError(w, http.StatusInternalServerError, "template_source_staging_failed", "Could not stage the replacement template source.")
 	default:
-		writeJSON(w, 201, result)
+		writeJSON(w, http.StatusCreated, result)
 	}
 }
 
@@ -52,86 +51,84 @@ func (a *API) listTemplates(w http.ResponseWriter, r *http.Request) {
 	items, err := a.templates.List(r.Context(), workspaceID(r))
 	if err != nil {
 		a.logger.Error("list templates", "error", err)
-		writeError(w, 500, "templates_list_failed", "Could not load templates.")
+		writeError(w, http.StatusInternalServerError, "templates_list_failed", "Could not load templates.")
 		return
 	}
-	writeJSON(w, 200, map[string]any{"items": items})
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 func (a *API) getTemplate(w http.ResponseWriter, r *http.Request) {
 	item, err := a.templates.Get(r.Context(), workspaceID(r), r.PathValue("templateID"))
 	if errors.Is(err, resumetemplate.ErrNotFound) {
-		writeError(w, 404, "template_not_found", "The requested template does not exist.")
+		writeError(w, http.StatusNotFound, "template_not_found", "The requested template does not exist.")
 		return
 	}
 	if err != nil {
-		writeError(w, 500, "template_read_failed", "Could not load the template.")
+		writeError(w, http.StatusInternalServerError, "template_read_failed", "Could not load the template.")
 		return
 	}
-	writeJSON(w, 200, item)
+	writeJSON(w, http.StatusOK, item)
 }
 
 func (a *API) stageTemplate(w http.ResponseWriter, r *http.Request) {
 	var input resumetemplate.StageInput
-	if decodeJSON(w, r, &input) != nil {
-		writeError(w, 400, "invalid_request", "The request body is not valid JSON.")
+	if !decodeOrBadRequest(w, r, &input) {
 		return
 	}
 	result, err := a.templates.Stage(r.Context(), workspaceID(r), input)
 	switch {
 	case errors.Is(err, resumetemplate.ErrInvalid):
-		writeError(w, 422, "invalid_template", "Choose a TeX, LaTeX ZIP, DOC, or DOCX file and provide a name, template type, and valid optional ZIP entry file.")
+		writeError(w, http.StatusUnprocessableEntity, "invalid_template", "Choose a TeX, LaTeX ZIP, DOC, or DOCX file and provide a name, template type, and valid optional ZIP entry file.")
 	case errors.Is(err, resumetemplate.ErrState):
-		writeError(w, 503, "template_uploads_unavailable", "Template uploads are unavailable in this deployment.")
+		writeError(w, http.StatusServiceUnavailable, "template_uploads_unavailable", "Template uploads are unavailable in this deployment.")
 	case err != nil:
 		a.logger.Error("stage template upload", "error", err)
-		writeError(w, 500, "template_staging_failed", "Could not stage the template upload.")
+		writeError(w, http.StatusInternalServerError, "template_staging_failed", "Could not stage the template upload.")
 	default:
-		writeJSON(w, 201, result)
+		writeJSON(w, http.StatusCreated, result)
 	}
 }
 func (a *API) queueTemplate(w http.ResponseWriter, r *http.Request) {
 	item, err := a.templates.Queue(r.Context(), workspaceID(r), r.PathValue("templateID"))
 	switch {
 	case errors.Is(err, resumetemplate.ErrNotFound):
-		writeError(w, 404, "template_not_found", "The staged template does not exist.")
+		writeError(w, http.StatusNotFound, "template_not_found", "The staged template does not exist.")
 	case errors.Is(err, resumetemplate.ErrState), errors.Is(err, resumetemplate.ErrBuiltIn):
-		writeError(w, 409, "template_state_conflict", "This template cannot be submitted.")
+		writeError(w, http.StatusConflict, "template_state_conflict", "This template cannot be submitted.")
 	case err != nil:
 		a.logger.Error("queue template extraction", "error", err)
-		writeError(w, 500, "template_queue_failed", "Could not queue template extraction.")
+		writeError(w, http.StatusInternalServerError, "template_queue_failed", "Could not queue template extraction.")
 	default:
-		writeJSON(w, 202, item)
+		writeJSON(w, http.StatusAccepted, item)
 	}
 }
 func (a *API) updateTemplate(w http.ResponseWriter, r *http.Request) {
 	var input resumetemplate.UpdateInput
-	if decodeJSON(w, r, &input) != nil {
-		writeError(w, 400, "invalid_request", "The request body is not valid JSON.")
+	if !decodeOrBadRequest(w, r, &input) {
 		return
 	}
 	item, err := a.templates.Update(r.Context(), workspaceID(r), r.PathValue("templateID"), input)
 	switch {
 	case errors.Is(err, resumetemplate.ErrInvalid):
-		writeError(w, 422, "invalid_template", "Provide a name, résumé or cover-letter type, and a valid description.")
+		writeError(w, http.StatusUnprocessableEntity, "invalid_template", "Provide a name, résumé or cover-letter type, and a valid description.")
 	case errors.Is(err, resumetemplate.ErrBuiltIn):
-		writeError(w, 409, "built_in_template", "Built-in templates cannot be edited.")
+		writeError(w, http.StatusConflict, "built_in_template", "Built-in templates cannot be edited.")
 	case errors.Is(err, resumetemplate.ErrNotFound):
-		writeError(w, 404, "template_not_found", "The requested template does not exist.")
+		writeError(w, http.StatusNotFound, "template_not_found", "The requested template does not exist.")
 	case err != nil:
-		writeError(w, 500, "template_update_failed", "Could not update the template.")
+		writeError(w, http.StatusInternalServerError, "template_update_failed", "Could not update the template.")
 	default:
-		writeJSON(w, 200, item)
+		writeJSON(w, http.StatusOK, item)
 	}
 }
 func (a *API) deleteTemplate(w http.ResponseWriter, r *http.Request) {
 	err := a.templates.Delete(r.Context(), workspaceID(r), r.PathValue("templateID"))
 	switch {
 	case errors.Is(err, resumetemplate.ErrBuiltIn):
-		writeError(w, 409, "built_in_template", "Built-in templates cannot be deleted.")
+		writeError(w, http.StatusConflict, "built_in_template", "Built-in templates cannot be deleted.")
 	case errors.Is(err, resumetemplate.ErrNotFound):
-		writeError(w, 404, "template_not_found", "The requested template does not exist.")
+		writeError(w, http.StatusNotFound, "template_not_found", "The requested template does not exist.")
 	case err != nil:
-		writeError(w, 500, "template_delete_failed", "Could not delete the template.")
+		writeError(w, http.StatusInternalServerError, "template_delete_failed", "Could not delete the template.")
 	default:
 		w.WriteHeader(204)
 	}
@@ -140,11 +137,11 @@ func (a *API) downloadTemplate(w http.ResponseWriter, r *http.Request) {
 	source, signed, err := a.templates.Download(r.Context(), workspaceID(r), r.PathValue("templateID"))
 	switch {
 	case errors.Is(err, resumetemplate.ErrNotFound):
-		writeError(w, 404, "template_not_found", "The requested template does not exist.")
+		writeError(w, http.StatusNotFound, "template_not_found", "The requested template does not exist.")
 	case errors.Is(err, resumetemplate.ErrState):
-		writeError(w, 409, "template_not_ready", "The template file is not ready for download.")
+		writeError(w, http.StatusConflict, "template_not_ready", "The template file is not ready for download.")
 	case err != nil:
-		writeError(w, 500, "template_download_failed", "Could not prepare the template download.")
+		writeError(w, http.StatusInternalServerError, "template_download_failed", "Could not prepare the template download.")
 	case source != nil:
 		w.Header().Set("Content-Type", "application/x-tex")
 		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename=%q`, "rezume.tex"))

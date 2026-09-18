@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+
+import { useEscapeToClose } from '../lib/dialogEscape'
 
 const { t } = useI18n()
 
@@ -15,12 +16,7 @@ function cancel() {
   if (!props.busy) emit('cancel')
 }
 
-function handleKeydown(event: KeyboardEvent) {
-  if (props.open && event.key === 'Escape') cancel()
-}
-
-onMounted(() => window.addEventListener('keydown', handleKeydown))
-onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown))
+useEscapeToClose(() => props.open, cancel)
 </script>
 
 <template>

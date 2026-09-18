@@ -289,9 +289,7 @@ func (r *GenerationRepository) Fail(ctx context.Context, task workqueue.Job, cod
 	})
 }
 
-type generationScanner interface{ Scan(...any) error }
-
-func scanGeneration(row generationScanner, item *generation.Run) error {
+func scanGeneration(row scanner, item *generation.Run) error {
 	var writer, renderer, reviewer []byte
 	err := row.Scan(&item.ID, &item.WorkspaceID, &item.ProfileID, &item.OpportunityID, &item.TemplateID, &item.DocumentType, &item.Language, &item.PageTarget, &item.CustomInstructions, &item.PipelineMode, &writer, &renderer, &reviewer, &item.State, &item.Stage, &item.Draft, &item.RenderedSource, &item.Review, &item.RepairCount, &item.ArtifactObjectID, &item.ErrorCode, &item.ErrorMessage, &item.ProfileSnapshot, &item.OpportunitySnapshot, &item.TemplateSnapshot, &item.CreatedAt, &item.UpdatedAt)
 	if err != nil {
@@ -303,7 +301,7 @@ func scanGeneration(row generationScanner, item *generation.Run) error {
 	return nil
 }
 
-func scanGenerationSummary(row generationScanner, item *generation.Run) error {
+func scanGenerationSummary(row scanner, item *generation.Run) error {
 	var writer, renderer, reviewer []byte
 	err := row.Scan(&item.ID, &item.WorkspaceID, &item.ProfileID, &item.OpportunityID, &item.TemplateID,
 		&item.DocumentType, &item.Language, &item.PageTarget, &item.PipelineMode, &writer, &renderer, &reviewer,

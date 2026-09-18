@@ -7,6 +7,8 @@ import GenerationPdfPreview from '../components/GenerationPdfPreview.vue'
 import GenerationWorkflow from '../components/GenerationWorkflow.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { api } from '../lib/api'
+import { formatDateTime } from '../lib/formatDate'
+import { useModelDiscovery } from '../lib/modelDiscovery'
 import { toast } from '../lib/toast'
 import type { GenerationInput, GenerationModelChoice, GenerationRun, GenerationStep, Job, LLMConnection, Profile, Template } from '../lib/types'
 
@@ -20,9 +22,6 @@ const profiles = ref<Profile[]>([])
 const opportunities = ref<Job[]>([])
 const templates = ref<Template[]>([])
 const connections = ref<LLMConnection[]>([])
-const models = reactive<Record<string, string[]>>({})
-const loadingModelConnections = reactive<Record<string, boolean>>({})
-const modelRequests = new Map<string, Promise<string[]>>()
 const loading = ref(true)
 const error = ref('')
 const prompt = ref('')
@@ -48,7 +47,7 @@ const pageTargetLabel = (value: string) => ({ one_page: t('generate.pageTarget.o
 
 const stepTitle = (step: GenerationStep) => ({ writer_draft: t('generate.detail.stepTitle.writerDraft'), rendered_pdf: step.repairCount ? t('generate.detail.stepTitle.renderedPdfRepair', { count: step.repairCount }) : run.value?.templateId ? t('generate.detail.stepTitle.templateAppliedPdf') : t('generate.detail.stepTitle.designerRenderedPdf'), reviewer_feedback: step.repairCount ? t('generate.detail.stepTitle.reviewerFeedbackRound', { round: step.repairCount + 1 }) : t('generate.detail.stepTitle.reviewerFeedback'), user_prompt: t('generate.detail.stepTitle.userPrompt'), system_warning: t('generate.detail.stepTitle.systemWarning'), configuration_change: t('generate.detail.stepTitle.configurationChange') } as Record<string, string>)[step.kind]
 const stepIcon = (kind: GenerationStep['kind']) => ({ writer_draft: 'W', rendered_pdf: 'P', reviewer_feedback: 'R', user_prompt: 'U', system_warning: '!', configuration_change: '↻' } as Record<string, string>)[kind]
-const formatDate = (value: string) => new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+const formatDate = (value: string) => formatDateTime(value)
 const newestRenderedStep = (values = steps.value) => [...values].reverse().find(value => value.kind === 'rendered_pdf')?.id
 
 async function toggleTimelineOrder() {
@@ -60,28 +59,10 @@ async function toggleTimelineOrder() {
   target.scrollTo({ top: sortOrder.value === 'desc' ? 0 : target.scrollHeight, behavior })
 }
 
-async function discover(choice: GenerationModelChoice) {
-  const connectionId = choice.connectionId
-  if (!connectionId) return
-  if (models[connectionId]) {
-    if (!choice.model) choice.model = models[connectionId][0] ?? ''
-    return
-  }
-  loadingModelConnections[connectionId] = true
-  let request = modelRequests.get(connectionId)
-  if (!request) {
-    request = api.testLLMConnection(connectionId).then(result => result.models)
-    modelRequests.set(connectionId, request)
-  }
-  try { models[connectionId] = await request; if (choice.connectionId === connectionId && !choice.model) choice.model = models[connectionId][0] ?? '' }
-  catch (cause) { error.value = cause instanceof Error ? cause.message : t('generate.errors.loadModels') }
-  finally { loadingModelConnections[connectionId] = false; modelRequests.delete(connectionId) }
-}
-
-function changeConnection(choice: GenerationModelChoice) {
-  choice.model = ''
-  void discover(choice)
-}
+const { models, loadingModelConnections, discover, changeConnection } = useModelDiscovery(
+  message => { error.value = message },
+  () => t('generate.errors.loadModels'),
+)
 
 watch(() => editForm.documentType, () => { if (editForm.templateId && !matchingTemplates.value.some(item => item.id === editForm.templateId)) editForm.templateId = '' })
 

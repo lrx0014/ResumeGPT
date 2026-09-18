@@ -8,13 +8,15 @@ import ListFilters from '../components/ListFilters.vue'
 import ListPagination from '../components/ListPagination.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { api } from '../lib/api'
+import { formatDateTime } from '../lib/formatDate'
+import { useModelDiscovery } from '../lib/modelDiscovery'
+import { usePagedList } from '../lib/pagination'
 import { toast } from '../lib/toast'
 import type { AgentDefault, GenerationInput, GenerationModelChoice, GenerationRun, Job, LLMConnection, Profile, Template } from '../lib/types'
 
 const profiles=ref<Profile[]>([]),opportunities=ref<Job[]>([]),templates=ref<Template[]>([]),connections=ref<LLMConnection[]>([]),runs=ref<GenerationRun[]>([])
-const models=reactive<Record<string,string[]>>({}),loading=ref(true),submitting=ref(false),deletingId=ref(''),pendingDelete=ref<GenerationRun|null>(null),showCreate=ref(false),error=ref(''),useSpecifiedModel=ref(false)
-const loadingModelConnections=reactive<Record<string,boolean>>({})
-const search=ref(''),stateFilter=ref('all'),page=ref(1),pageSize=ref(8)
+const loading=ref(true),submitting=ref(false),deletingId=ref(''),pendingDelete=ref<GenerationRun|null>(null),showCreate=ref(false),error=ref(''),useSpecifiedModel=ref(false)
+const search=ref(''),stateFilter=ref('all')
 const emptyChoice=():GenerationModelChoice=>({connectionId:'',model:''})
 const form=reactive<GenerationInput>({profileId:'',opportunityId:'',templateId:'',documentType:'resume',language:'English',pageTarget:'one_page',customInstructions:'',pipelineMode:'multi',writer:emptyChoice(),renderer:emptyChoice(),reviewer:emptyChoice()})
 const writerDefault=ref<GenerationModelChoice|null>(null),templateApplierDefault=ref<GenerationModelChoice|null>(null),designerDefault=ref<GenerationModelChoice|null>(null),reviewerDefault=ref<GenerationModelChoice|null>(null)
@@ -26,16 +28,16 @@ const active=computed(()=>runs.value.some(item=>item.state==='queued'||item.stat
 const optionName=(values:{id:string;name?:string;title?:string;company?:string}[],id:string)=>{const value=values.find(item=>item.id===id);return value?.name??([value?.title,value?.company].filter(Boolean).join(' · ')||t('generate.deletedInput'))}
 const stageLabel=(run:GenerationRun)=>run.state==='failed'?t('common.needsAttention'):({queued:t('generate.stage.waiting'),writing:t('generate.stage.writing'),rendering:run.templateId?t('generate.stage.applyingTemplate'):t('generate.stage.designingDocument'),reviewing:t('generate.stage.visualQa'),repairing:t('generate.stage.repairing',{count:run.repairCount}),finalizing:t('generate.stage.finalizing'),ready:t('generate.stage.ready')} as Record<string,string>)[run.stage]??run.stage
 const stageProgress=(run:GenerationRun)=>run.state==='failed'?100:({queued:8,writing:20,rendering:42,reviewing:64,repairing:82,finalizing:94,ready:100} as Record<string,number>)[run.stage]??0
-const formatDate=(value:string)=>new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date(value))
+const formatDate=(value:string)=>formatDateTime(value)
 const pageTargetLabel=(value:string)=>({one_page:t('generate.pageTarget.onePage'),two_pages:t('generate.pageTarget.twoPages'),flexible:t('generate.pageTarget.flexible')} as Record<string,string>)[value]??value.replace('_',' ')
 const filteredRuns=computed(()=>{const query=search.value.trim().toLocaleLowerCase();return runs.value.filter(run=>{const values=[optionName(opportunities.value,run.opportunityId),optionName(profiles.value,run.profileId),optionName(templates.value,run.templateId),run.writer.model,run.documentType,run.stage];const matchesSearch=!query||values.some(value=>value.toLocaleLowerCase().includes(query));return matchesSearch&&(stateFilter.value==='all'||run.state===stateFilter.value)})})
 const templateName=(id:string)=>id?optionName(templates.value,id):t('generate.noTemplate')
-const visibleRuns=computed(()=>filteredRuns.value.slice((page.value-1)*pageSize.value,page.value*pageSize.value))
-watch([search,stateFilter,pageSize],()=>{page.value=1})
-watch(()=>filteredRuns.value.length,total=>{page.value=Math.min(page.value,Math.max(1,Math.ceil(total/pageSize.value)))})
+const { page, pageSize, visible: visibleRuns } = usePagedList(filteredRuns, [search, stateFilter])
 
-async function discover(choice:GenerationModelChoice){const connectionId=choice.connectionId;if(!connectionId)return;if(models[connectionId]){if(!choice.model)choice.model=models[connectionId][0]??'';return}loadingModelConnections[connectionId]=true;try{models[connectionId]=(await api.testLLMConnection(connectionId)).models;if(choice.connectionId===connectionId&&!choice.model)choice.model=models[connectionId][0]??''}catch(cause){error.value=cause instanceof Error?cause.message:t('generate.errors.loadModels')}finally{loadingModelConnections[connectionId]=false}}
-function changeConnection(choice:GenerationModelChoice){choice.model='';void discover(choice)}
+const { models, loadingModelConnections, discover, changeConnection } = useModelDiscovery(
+  message => { error.value = message },
+  () => t('generate.errors.loadModels'),
+)
 watch(()=>form.documentType,()=>{if(form.templateId&&!latexTemplates.value.some(item=>item.id===form.templateId))form.templateId=''})
 watch(()=>form.templateId,()=>{if(!useSpecifiedModel.value){const choice=form.templateId?templateApplierDefault.value:designerDefault.value;if(choice)form.renderer={...choice};void discover(form.renderer)}})
 watch(useSpecifiedModel,value=>{form.pipelineMode=value?'single':'multi';if(value){form.renderer={...form.writer};form.reviewer={...form.writer}}else{form.writer={...(writerDefault.value??form.writer)};form.renderer={...((form.templateId?templateApplierDefault.value:designerDefault.value)??form.writer)};form.reviewer={...(reviewerDefault.value??form.writer)};void Promise.all([discover(form.writer),discover(form.renderer),discover(form.reviewer)])}})

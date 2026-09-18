@@ -28,12 +28,6 @@ const (
 	reviewerMaxTokens = 512
 )
 
-type ProcessorQueue interface {
-	ClaimKind(context.Context, string, string, time.Duration) (workqueue.Job, error)
-	Retry(context.Context, workqueue.Job, string, string, string, time.Duration) error
-	Fail(context.Context, string, string, string, string) error
-}
-
 type RuntimeResolver interface {
 	RuntimeConnection(context.Context, string, string) (settings.RuntimeConnection, error)
 }
@@ -45,7 +39,7 @@ type DocumentRenderer interface {
 }
 
 type Processor struct {
-	Queue      ProcessorQueue
+	Queue      workqueue.ClaimQueue
 	Repository Repository
 	Settings   RuntimeResolver
 	Blobs      interface {
@@ -59,23 +53,8 @@ type Processor struct {
 }
 
 func (p *Processor) Run(ctx context.Context) error {
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-	for {
-		jobValue, err := p.Queue.ClaimKind(ctx, p.WorkerID, JobKind, 45*time.Minute)
-		if err == nil {
-			jobCtx, cancel := context.WithTimeout(ctx, 44*time.Minute)
-			p.handle(jobCtx, jobValue)
-			cancel()
-		} else if !errors.Is(err, workqueue.ErrEmpty) {
-			p.Logger.Error("claim generation job", "error", err)
-		}
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-ticker.C:
-		}
-	}
+	return workqueue.RunLoop(ctx, p.Queue, p.WorkerID, JobKind, 45*time.Minute, 44*time.Minute,
+		p.Logger, "claim generation job", p.handle)
 }
 
 func (p *Processor) handle(ctx context.Context, task workqueue.Job) {

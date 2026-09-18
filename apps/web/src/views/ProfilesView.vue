@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
@@ -10,6 +10,7 @@ import ListFilters from '../components/ListFilters.vue'
 import ListPagination from '../components/ListPagination.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { api } from '../lib/api'
+import { usePagedList } from '../lib/pagination'
 import { toast } from '../lib/toast'
 import type { Profile } from '../lib/types'
 
@@ -22,17 +23,13 @@ const pendingDelete = ref<Profile | null>(null)
 const error = ref('')
 const showForm = ref(false)
 const search = ref('')
-const page = ref(1)
-const pageSize = ref(8)
 const form = reactive({ name: '', targetRole: '', defaultLanguage: 'English', content: '', avatarObjectId: '' })
 
 const filteredProfiles = computed(() => {
   const query = search.value.trim().toLocaleLowerCase()
   return profiles.value.filter(profile => !query || [profile.name, profile.targetRole, profile.contentPreview].some(value => value?.toLocaleLowerCase().includes(query)))
 })
-const visibleProfiles = computed(() => filteredProfiles.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
-watch([search, pageSize], () => { page.value = 1 })
-watch(() => filteredProfiles.value.length, total => { page.value = Math.min(page.value, Math.max(1, Math.ceil(total / pageSize.value))) })
+const { page, pageSize, visible: visibleProfiles } = usePagedList(filteredProfiles, [search])
 
 async function load() {
   loading.value = true

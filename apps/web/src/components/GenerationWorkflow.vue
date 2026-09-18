@@ -37,12 +37,14 @@ const currentIndex = computed(() => {
   return Math.max(0, index)
 })
 
-function status(index: number): WorkflowStatus {
+function computeStatus(index: number): WorkflowStatus {
   if (props.run.state === 'ready') return 'completed'
   if (props.run.state === 'failed') return index < currentIndex.value ? 'completed' : index === currentIndex.value ? 'failed' : 'waiting'
   if (props.run.state === 'queued') return 'waiting'
   return index < currentIndex.value ? 'completed' : index === currentIndex.value ? 'active' : 'waiting'
 }
+
+const statuses = computed(() => stages.map((_, index) => computeStatus(index)))
 
 const icon = (value: WorkflowStatus) => ({ completed: '✓', active: '•', failed: '×', waiting: '·' })[value]
 const statusLabel = (value: WorkflowStatus) => ({ completed: t('generate.workflow.status.completed'), active: t('generate.workflow.status.active'), failed: t('generate.workflow.status.failed'), waiting: t('generate.stage.waiting') })[value]
@@ -54,12 +56,12 @@ const stageLabel = (stage: (typeof stages)[number]) => stage.key === 'rendering'
     <div class="workflow-heading"><div><p class="eyebrow">{{ t('generate.workflow.eyebrow') }}</p><h2>{{ t('generate.workflow.title') }}</h2></div><span>{{ run.state === 'ready' ? t('generate.workflow.overallComplete') : run.state === 'failed' ? t('generate.workflow.actionRequired') : t('generate.workflow.processing') }}</span></div>
     <div class="workflow-track">
       <template v-for="(stage, index) in stages" :key="stage.key">
-        <div v-if="index" class="workflow-connector" :class="{ completed: status(index) === 'completed' || status(index) === 'active' || status(index) === 'failed' }"><span /></div>
-        <div class="workflow-stage" :class="status(index)" :tabindex="status(index) === 'failed' ? 0 : undefined">
-          <span class="workflow-node">{{ icon(status(index)) }}</span>
+        <div v-if="index" class="workflow-connector" :class="{ completed: statuses[index] === 'completed' || statuses[index] === 'active' || statuses[index] === 'failed' }"><span /></div>
+        <div class="workflow-stage" :class="statuses[index]" :tabindex="statuses[index] === 'failed' ? 0 : undefined">
+          <span class="workflow-node">{{ icon(statuses[index]) }}</span>
           <strong>{{ stageLabel(stage) }}</strong>
-          <small>{{ statusLabel(status(index)) }}</small>
-          <div v-if="status(index) === 'failed'" class="failure-tooltip" role="tooltip">
+          <small>{{ statusLabel(statuses[index]) }}</small>
+          <div v-if="statuses[index] === 'failed'" class="failure-tooltip" role="tooltip">
             <strong>{{ t('generate.workflow.failureTitle') }}</strong>
             <p>{{ run.errorMessage || t('generate.workflow.failureFallback') }}</p>
             <small v-if="run.errorCode">{{ run.errorCode.replaceAll('_', ' ') }}</small>

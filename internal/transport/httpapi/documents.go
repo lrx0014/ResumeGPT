@@ -19,8 +19,7 @@ func (a *API) registerDocuments(mux *http.ServeMux) {
 
 func (a *API) stageDocument(w http.ResponseWriter, r *http.Request) {
 	var input document.StageInput
-	if err := decodeJSON(w, r, &input); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", "The request body is not valid JSON.")
+	if !decodeOrBadRequest(w, r, &input) {
 		return
 	}
 	result, err := a.documents.Stage(r.Context(), workspaceID(r), r.PathValue("profileID"), input)

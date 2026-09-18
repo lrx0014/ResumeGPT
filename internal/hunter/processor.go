@@ -12,14 +12,8 @@ import (
 	"github.com/lrx0014/ResumeGPT/internal/shared/id"
 )
 
-type ProcessorQueue interface {
-	ClaimKind(context.Context, string, string, time.Duration) (workqueue.Job, error)
-	Retry(context.Context, workqueue.Job, string, string, string, time.Duration) error
-	Fail(context.Context, string, string, string, string) error
-}
-
 type Processor struct {
-	Queue      ProcessorQueue
+	Queue      workqueue.ClaimQueue
 	Repository Repository
 	Agent      Agent
 	WorkerID   string
@@ -27,23 +21,8 @@ type Processor struct {
 }
 
 func (p *Processor) Run(ctx context.Context) error {
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-	for {
-		task, err := p.Queue.ClaimKind(ctx, p.WorkerID, JobKind, 5*time.Minute)
-		if err == nil {
-			runCtx, cancel := context.WithTimeout(ctx, 4*time.Minute)
-			p.handle(runCtx, task)
-			cancel()
-		} else if !errors.Is(err, workqueue.ErrEmpty) {
-			p.Logger.Error("claim job hunt", "error", err)
-		}
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-ticker.C:
-		}
-	}
+	return workqueue.RunLoop(ctx, p.Queue, p.WorkerID, JobKind, 5*time.Minute, 4*time.Minute,
+		p.Logger, "claim job hunt", p.handle)
 }
 
 func (p *Processor) handle(ctx context.Context, task workqueue.Job) {

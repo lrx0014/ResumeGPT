@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/lrx0014/ResumeGPT/internal/settings"
+	"github.com/lrx0014/ResumeGPT/internal/shared/llmtext"
 	"github.com/tmc/langchaingo/llms"
 )
 
@@ -60,22 +61,12 @@ func (m *gatewayModel) GenerateContent(ctx context.Context, messages []llms.Mess
 	if maxTokens <= 0 {
 		maxTokens = m.maxTokens
 	}
-	var prompt strings.Builder
-	for _, message := range messages {
-		for _, part := range message.Parts {
-			if text, ok := part.(llms.TextContent); ok {
-				if prompt.Len() > 0 {
-					prompt.WriteString("\n\n")
-				}
-				prompt.WriteString(text.Text)
-			}
-		}
-	}
+	prompt := llmtext.FlattenMessages(messages)
 	images := m.images
 	if m.imageSource != nil {
 		images = m.imageSource()
 	}
-	content, err := m.gateway.Complete(ctx, m.runtime, m.model, m.systemPrompt, prompt.String(), images, maxTokens)
+	content, err := m.gateway.Complete(ctx, m.runtime, m.model, m.systemPrompt, prompt, images, maxTokens)
 	if err != nil {
 		return nil, err
 	}

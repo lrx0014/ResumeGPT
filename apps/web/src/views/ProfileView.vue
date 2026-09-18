@@ -25,6 +25,7 @@ const error = ref('')
 const extraction = ref<DocumentUpload>()
 const avatarUrl = ref('')
 let localAvatarUrl = ''
+let cancelled = false
 
 async function load() {
   loading.value = true
@@ -83,10 +84,12 @@ async function extractDocument(event: Event) {
     extraction.value = staged.upload
     await api.putStagedDocument(staged.target, file)
     extraction.value = await api.completeDocumentUpload(profileId.value, staged.upload.id)
-    for (let attempt = 0; attempt < 240 && extraction.value.state === 'queued'; attempt += 1) {
+    for (let attempt = 0; attempt < 240 && !cancelled && extraction.value.state === 'queued'; attempt += 1) {
       await new Promise(resolve => setTimeout(resolve, 1000))
+      if (cancelled) break
       extraction.value = await api.documentUpload(profileId.value, staged.upload.id)
     }
+    if (cancelled) return
     if (extraction.value.state !== 'ready' || !extraction.value.extractedText) {
       throw new Error(extraction.value.errorMessage || t('profiles.errors.extractionIncomplete'))
     }
@@ -152,7 +155,10 @@ async function removeProfile() {
 }
 
 watch(profileId, () => void load(), { immediate: true })
-onBeforeUnmount(() => { if (localAvatarUrl) URL.revokeObjectURL(localAvatarUrl) })
+onBeforeUnmount(() => {
+  cancelled = true
+  if (localAvatarUrl) URL.revokeObjectURL(localAvatarUrl)
+})
 </script>
 
 <template>

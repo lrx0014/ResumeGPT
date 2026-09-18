@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { toast } from '../lib/toast'
+import { TOAST_DURATION_MS, toast } from '../lib/toast'
 
 const { t } = useI18n()
 
 const icon = { success: '✓', info: 'i', warning: '!' }
+const timerStyle = { '--toast-timer-duration': `${TOAST_DURATION_MS}ms` }
 </script>
 
 <template>
@@ -14,7 +15,7 @@ const icon = { success: '✓', info: 'i', warning: '!' }
         <span class="toast-icon" aria-hidden="true">{{ icon[item.tone] }}</span>
         <p>{{ item.message }}</p>
         <button type="button" :aria-label="t('toast.dismiss')" @click="toast.dismiss(item.id)">×</button>
-        <span class="toast-timer" aria-hidden="true" />
+        <span class="toast-timer" :style="timerStyle" aria-hidden="true" />
       </div>
     </TransitionGroup>
   </div>
@@ -29,7 +30,7 @@ const icon = { success: '✓', info: 'i', warning: '!' }
 .toast p { margin: 0; color: var(--ink); font-size: 13px; font-weight: 650; line-height: 1.45; }
 .toast button { display: grid; width: 28px; height: 28px; padding: 0; place-items: center; border: 0; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; font-size: 20px; line-height: 1; transition: background .18s ease, color .18s ease, transform .18s ease; }
 .toast button:hover { background: var(--surface-soft); color: var(--ink); transform: rotate(6deg); }
-.toast-timer { position: absolute; right: 0; bottom: 0; left: 0; height: 3px; background: var(--accent); transform-origin: left; animation: toast-timer 5s linear forwards; }
+.toast-timer { position: absolute; right: 0; bottom: 0; left: 0; height: 3px; background: var(--accent); transform-origin: left; animation: toast-timer var(--toast-timer-duration, 5s) linear forwards; }
 .toast.warning .toast-timer { background: #b6862e; }
 .toast-list-enter-active { transition: opacity .28s ease, transform .34s cubic-bezier(.2, .9, .25, 1.15); }
 .toast-list-leave-active { position: absolute; right: 0; left: 0; transition: opacity .2s ease, transform .24s ease; }

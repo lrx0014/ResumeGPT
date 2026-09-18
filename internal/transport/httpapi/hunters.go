@@ -72,8 +72,7 @@ func (a *API) getHunter(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) createHunter(w http.ResponseWriter, r *http.Request) {
 	var input hunter.SaveInput
-	if decodeJSON(w, r, &input) != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", "The request body is not valid JSON.")
+	if !decodeOrBadRequest(w, r, &input) {
 		return
 	}
 	item, err := a.hunters.Create(r.Context(), workspaceID(r), input)
@@ -90,8 +89,7 @@ func (a *API) createHunter(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) updateHunter(w http.ResponseWriter, r *http.Request) {
 	var input hunter.SaveInput
-	if decodeJSON(w, r, &input) != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", "The request body is not valid JSON.")
+	if !decodeOrBadRequest(w, r, &input) {
 		return
 	}
 	item, err := a.hunters.Update(r.Context(), workspaceID(r), r.PathValue("hunterID"), input)

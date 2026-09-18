@@ -7,6 +7,7 @@ const { t } = useI18n()
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { api } from '../lib/api'
+import { formatDateTime } from '../lib/formatDate'
 import { toast } from '../lib/toast'
 import type { AgentDefault, GenerationModelChoice, JobHunter, JobHunterInput, LLMConnection, Profile } from '../lib/types'
 
@@ -32,7 +33,7 @@ const form = reactive<JobHunterInput>(blankForm())
 const activeCount = computed(() => hunters.value.filter(item => item.enabled).length)
 
 function formatTime(value?: string) {
-  return value ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : t('hunters.card.notRunYet')
+  return value ? formatDateTime(value) : t('hunters.card.notRunYet')
 }
 
 function scheduleLabel(minutes: number) {

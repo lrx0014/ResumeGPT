@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -16,7 +15,7 @@ import (
 )
 
 type Processor struct {
-	Queue      ProcessorQueue
+	Queue      workqueue.ClaimQueue
 	Repository Repository
 	Blobs      TemplateBlobs
 	Extractor  *document.HTTPExtractor
@@ -30,30 +29,9 @@ type TemplateBlobs interface {
 	blobstore.Writer
 }
 
-type ProcessorQueue interface {
-	ClaimKind(context.Context, string, string, time.Duration) (workqueue.Job, error)
-	Retry(context.Context, workqueue.Job, string, string, string, time.Duration) error
-	Fail(context.Context, string, string, string, string) error
-}
-
 func (p *Processor) Run(ctx context.Context) error {
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-	for {
-		job, err := p.Queue.ClaimKind(ctx, p.WorkerID, ExtractJobKind, 5*time.Minute)
-		if err == nil {
-			jobCtx, cancel := context.WithTimeout(ctx, 4*time.Minute+30*time.Second)
-			p.handle(jobCtx, job)
-			cancel()
-		} else if !errors.Is(err, workqueue.ErrEmpty) {
-			p.Logger.Error("claim template job", "error", err)
-		}
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-ticker.C:
-		}
-	}
+	return workqueue.RunLoop(ctx, p.Queue, p.WorkerID, ExtractJobKind, 5*time.Minute, 4*time.Minute+30*time.Second,
+		p.Logger, "claim template job", p.handle)
 }
 
 func (p *Processor) handle(ctx context.Context, job workqueue.Job) {
@@ -165,5 +143,5 @@ func (p *Processor) fail(ctx context.Context, job workqueue.Job, state, code, me
 	if err != nil {
 		p.Logger.Error("finalize failed template job", "job_id", job.ID, "error", err)
 	}
-	p.Logger.Warn("template extraction failed", "job_id", job.ID, "code", code, "retryable", retryable, "error", fmt.Errorf("%s", message))
+	p.Logger.Warn("template extraction failed", "job_id", job.ID, "code", code, "retryable", retryable, "error", message)
 }

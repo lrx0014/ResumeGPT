@@ -4,7 +4,6 @@ import (
 	"errors"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/lrx0014/ResumeGPT/internal/platform/blobstore"
 	"github.com/lrx0014/ResumeGPT/internal/profile"
@@ -16,8 +15,7 @@ type avatarUploadRequest struct {
 
 func (a *API) createAvatarUpload(w http.ResponseWriter, r *http.Request) {
 	var input avatarUploadRequest
-	if err := decodeJSON(w, r, &input); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", "The request body is not valid JSON.")
+	if !decodeOrBadRequest(w, r, &input) {
 		return
 	}
 	if input.ContentType != "image/jpeg" && input.ContentType != "image/png" {
@@ -31,7 +29,7 @@ func (a *API) createAvatarUpload(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "profile_read_failed", "Could not load the profile.")
 		return
 	}
-	result, err := a.blobs.PresignUpload(r.Context(), workspaceID(r), blobstore.NewObjectID(), input.ContentType, 15*time.Minute)
+	result, err := a.blobs.PresignUpload(r.Context(), workspaceID(r), blobstore.NewObjectID(), input.ContentType, presignTTL)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "avatar_upload_failed", "Could not create an avatar upload URL.")
 		return
@@ -49,7 +47,7 @@ func (a *API) getProfileAvatar(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "profile_read_failed", "Could not load the profile.")
 		return
 	}
-	result, err := a.blobs.PresignDownload(r.Context(), workspaceID(r), item.AvatarObjectID, 15*time.Minute)
+	result, err := a.blobs.PresignDownload(r.Context(), workspaceID(r), item.AvatarObjectID, presignTTL)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "avatar_download_failed", "Could not create an avatar URL.")
 		return

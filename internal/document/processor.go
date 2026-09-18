@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -14,7 +13,7 @@ import (
 )
 
 type Processor struct {
-	Queue      ProcessorQueue
+	Queue      workqueue.ClaimQueue
 	Repository Repository
 	Blobs      blobstore.Reader
 	Extractor  *HTTPExtractor
@@ -22,30 +21,9 @@ type Processor struct {
 	Logger     *slog.Logger
 }
 
-type ProcessorQueue interface {
-	ClaimKind(context.Context, string, string, time.Duration) (workqueue.Job, error)
-	Retry(context.Context, workqueue.Job, string, string, string, time.Duration) error
-	Fail(context.Context, string, string, string, string) error
-}
-
 func (p *Processor) Run(ctx context.Context) error {
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-	for {
-		job, err := p.Queue.ClaimKind(ctx, p.WorkerID, ExtractJobKind, 5*time.Minute)
-		if err == nil {
-			jobContext, cancel := context.WithTimeout(ctx, 4*time.Minute+30*time.Second)
-			p.handle(jobContext, job)
-			cancel()
-		} else if !errors.Is(err, workqueue.ErrEmpty) {
-			p.Logger.Error("claim document job", "error", err)
-		}
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-ticker.C:
-		}
-	}
+	return workqueue.RunLoop(ctx, p.Queue, p.WorkerID, ExtractJobKind, 5*time.Minute, 4*time.Minute+30*time.Second,
+		p.Logger, "claim document job", p.handle)
 }
 
 func (p *Processor) handle(ctx context.Context, job workqueue.Job) {
@@ -126,5 +104,5 @@ func (p *Processor) fail(ctx context.Context, job workqueue.Job, uploadID, state
 	if err != nil {
 		p.Logger.Error("finalize failed document job", "job_id", job.ID, "error", err)
 	}
-	p.Logger.Warn("document extraction failed", "job_id", job.ID, "code", code, "retryable", retryable, "error", fmt.Errorf("%s", message))
+	p.Logger.Warn("document extraction failed", "job_id", job.ID, "code", code, "retryable", retryable, "error", message)
 }

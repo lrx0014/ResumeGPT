@@ -9,7 +9,7 @@ import UnsavedChangesDialog from '../components/UnsavedChangesDialog.vue'
 import { api } from '../lib/api'
 import { applyTheme } from '../lib/preferences'
 import { toast } from '../lib/toast'
-import { interfaceLanguages, normalizeInterfaceLocale, type InterfaceLocale } from '../plugins/i18n'
+import { interfaceLanguages, loadLocaleMessages, normalizeInterfaceLocale, type InterfaceLocale } from '../plugins/i18n'
 import type { AgentDefault, AgentKind, GenerationModelChoice, LLMConnection, LLMConnectionInput, SettingsPreferences } from '../lib/types'
 
 const { locale, t } = useI18n()
@@ -38,7 +38,6 @@ const showUnsavedDialog = ref(false)
 const savingBeforeLeave = ref(false)
 const pendingDestination = ref('')
 let allowNavigation = false
-const discoveredModels = ref<string[]>([])
 const connectionResults = reactive<Record<string, string>>({})
 const agentModels = reactive<Record<string, string[]>>({})
 const agentDefaults = reactive<Record<AgentKind, GenerationModelChoice>>({
@@ -104,7 +103,6 @@ function resetConnectionForm() {
   editingId.value = ''
   applyToAllAgents.value = false
   sharedAgentModel.value = ''
-  discoveredModels.value = []
   Object.assign(connectionForm, { name: '', executionMode: 'local', provider: 'ollama', baseUrl: 'http://host.docker.internal:11434', apiToken: '', clearApiToken: false })
 }
 
@@ -119,7 +117,6 @@ function editConnection(item: LLMConnection) {
   editingId.value = item.id
   applyToAllAgents.value = false
   sharedAgentModel.value = ''
-  discoveredModels.value = []
   Object.assign(connectionForm, { name: item.name, executionMode: item.executionMode, provider: item.provider, baseUrl: item.baseUrl, apiToken: '', clearApiToken: false })
   providerFormSnapshot.value = serializeProviderForm()
   showConnectionForm.value = true
@@ -155,7 +152,9 @@ async function load() {
     connections.value = storedConnections.items
     capabilities.value = system.features
     for (const item of storedAgentDefaults.items) Object.assign(agentDefaults[item.agent], { connectionId: item.connectionId, model: item.model })
-    locale.value = normalizeInterfaceLocale(storedPreferences.interfaceLanguage)
+    const nextLocale = normalizeInterfaceLocale(storedPreferences.interfaceLanguage)
+    await loadLocaleMessages(nextLocale)
+    locale.value = nextLocale
     document.documentElement.lang = storedPreferences.interfaceLanguage
     applyTheme(storedPreferences.theme)
     preferencesSnapshot.value = serializePreferences()
@@ -218,7 +217,9 @@ async function savePreferences() {
   error.value = ''
   try {
     const saved = await api.updateSettings({ ...preferences })
-    locale.value = normalizeInterfaceLocale(saved.interfaceLanguage)
+    const nextLocale = normalizeInterfaceLocale(saved.interfaceLanguage)
+    await loadLocaleMessages(nextLocale)
+    locale.value = nextLocale
     document.documentElement.lang = saved.interfaceLanguage
     applyTheme(saved.theme)
     preferencesSnapshot.value = serializePreferences()
@@ -236,10 +237,11 @@ async function switchInterfaceLanguage(language: InterfaceLocale) {
   if (switchingLanguage.value || preferences.interfaceLanguage === language) return
   const previous = preferences.interfaceLanguage
   preferences.interfaceLanguage = language
-  locale.value = language
-  document.documentElement.lang = language
   switchingLanguage.value = true
   try {
+    await loadLocaleMessages(language)
+    locale.value = language
+    document.documentElement.lang = language
     const saved = await api.updateSettings({ ...preferences })
     Object.assign(preferences, { interfaceLanguage: saved.interfaceLanguage, theme: saved.theme })
     preferencesSnapshot.value = serializePreferences()
@@ -305,7 +307,6 @@ async function testConnection(item: LLMConnection) {
   try {
     const result = await api.testLLMConnection(item.id, true)
     connectionResults[item.id] = t('settings.connections.testResultAvailable', { count: result.models.length }, result.models.length)
-    discoveredModels.value = result.models
     agentModels[item.id] = result.models
     toast.success(result.models.length
       ? t('settings.connections.testSucceededWithModels', { models: `${result.models.slice(0, 8).join(', ')}${result.models.length > 8 ? '…' : ''}` })

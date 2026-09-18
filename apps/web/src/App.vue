@@ -1,25 +1,44 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { api } from './lib/api'
 import { applyTheme } from './lib/preferences'
-import { normalizeInterfaceLocale } from './plugins/i18n'
+import { loadLocaleMessages, normalizeInterfaceLocale } from './plugins/i18n'
 import LanguageSwitcher from './components/LanguageSwitcher.vue'
 import ToastViewport from './components/ToastViewport.vue'
 
 const { locale, t } = useI18n()
+const hasActiveTasks = ref(false)
+let taskPollTimer: number | undefined
 
 onMounted(async () => {
   try {
     const settings = await api.getSettings()
-    locale.value = normalizeInterfaceLocale(settings.interfaceLanguage)
+    const nextLocale = normalizeInterfaceLocale(settings.interfaceLanguage)
+    await loadLocaleMessages(nextLocale)
+    locale.value = nextLocale
     document.documentElement.lang = settings.interfaceLanguage
     applyTheme(settings.theme)
   } catch {
     applyTheme('system')
   }
+  await pollActiveTasks()
+  taskPollTimer = window.setInterval(pollActiveTasks, 5000)
 })
+
+onBeforeUnmount(() => {
+  if (taskPollTimer) window.clearInterval(taskPollTimer)
+})
+
+async function pollActiveTasks() {
+  try {
+    const { counts } = await api.listTasks({ page: 1, pageSize: 1 })
+    hasActiveTasks.value = (counts.queued ?? 0) + (counts.running ?? 0) + (counts.retry_wait ?? 0) > 0
+  } catch {
+    // Task monitor may be unavailable in this deployment; leave the indicator off.
+  }
+}
 </script>
 
 <template>
@@ -68,6 +87,7 @@ onMounted(async () => {
             <p class="nav-group-label">{{ t('navGroups.system') }}</p>
             <RouterLink to="/system/tasks" active-class="active">
               <span class="nav-icon">◴</span>{{ t('nav.tasks') }}
+              <span v-if="hasActiveTasks" class="task-indicator" aria-hidden="true" />
             </RouterLink>
             <RouterLink to="/settings" active-class="active">
               <span class="nav-icon">⚙</span>{{ t('nav.settings') }}

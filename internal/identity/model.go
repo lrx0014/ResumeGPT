@@ -31,9 +31,10 @@ const (
 	RoleOwner  Role = "owner"
 )
 
+var roleRank = map[Role]int{RoleViewer: 1, RoleEditor: 2, RoleAdmin: 3, RoleOwner: 4}
+
 func (r Role) Allows(required Role) bool {
-	rank := map[Role]int{RoleViewer: 1, RoleEditor: 2, RoleAdmin: 3, RoleOwner: 4}
-	return rank[r] >= rank[required]
+	return roleRank[r] >= roleRank[required]
 }
 
 type Authenticator interface {

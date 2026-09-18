@@ -8,6 +8,8 @@ export interface ToastMessage {
   tone: ToastTone
 }
 
+export const TOAST_DURATION_MS = 5000
+
 const messages = reactive<ToastMessage[]>([])
 let nextId = 1
 
@@ -19,7 +21,7 @@ function dismiss(id: number) {
 function show(message: string, tone: ToastTone = 'success') {
   const id = nextId++
   messages.push({ id, message, tone })
-  window.setTimeout(() => dismiss(id), 5000)
+  window.setTimeout(() => dismiss(id), TOAST_DURATION_MS)
   return id
 }
 
