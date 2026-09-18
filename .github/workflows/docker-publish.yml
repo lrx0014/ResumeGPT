@@ -14,11 +14,6 @@ concurrency:
 permissions:
   contents: read
 
-env:
-  # Docker Hub account/org that owns the image repositories, e.g. "resumegpt".
-  # Falls back to the login username when no separate namespace is configured.
-  IMAGE_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE || secrets.DOCKERHUB_USERNAME }}
-
 jobs:
   resolve-tag:
     name: Resolve image tag
@@ -64,6 +59,16 @@ jobs:
           - arch: arm64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.platform.runner }}
+    # Secrets/variables stored on a GitHub Environment are only visible to a
+    # job that declares that environment. Create this environment (Settings
+    # -> Environments -> New environment -> "devops") and add
+    # DOCKERHUB_USERNAME / DOCKERHUB_TOKEN there. Plain repository secrets
+    # keep working too -- this declaration doesn't hide those.
+    environment: devops
+    env:
+      # Docker Hub account/org that owns the image repositories, e.g. "resumegpt".
+      # Falls back to the login username when no separate namespace is configured.
+      IMAGE_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE || secrets.DOCKERHUB_USERNAME }}
     steps:
       - uses: actions/checkout@v4
 
@@ -92,6 +97,9 @@ jobs:
     strategy:
       matrix:
         image: [backend, document-worker, web-worker, web]
+    environment: devops
+    env:
+      IMAGE_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE || secrets.DOCKERHUB_USERNAME }}
     steps:
       - uses: docker/setup-buildx-action@v3
 
