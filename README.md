@@ -94,6 +94,46 @@ Either way, open [http://localhost:5173](http://localhost:5173) once the stack i
 - Emit structured logs and OpenTelemetry traces with W3C trace-context propagation.
 - Create PostgreSQL backups and run an automated restore check with the supplied scripts.
 
+
+## Architecture
+
+See [Architecture](./docs/architecture-design.md) for the implemented component model, persistence layout, workflows, and security boundaries.
+
+
+## Screenshots
+
+<table>
+<tr>
+<td width="50%"><img src="./docs/images/landing_page_overview.png" alt="Workspace overview"><br><sub>Workspace overview — profiles, job opportunities, templates, providers, and generated PDFs at a glance.</sub></td>
+<td width="50%"><img src="./docs/images/profiles.png" alt="Profiles"><br><sub>Profiles — one focused profile per role, with saved content and language.</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="./docs/images/opportunity_list.png" alt="Job Opportunities list"><br><sub>Job Opportunities — track status and source, and queue a CV or cover letter for any listing.</sub></td>
+<td width="50%"><img src="./docs/images/opportunity_detail.png" alt="Job opportunity detail"><br><sub>Job opportunity detail — full description, location, work mode, and tracking status.</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="./docs/images/job_hunter.png" alt="Job Hunter"><br><sub>Job Hunter — scheduled searches that surface new opportunities automatically.</sub></td>
+<td width="50%"><img src="./docs/images/templates.png" alt="Templates"><br><sub>Templates — the built-in Rezume LaTeX template alongside an uploaded custom one.</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="./docs/images/create_cv.png" alt="Create CVs and Cover Letters"><br><sub>Create CVs and Cover Letters — every generation with its status, model, and template.</sub></td>
+<td width="50%"><img src="./docs/images/opportunity_create_cv.png" alt="Quick CV generation dialog"><br><sub>Quick generation — start a CV or cover letter straight from a job opportunity.</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="./docs/images/create_cv_stages.png" alt="Generation progress and PDF preview"><br><sub>Live generation progress with a staged PDF preview, shown here for a Japanese résumé.</sub></td>
+<td width="50%"><img src="./docs/images/setting-1.png" alt="Settings: LLM providers"><br><sub>Settings — configured LLM providers, cloud and local.</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="./docs/images/setting-2.png" alt="Settings: default models"><br><sub>Settings — default model routing per Agent role.</sub></td>
+<td width="50%"><img src="./docs/images/setting-3.png" alt="Settings: interface language"><br><sub>Settings — interface language switcher, shown here in Simplified Chinese.</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="./docs/images/task_mng.png" alt="Task Monitor"><br><sub>Task Monitor — background task history and per-task details.</sub></td>
+<td width="50%"></td>
+</tr>
+</table>
+
+
 ## Local Stack
 
 The default Compose deployment runs:
@@ -219,9 +259,6 @@ scripts/                    Backup and restore-check utilities
 docs/                       Current architecture documentation
 ```
 
-## Architecture
-
-See [Architecture](./docs/architecture-design.md) for the implemented component model, persistence layout, workflows, and security boundaries.
 
 ## License
 

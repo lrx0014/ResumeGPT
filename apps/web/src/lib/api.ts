@@ -15,7 +15,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const payload = (await response.json().catch(() => null)) as APIError | null
     throw new Error(payload?.error.message ?? `Request failed with status ${response.status}`)
   }
-  return response.json() as Promise<T>
+  const text = await response.text()
+  return (text === '' ? undefined : JSON.parse(text)) as T
 }
 
 export const api = {
@@ -47,13 +48,7 @@ export const api = {
     request<Profile>('/v1/profiles', { method: 'POST', body: JSON.stringify(input) }),
   updateProfile: (id: string, input: Pick<Profile, 'name' | 'targetRole' | 'defaultLanguage' | 'content' | 'avatarObjectId'>) =>
     request<Profile>(`/v1/profiles/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(input) }),
-  deleteProfile: async (id: string) => {
-    const response = await fetch(`${API_BASE_URL}/v1/profiles/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { 'X-Workspace-ID': 'ws_personal_dev' } })
-    if (!response.ok) {
-      const payload = (await response.json().catch(() => null)) as APIError | null
-      throw new Error(payload?.error.message ?? `Request failed with status ${response.status}`)
-    }
-  },
+  deleteProfile: (id: string) => request<void>(`/v1/profiles/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   listJobs: () => request<ListResponse<Job>>('/v1/jobs'),
   getJob: (id: string) => request<Job>(`/v1/jobs/${encodeURIComponent(id)}`),
   createJob: (input: JobInput) =>
@@ -63,27 +58,16 @@ export const api = {
   updateJobStatus: (id: string, status: string) =>
     request<void>(`/v1/jobs/${encodeURIComponent(id)}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   importJobs: (input: JobImportInput) => request<ListResponse<Job>>('/v1/jobs/imports', { method: 'POST', body: JSON.stringify(input) }),
-  deleteJob: async (id: string) => {
-    const response = await fetch(`${API_BASE_URL}/v1/jobs/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { 'X-Workspace-ID': 'ws_personal_dev' } })
-    if (!response.ok) {
-      const payload = (await response.json().catch(() => null)) as APIError | null
-      throw new Error(payload?.error.message ?? `Request failed with status ${response.status}`)
-    }
-  },
+  deleteJob: (id: string) => request<void>(`/v1/jobs/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   listJobHunters: () => request<ListResponse<JobHunter>>('/v1/job-hunters'),
   getJobHunter: (id: string) => request<JobHunter>(`/v1/job-hunters/${encodeURIComponent(id)}`),
   createJobHunter: (input: JobHunterInput) => request<JobHunter>('/v1/job-hunters', { method: 'POST', body: JSON.stringify(input) }),
   updateJobHunter: (id: string, input: JobHunterInput) => request<JobHunter>(`/v1/job-hunters/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(input) }),
   runJobHunter: (id: string) => request<{ status: string }>(`/v1/job-hunters/${encodeURIComponent(id)}/run`, { method: 'POST' }),
   listJobHunterReviewItems: (id: string) => request<ListResponse<JobHunterReviewItem>>(`/v1/job-hunters/${encodeURIComponent(id)}/review-items`),
-  dismissJobHunterReviewItem: async (hunterId: string, reviewId: string) => {
-    const response = await fetch(`${API_BASE_URL}/v1/job-hunters/${encodeURIComponent(hunterId)}/review-items/${encodeURIComponent(reviewId)}`, { method: 'DELETE', headers: { 'X-Workspace-ID': 'ws_personal_dev' } })
-    if (!response.ok) { const payload = (await response.json().catch(() => null)) as APIError | null; throw new Error(payload?.error.message ?? `Request failed with status ${response.status}`) }
-  },
-  deleteJobHunter: async (id: string) => {
-    const response = await fetch(`${API_BASE_URL}/v1/job-hunters/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { 'X-Workspace-ID': 'ws_personal_dev' } })
-    if (!response.ok) { const payload = (await response.json().catch(() => null)) as APIError | null; throw new Error(payload?.error.message ?? `Request failed with status ${response.status}`) }
-  },
+  dismissJobHunterReviewItem: (hunterId: string, reviewId: string) =>
+    request<void>(`/v1/job-hunters/${encodeURIComponent(hunterId)}/review-items/${encodeURIComponent(reviewId)}`, { method: 'DELETE' }),
+  deleteJobHunter: (id: string) => request<void>(`/v1/job-hunters/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   getSettings: () => request<SettingsPreferences>('/v1/settings'),
   updateSettings: (input: Pick<SettingsPreferences, 'interfaceLanguage' | 'theme'>) =>
     request<SettingsPreferences>('/v1/settings', { method: 'PUT', body: JSON.stringify(input) }),
@@ -94,13 +78,7 @@ export const api = {
     request<LLMConnection>('/v1/settings/llm-connections', { method: 'POST', body: JSON.stringify(input) }),
   updateLLMConnection: (id: string, input: LLMConnectionInput) =>
     request<LLMConnection>(`/v1/settings/llm-connections/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(input) }),
-  deleteLLMConnection: async (id: string) => {
-    const response = await fetch(`${API_BASE_URL}/v1/settings/llm-connections/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { 'X-Workspace-ID': 'ws_personal_dev' } })
-    if (!response.ok) {
-      const payload = (await response.json().catch(() => null)) as APIError | null
-      throw new Error(payload?.error.message ?? `Request failed with status ${response.status}`)
-    }
-  },
+  deleteLLMConnection: (id: string) => request<void>(`/v1/settings/llm-connections/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   testLLMConnection: (id: string, refresh = false) =>
     request<LLMConnectionTest>(`/v1/settings/llm-connections/${encodeURIComponent(id)}/test${refresh ? '?refresh=true' : ''}`, { method: 'POST' }),
   listTemplates: () => request<ListResponse<Template>>('/v1/templates'),
@@ -117,10 +95,7 @@ export const api = {
   }),
   updateTemplate: (id: string, input: Pick<Template, 'name' | 'kind' | 'description'>) =>
     request<Template>(`/v1/templates/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(input) }),
-  deleteTemplate: async (id: string) => {
-    const response = await fetch(`${API_BASE_URL}/v1/templates/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { 'X-Workspace-ID': 'ws_personal_dev' } })
-    if (!response.ok) { const payload = (await response.json().catch(() => null)) as APIError | null; throw new Error(payload?.error.message ?? `Request failed with status ${response.status}`) }
-  },
+  deleteTemplate: (id: string) => request<void>(`/v1/templates/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   downloadTemplate: async (item: Template) => {
     const response = await fetch(`${API_BASE_URL}/v1/templates/${encodeURIComponent(item.id)}/file`, { headers: { 'X-Workspace-ID': 'ws_personal_dev' } })
     if (!response.ok) { const payload = (await response.json().catch(() => null)) as APIError | null; throw new Error(payload?.error.message ?? `Request failed with status ${response.status}`) }
@@ -137,10 +112,7 @@ export const api = {
   getGeneration: (id: string) => request<GenerationRun>(`/v1/generations/${encodeURIComponent(id)}`),
   createGeneration: (input: GenerationInput) => request<GenerationRun>('/v1/generations', { method: 'POST', body: JSON.stringify(input) }),
   reconfigureGeneration: (id: string, input: GenerationInput) => request<GenerationRun>(`/v1/generations/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(input) }),
-  deleteGeneration: async (id: string) => {
-    const response = await fetch(`${API_BASE_URL}/v1/generations/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { 'X-Workspace-ID': 'ws_personal_dev' } })
-    if (!response.ok) { const payload = (await response.json().catch(() => null)) as APIError | null; throw new Error(payload?.error.message ?? `Request failed with status ${response.status}`) }
-  },
+  deleteGeneration: (id: string) => request<void>(`/v1/generations/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   retryGeneration: (id: string) => request<GenerationRun>(`/v1/generations/${encodeURIComponent(id)}/retry`, { method: 'POST' }),
   generationSteps: (id: string) => request<ListResponse<GenerationStep>>(`/v1/generations/${encodeURIComponent(id)}/steps`),
   reviseGeneration: (id: string, prompt: string) => request<GenerationRun>(`/v1/generations/${encodeURIComponent(id)}/revisions`, { method: 'POST', body: JSON.stringify({ prompt }) }),

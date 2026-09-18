@@ -73,6 +73,18 @@ func (g *HTTPGateway) Complete(ctx context.Context, runtime settings.RuntimeConn
 			body["max_tokens"] = maxTokens
 		}
 	}
+	content, err := g.execute(ctx, runtime, endpoint, body, images)
+	if err != nil && len(stopWords) > 0 && stopWordsUnsupported(err) {
+		// Some models (notably newer reasoning models served through an
+		// OpenAI-compatible API) reject the stop parameter outright. Retry
+		// once without it rather than failing the whole agent run.
+		removeStopWords(runtime.Connection.Provider, body)
+		content, err = g.execute(ctx, runtime, endpoint, body, images)
+	}
+	return content, err
+}
+
+func (g *HTTPGateway) execute(ctx context.Context, runtime settings.RuntimeConnection, endpoint string, body map[string]any, images []string) (string, error) {
 	encoded, _ := json.Marshal(body)
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(encoded))
 	if err != nil {
@@ -147,6 +159,32 @@ func (g *HTTPGateway) Complete(ctx context.Context, runtime settings.RuntimeConn
 		return "", ErrLLM
 	}
 	return result.Choices[0].Message.Content, nil
+}
+
+// stopWordsUnsupported reports whether err looks like a provider rejecting
+// the stop parameter itself, as some newer reasoning models do.
+func stopWordsUnsupported(err error) bool {
+	value := strings.ToLower(err.Error())
+	if !strings.Contains(value, "stop") {
+		return false
+	}
+	patterns := []string{"unsupported parameter", "is not supported with this model", "is not supported for this model", "not supported for this model"}
+	for _, pattern := range patterns {
+		if strings.Contains(value, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+func removeStopWords(provider string, body map[string]any) {
+	if provider == "ollama" {
+		if options, ok := body["options"].(map[string]any); ok {
+			delete(options, "stop")
+		}
+		return
+	}
+	delete(body, "stop")
 }
 
 func visionUnsupported(message string) bool {

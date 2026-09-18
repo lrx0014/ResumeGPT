@@ -146,6 +146,38 @@ func TestHTTPGatewayOllamaForwardsStopWords(t *testing.T) {
 	}
 }
 
+func TestHTTPGatewayRetriesWithoutStopWhenProviderRejectsThem(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if attempts == 1 {
+			if _, ok := body["stop"]; !ok {
+				t.Fatal("first attempt should still include stop")
+			}
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"error":{"message":"Unsupported parameter: 'stop' is not supported with this model.","type":"invalid_request_error","param":"stop","code":"unsupported_parameter"}}`))
+			return
+		}
+		if _, ok := body["stop"]; ok {
+			t.Fatal("retry should not include stop")
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"draft"}}]}`))
+	}))
+	defer server.Close()
+
+	result, err := NewHTTPGateway().Complete(context.Background(), settings.RuntimeConnection{Connection: settings.LLMConnection{Provider: "openai_compatible", BaseURL: server.URL}}, "gpt-5.6-sol", "system", "write", nil, 1024, []string{"\nObservation:"})
+	if err != nil || result != "draft" {
+		t.Fatalf("complete: %q %v", result, err)
+	}
+	if attempts != 2 {
+		t.Fatalf("attempts = %d, want 2", attempts)
+	}
+}
+
 func TestHTTPGatewayOllamaRequest(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/chat" {
