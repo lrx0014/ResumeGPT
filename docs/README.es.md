@@ -14,6 +14,10 @@
   <a href="./README.zh-TW.md">繁體中文</a>
 </p>
 
+<p align="center">
+  <a href="https://resumegpt.tech-fun.net">Página de inicio del proyecto</a>
+</p>
+
 ResumeGPT es un espacio de trabajo autoalojado para adaptar CV y cartas de presentación a ofertas de empleo concretas. Combina en una sola aplicación la gestión de perfiles, el seguimiento de ofertas, la búsqueda programada de empleo, plantillas reutilizables, agentes LLM configurables, generación de PDF, revisión visual y monitorización de tareas en segundo plano.
 
 ## Resumen rápido

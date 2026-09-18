@@ -14,6 +14,10 @@
   <a href="./README.zh-TW.md">繁體中文</a>
 </p>
 
+<p align="center">
+  <a href="https://resumegpt.tech-fun.net">Projekt-Homepage</a>
+</p>
+
 ResumeGPT ist ein selbst gehosteter Arbeitsbereich zum Zuschneiden von Lebensläufen und Anschreiben auf konkrete Stellenangebote. Die Anwendung vereint Profilverwaltung, Job-Tracking, geplante Job-Suche, wiederverwendbare Vorlagen, konfigurierbare LLM-Agenten, PDF-Erzeugung, visuelle Prüfung und Hintergrundaufgaben-Monitoring an einem Ort.
 
 ## TL;DR

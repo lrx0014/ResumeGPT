@@ -14,6 +14,10 @@
   <a href="./README.zh-TW.md">繁體中文</a>
 </p>
 
+<p align="center">
+  <a href="https://resumegpt.tech-fun.net">项目主页</a>
+</p>
+
 ResumeGPT 是一个自托管的工作台,用于针对具体的职位机会定制简历和求职信。它把个人资料管理、职位跟踪、定时职位搜索、可复用的模板、可配置的 LLM Agent、PDF 生成、视觉审查以及后台任务监控整合在同一个应用里。
 
 ## 快速开始

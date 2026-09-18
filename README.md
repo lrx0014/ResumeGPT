@@ -14,6 +14,10 @@
   <a href="./docs/README.zh-TW.md">繁體中文</a>
 </p>
 
+<p align="center">
+  <a href="https://resumegpt.tech-fun.net">Project Homepage</a>
+</p>
+
 ResumeGPT is a self-hosted workspace for tailoring CVs and cover letters to specific job opportunities. It combines profile management, job tracking, scheduled job discovery, reusable templates, configurable LLM agents, PDF generation, visual review, and background-task monitoring in one application.
 
 ## TL;DR
