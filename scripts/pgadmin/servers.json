@@ -1,0 +1,13 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "ResumeGPT (docker compose)",
+      "Group": "Servers",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "resumegpt",
+      "Username": "resumegpt",
+      "SSLMode": "prefer"
+    }
+  }
+}

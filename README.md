@@ -103,6 +103,7 @@ The default Compose deployment runs:
 | `redis` | Expiring cache for provider model discovery | `localhost:6379` |
 | `minio` | S3-compatible object storage | API `localhost:9000`, console `localhost:9001` |
 | `migrate` | One-shot database migration process | Internal |
+| `pgadmin` | Web UI for inspecting/debugging the Postgres database | `http://localhost:5050` |
 
 Check status or follow logs with:
 
