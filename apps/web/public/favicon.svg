@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">ResumeGPT logo</title>
+  <desc id="description">The letters Ré in dark green on a warm rounded square.</desc>
+  <rect width="512" height="512" rx="150" fill="#f0ddbc" />
+  <text
+    x="256"
+    y="270"
+    fill="#254b3b"
+    font-family="Avenir Next, Avenir, Arial, sans-serif"
+    font-size="238"
+    font-weight="700"
+    letter-spacing="-14"
+    text-anchor="middle"
+    dominant-baseline="middle"
+  >Ré</text>
+</svg>
