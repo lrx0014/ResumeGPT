@@ -23,7 +23,7 @@ x-backend-environment: &backend-environment
   OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
 
 x-backend-service: &backend-service
-  image: resumegpt-backend:local
+  image: ${DOCKERHUB_NAMESPACE:-lrx0014}/resumegpt-backend:latest
   build:
     context: .
     dockerfile: Dockerfile
@@ -153,7 +153,7 @@ services:
     restart: unless-stopped
 
   document-worker:
-    image: resumegpt-document-worker:local
+    image: ${DOCKERHUB_NAMESPACE:-lrx0014}/resumegpt-document-worker:latest
     build:
       context: services/document-worker
       dockerfile: Dockerfile
@@ -173,7 +173,7 @@ services:
     restart: unless-stopped
 
   web-worker:
-    image: resumegpt-web-worker:local
+    image: ${DOCKERHUB_NAMESPACE:-lrx0014}/resumegpt-web-worker:latest
     build:
       context: services/web-worker
       dockerfile: Dockerfile
@@ -193,7 +193,7 @@ services:
     restart: unless-stopped
 
   web:
-    image: resumegpt-web:local
+    image: ${DOCKERHUB_NAMESPACE:-lrx0014}/resumegpt-web:latest
     build:
       context: apps/web
       dockerfile: Dockerfile

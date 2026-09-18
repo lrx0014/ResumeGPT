@@ -11,10 +11,16 @@ ResumeGPT is a self-hosted workspace for tailoring CVs and cover letters to spec
 With Docker Compose installed, start the complete application with one command:
 
 ```bash
+docker compose up -d
+```
+
+This pulls the pre-built `latest` images published by CI (see [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml)) instead of building them locally, so the stack comes up in seconds. If you're working on the code and want Compose to build the `api`, `worker`, `document-worker`, `web-worker`, and `web` images from your local checkout instead, add `--build`:
+
+```bash
 docker compose up -d --build
 ```
 
-Then open [http://localhost:5173](http://localhost:5173). The Compose stack supplies development defaults, creates its storage volumes, applies database migrations, and waits for dependencies to become healthy.
+Either way, open [http://localhost:5173](http://localhost:5173) once the stack is ready. The Compose stack supplies development defaults, creates its storage volumes, applies database migrations, and waits for dependencies to become healthy.
 
 ## Features
 
