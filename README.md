@@ -4,6 +4,16 @@
   <img src="./docs/assets/resumegpt-logo.png" alt="ResumeGPT Ré logo" width="128" height="128">
 </p>
 
+<p align="center">
+  <b>English</b> ·
+  <a href="./docs/README.de.md">Deutsch</a> ·
+  <a href="./docs/README.fr.md">Français</a> ·
+  <a href="./docs/README.es.md">Español</a> ·
+  <a href="./docs/README.ja.md">日本語</a> ·
+  <a href="./docs/README.zh-CN.md">简体中文</a> ·
+  <a href="./docs/README.zh-TW.md">繁體中文</a>
+</p>
+
 ResumeGPT is a self-hosted workspace for tailoring CVs and cover letters to specific job opportunities. It combines profile management, job tracking, scheduled job discovery, reusable templates, configurable LLM agents, PDF generation, visual review, and background-task monitoring in one application.
 
 ## TL;DR
