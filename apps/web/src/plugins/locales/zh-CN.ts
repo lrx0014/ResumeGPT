@@ -241,7 +241,7 @@ export default {
       viewDraft: '查看草稿', viewRawResponse: '查看原始响应', viewLatexSource: '查看 LaTeX 源码', viewHtmlCssSource: '查看 HTML/CSS 源码', viewContent: '查看内容',
       previewThisPdf: '预览此 PDF →', artifactEyebrow: '产出物', stagePdf: '阶段 PDF', finalPdf: '最终 PDF', showFinal: '显示最终版本', previewPlaceholder: '文档版式渲染完成后将显示 PDF 预览。',
       refineEyebrow: '优化', askForChange: '请求进一步修改', reviseDescription: '描述需要更改的内容。模型将基于已确认的草稿和当前文档源生成新结果，并添加到此时间线中。',
-      revisePlaceholder: '例如：减少"工作经历"上方的空白，并突出 Go 迁移相关工作。', sendRevision: '发送修改请求',
+      revisePlaceholder: '例如：减少"工作经历"上方的空白。', sendRevision: '发送修改请求',
       stage: { waiting: '等待开始', writing: '正在撰写内容', reviewing: '正在审核 PDF', repairing: '正在修复版式（{count}/2）', finalizing: '正在完成 PDF' },
       stepTitle: {
         writerDraft: '撰写草稿', renderedPdfRepair: '渲染后的 PDF · 第 {count} 次修复', templateAppliedPdf: '已应用模板的 PDF', designerRenderedPdf: '设计生成的 PDF',

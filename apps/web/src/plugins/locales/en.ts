@@ -252,7 +252,7 @@ export default {
       viewDraft: 'View draft', viewRawResponse: 'View raw response', viewLatexSource: 'View LaTeX source', viewHtmlCssSource: 'View HTML/CSS source', viewContent: 'View content',
       previewThisPdf: 'Preview this PDF →', artifactEyebrow: 'Artifact', stagePdf: 'Stage PDF', finalPdf: 'Final PDF', showFinal: 'Show final', previewPlaceholder: 'A PDF preview appears after the document layout is rendered.',
       refineEyebrow: 'Refine', askForChange: 'Ask for another change', reviseDescription: 'Describe what should change. The model receives the grounded draft and current document source, then adds the new result to this timeline.',
-      revisePlaceholder: 'For example: Reduce whitespace above Experience and emphasize the Go migration work.', sendRevision: 'Send revision',
+      revisePlaceholder: 'For example: Reduce whitespace above Experience.', sendRevision: 'Send revision',
       stage: { waiting: 'Waiting to start', writing: 'Writing content', reviewing: 'Reviewing the PDF', repairing: 'Repairing layout ({count}/2)', finalizing: 'Finalizing PDF' },
       stepTitle: {
         writerDraft: 'Writer draft', renderedPdfRepair: 'Rendered PDF · repair {count}', templateAppliedPdf: 'Template-applied PDF', designerRenderedPdf: 'Designer-rendered PDF',

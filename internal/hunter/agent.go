@@ -22,7 +22,7 @@ type RuntimeResolver interface {
 }
 
 type Gateway interface {
-	Complete(context.Context, settings.RuntimeConnection, string, string, string, []string, int) (string, error)
+	Complete(context.Context, settings.RuntimeConnection, string, string, string, []string, int, []string) (string, error)
 }
 
 type JobHunterAgent struct {
@@ -128,7 +128,7 @@ func (m *hunterAgentModel) GenerateContent(ctx context.Context, messages []llms.
 			}
 		}
 	}
-	content, err := m.gateway.Complete(ctx, m.runtime, m.model, m.systemPrompt, prompt.String(), nil, callOptions.MaxTokens)
+	content, err := m.gateway.Complete(ctx, m.runtime, m.model, m.systemPrompt, prompt.String(), nil, callOptions.MaxTokens, callOptions.StopWords)
 	if err != nil {
 		return nil, err
 	}

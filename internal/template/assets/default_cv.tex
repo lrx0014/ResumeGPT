@@ -36,15 +36,28 @@
 \usepackage[normalem]{ulem} % provides "\ul" (uline) command which will break at line breaks
 
 \usepackage[english]{babel} % provides culturally determined typographical rules for wide range of languages
+
+\usepackage{iftex} % detects which engine is compiling this document
 %-----------------------------------------
 
-\input glyphtounicode % converts glyph names to unicode
-\pdfgentounicode=1 % ensures pdfs generated are ats readable
+\ifPDFTeX
+  \input glyphtounicode % converts glyph names to unicode
+  \pdfgentounicode=1 % ensures pdfs generated are ats readable
+\fi
 
 %----------FONT OPTIONS-------------------
 % Prefer Source Sans Pro when installed, with a portable sans-serif fallback.
 \IfFileExists{sourcesanspro.sty}{\usepackage[default]{sourcesanspro}}{\usepackage{helvet}\renewcommand{\familydefault}{\sfdefault}}
 \urlstyle{same} % changes url font from default urlfont to font being used by the document
+
+% CJK support: under XeTeX, render Chinese/Japanese/Korean text with a Noto
+% CJK font while leaving the Latin body font untouched, so bilingual and
+% fully CJK resumes render correctly instead of showing missing-glyph boxes.
+\ifXeTeX
+  \usepackage{fontspec}
+  \usepackage{xeCJK}
+  \IfFontExistsTF{Noto Sans CJK SC}{\setCJKmainfont{Noto Sans CJK SC}}{}
+\fi
 %-----------------------------------------
 
 

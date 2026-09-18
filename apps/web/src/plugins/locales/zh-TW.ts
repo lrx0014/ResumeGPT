@@ -241,7 +241,7 @@ export default {
       viewDraft: '檢視草稿', viewRawResponse: '檢視原始回應', viewLatexSource: '檢視 LaTeX 原始碼', viewHtmlCssSource: '檢視 HTML/CSS 原始碼', viewContent: '檢視內容',
       previewThisPdf: '預覽此 PDF →', artifactEyebrow: '產出物', stagePdf: '階段 PDF', finalPdf: '最終 PDF', showFinal: '顯示最終版本', previewPlaceholder: '文件版面渲染完成後將顯示 PDF 預覽。',
       refineEyebrow: '優化', askForChange: '要求進一步修改', reviseDescription: '描述需要變更的內容。模型將以已確認的草稿和目前文件原始碼為基礎產生新結果，並新增到此時間軸中。',
-      revisePlaceholder: '例如：減少「工作經歷」上方的留白，並強調 Go 遷移相關工作。', sendRevision: '傳送修改要求',
+      revisePlaceholder: '例如：減少「工作經歷」上方的留白。', sendRevision: '傳送修改要求',
       stage: { waiting: '等待開始', writing: '正在撰寫內容', reviewing: '正在審查 PDF', repairing: '正在修復版面（{count}/2）', finalizing: '正在完成 PDF' },
       stepTitle: {
         writerDraft: '撰寫草稿', renderedPdfRepair: '渲染後的 PDF · 第 {count} 次修復', templateAppliedPdf: '已套用範本的 PDF', designerRenderedPdf: '設計產生的 PDF',

@@ -241,7 +241,7 @@ export default {
       viewDraft: '下書きを表示', viewRawResponse: '生の応答を表示', viewLatexSource: 'LaTeXソースを表示', viewHtmlCssSource: 'HTML/CSSソースを表示', viewContent: '内容を表示',
       previewThisPdf: 'このPDFをプレビュー →', artifactEyebrow: '成果物', stagePdf: '段階PDF', finalPdf: '最終PDF', showFinal: '最終版を表示', previewPlaceholder: '文書レイアウトが描画されると、PDFプレビューが表示されます。',
       refineEyebrow: '調整', askForChange: '追加の変更を依頼', reviseDescription: '変更してほしい内容を記述してください。モデルは根拠となる下書きと現在の文書ソースを受け取り、新しい結果をこのタイムラインに追加します。',
-      revisePlaceholder: '例: 「経験」セクション上部の余白を減らし、Go移行の実績を強調してください。', sendRevision: '修正内容を送信',
+      revisePlaceholder: '例: 「経験」セクション上部の余白を減らし。', sendRevision: '修正内容を送信',
       stage: { waiting: '開始待ち', writing: '内容を執筆中', reviewing: 'PDFをレビュー中', repairing: 'レイアウトを修正中（{count}/2）', finalizing: 'PDFを最終処理中' },
       stepTitle: {
         writerDraft: 'Writerの下書き', renderedPdfRepair: '描画済みPDF ・ 修正{count}', templateAppliedPdf: 'テンプレート適用済みPDF', designerRenderedPdf: 'Designerが描画したPDF',

@@ -241,7 +241,7 @@ export default {
       viewDraft: 'Entwurf anzeigen', viewRawResponse: 'Rohantwort anzeigen', viewLatexSource: 'LaTeX-Quelle anzeigen', viewHtmlCssSource: 'HTML/CSS-Quelle anzeigen', viewContent: 'Inhalt anzeigen',
       previewThisPdf: 'Dieses PDF als Vorschau anzeigen →', artifactEyebrow: 'Artefakt', stagePdf: 'Phasen-PDF', finalPdf: 'Finales PDF', showFinal: 'Finale Version anzeigen', previewPlaceholder: 'Eine PDF-Vorschau erscheint, nachdem das Dokumentenlayout gerendert wurde.',
       refineEyebrow: 'Verfeinern', askForChange: 'Um eine weitere Änderung bitten', reviseDescription: 'Beschreiben Sie, was sich ändern soll. Das Modell erhält den fundierten Entwurf und die aktuelle Dokumentenquelle und fügt das neue Ergebnis diesem Zeitverlauf hinzu.',
-      revisePlaceholder: 'Zum Beispiel: Weißraum über „Erfahrung" reduzieren und die Go-Migrationsarbeit hervorheben.', sendRevision: 'Überarbeitung senden',
+      revisePlaceholder: 'Zum Beispiel: Weißraum über „Erfahrung" reduzieren.', sendRevision: 'Überarbeitung senden',
       stage: { waiting: 'Wartet auf Start', writing: 'Inhalt wird geschrieben', reviewing: 'PDF wird geprüft', repairing: 'Layout wird repariert ({count}/2)', finalizing: 'PDF wird finalisiert' },
       stepTitle: {
         writerDraft: 'Writer-Entwurf', renderedPdfRepair: 'Gerendertes PDF · Reparatur {count}', templateAppliedPdf: 'Vorlagen-angewendetes PDF', designerRenderedPdf: 'Vom Designer gerendertes PDF',

@@ -241,7 +241,7 @@ export default {
       viewDraft: 'Voir le brouillon', viewRawResponse: 'Voir la réponse brute', viewLatexSource: 'Voir la source LaTeX', viewHtmlCssSource: 'Voir la source HTML/CSS', viewContent: 'Voir le contenu',
       previewThisPdf: 'Prévisualiser ce PDF →', artifactEyebrow: 'Artefact', stagePdf: 'PDF de l’étape', finalPdf: 'PDF final', showFinal: 'Afficher le final', previewPlaceholder: 'Un aperçu PDF apparaît une fois la mise en page du document générée.',
       refineEyebrow: 'Affiner', askForChange: 'Demander une autre modification', reviseDescription: 'Décrivez ce qui doit changer. Le modèle reçoit le brouillon de référence et la source actuelle du document, puis ajoute le nouveau résultat à cette chronologie.',
-      revisePlaceholder: 'Par exemple : réduire l’espace au-dessus d’Expérience et mettre en avant le travail de migration Go.', sendRevision: 'Envoyer la révision',
+      revisePlaceholder: 'Par exemple : réduire l’espace au-dessus d’Expérience.', sendRevision: 'Envoyer la révision',
       stage: { waiting: 'En attente de démarrage', writing: 'Rédaction du contenu', reviewing: 'Révision du PDF', repairing: 'Réparation de la mise en page ({count}/2)', finalizing: 'Finalisation du PDF' },
       stepTitle: {
         writerDraft: 'Brouillon du rédacteur', renderedPdfRepair: 'PDF généré · réparation {count}', templateAppliedPdf: 'PDF avec modèle appliqué', designerRenderedPdf: 'PDF généré par le concepteur',

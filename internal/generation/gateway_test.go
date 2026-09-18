@@ -27,7 +27,7 @@ func TestHTTPGatewayOpenAICompatibleVisionRequest(t *testing.T) {
 	}))
 	defer server.Close()
 	gateway := NewHTTPGateway()
-	result, err := gateway.Complete(context.Background(), settings.RuntimeConnection{Connection: settings.LLMConnection{Provider: "openai_compatible", BaseURL: server.URL}, APIToken: "secret"}, "vision-model", "system", "review", []string{"aW1hZ2U="}, 512)
+	result, err := gateway.Complete(context.Background(), settings.RuntimeConnection{Connection: settings.LLMConnection{Provider: "openai_compatible", BaseURL: server.URL}, APIToken: "secret"}, "vision-model", "system", "review", []string{"aW1hZ2U="}, 512, nil)
 	if err != nil || result != "approved" {
 		t.Fatalf("complete: %q %v", result, err)
 	}
@@ -55,7 +55,7 @@ func TestHTTPGatewayOpenAIUsesCompletionTokenLimit(t *testing.T) {
 	}))
 	defer server.Close()
 
-	result, err := NewHTTPGateway().Complete(context.Background(), settings.RuntimeConnection{Connection: settings.LLMConnection{Provider: "openai", BaseURL: server.URL}}, "openai-model", "system", "write", nil, 2048)
+	result, err := NewHTTPGateway().Complete(context.Background(), settings.RuntimeConnection{Connection: settings.LLMConnection{Provider: "openai", BaseURL: server.URL}}, "openai-model", "system", "write", nil, 2048, nil)
 	if err != nil || result != "draft" {
 		t.Fatalf("complete: %q %v", result, err)
 	}
@@ -77,7 +77,7 @@ func TestHTTPGatewayOpenAICompatibleKeepsLegacyTokenLimit(t *testing.T) {
 	}))
 	defer server.Close()
 
-	result, err := NewHTTPGateway().Complete(context.Background(), settings.RuntimeConnection{Connection: settings.LLMConnection{Provider: "openai_compatible", BaseURL: server.URL}}, "compatible-model", "system", "write", nil, 1024)
+	result, err := NewHTTPGateway().Complete(context.Background(), settings.RuntimeConnection{Connection: settings.LLMConnection{Provider: "openai_compatible", BaseURL: server.URL}}, "compatible-model", "system", "write", nil, 1024, nil)
 	if err != nil || result != "draft" {
 		t.Fatalf("complete: %q %v", result, err)
 	}
@@ -89,7 +89,7 @@ func TestHTTPGatewayClassifiesUnsupportedVisionInput(t *testing.T) {
 		_, _ = w.Write([]byte(`{"error":"this model does not support image input"}`))
 	}))
 	defer server.Close()
-	_, err := NewHTTPGateway().Complete(context.Background(), settings.RuntimeConnection{Connection: settings.LLMConnection{Provider: "ollama", BaseURL: server.URL}}, "text-model", "system", "review", []string{"aW1hZ2U="}, 512)
+	_, err := NewHTTPGateway().Complete(context.Background(), settings.RuntimeConnection{Connection: settings.LLMConnection{Provider: "ollama", BaseURL: server.URL}}, "text-model", "system", "review", []string{"aW1hZ2U="}, 512, nil)
 	if !errors.Is(err, ErrVisionUnsupported) {
 		t.Fatalf("error = %v, want ErrVisionUnsupported", err)
 	}
@@ -102,6 +102,50 @@ func TestVisionUnsupportedRecognizesOllamaMultimodalError(t *testing.T) {
 	}
 }
 
+func TestHTTPGatewayOpenAICompatibleForwardsStopWords(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		stop, ok := body["stop"].([]any)
+		if !ok || len(stop) != 2 || stop[0] != "\nObservation:" || stop[1] != "\n\tObservation:" {
+			t.Fatalf("stop = %v, want [\\nObservation: \\n\\tObservation:]", body["stop"])
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"draft"}}]}`))
+	}))
+	defer server.Close()
+
+	result, err := NewHTTPGateway().Complete(context.Background(), settings.RuntimeConnection{Connection: settings.LLMConnection{Provider: "openai_compatible", BaseURL: server.URL}}, "compatible-model", "system", "write", nil, 1024, []string{"\nObservation:", "\n\tObservation:"})
+	if err != nil || result != "draft" {
+		t.Fatalf("complete: %q %v", result, err)
+	}
+}
+
+func TestHTTPGatewayOllamaForwardsStopWords(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		options, ok := body["options"].(map[string]any)
+		if !ok {
+			t.Fatal("expected an options object")
+		}
+		stop, ok := options["stop"].([]any)
+		if !ok || len(stop) != 1 || stop[0] != "\nObservation:" {
+			t.Fatalf("options.stop = %v, want [\\nObservation:]", options["stop"])
+		}
+		_, _ = w.Write([]byte(`{"message":{"content":"draft"}}`))
+	}))
+	defer server.Close()
+
+	result, err := NewHTTPGateway().Complete(context.Background(), settings.RuntimeConnection{Connection: settings.LLMConnection{Provider: "ollama", BaseURL: server.URL}}, "local", "system", "write", nil, 4096, []string{"\nObservation:"})
+	if err != nil || result != "draft" {
+		t.Fatalf("complete: %q %v", result, err)
+	}
+}
+
 func TestHTTPGatewayOllamaRequest(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/chat" {
@@ -110,7 +154,7 @@ func TestHTTPGatewayOllamaRequest(t *testing.T) {
 		_, _ = w.Write([]byte(`{"message":{"content":"draft"}}`))
 	}))
 	defer server.Close()
-	result, err := NewHTTPGateway().Complete(context.Background(), settings.RuntimeConnection{Connection: settings.LLMConnection{Provider: "ollama", BaseURL: server.URL}}, "local", "system", "write", nil, 4096)
+	result, err := NewHTTPGateway().Complete(context.Background(), settings.RuntimeConnection{Connection: settings.LLMConnection{Provider: "ollama", BaseURL: server.URL}}, "local", "system", "write", nil, 4096, nil)
 	if err != nil || result != "draft" {
 		t.Fatalf("complete: %q %v", result, err)
 	}

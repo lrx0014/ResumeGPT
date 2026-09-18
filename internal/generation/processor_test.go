@@ -91,7 +91,7 @@ type processorGateway struct {
 	prompts   []string
 }
 
-func (g *processorGateway) Complete(_ context.Context, _ settings.RuntimeConnection, _, _, prompt string, _ []string, _ int) (string, error) {
+func (g *processorGateway) Complete(_ context.Context, _ settings.RuntimeConnection, _, _, prompt string, _ []string, _ int, _ []string) (string, error) {
 	g.prompts = append(g.prompts, prompt)
 	if err := g.failureAt[g.calls]; err != nil {
 		g.calls++

@@ -73,12 +73,11 @@ var _ tools.Tool = (*renderHTMLPDFTool)(nil)
 
 func (*renderHTMLPDFTool) Name() string { return "render_html_pdf" }
 func (*renderHTMLPDFTool) Description() string {
-	return "Render a complete self-contained HTML and CSS document into PDF in an isolated renderer. External URLs, scripts, and local files are unavailable."
+	return "Render a complete self-contained HTML and CSS document into PDF in an isolated renderer. External URLs, scripts, and local files are unavailable. The input must be the raw HTML document itself, starting with <!doctype html> or <html> — never wrap it in JSON or any other object."
 }
 func (t *renderHTMLPDFTool) Call(ctx context.Context, source string) (string, error) {
 	t.source = cleanModelSource(source)
-	lowered := strings.ToLower(t.source)
-	if !strings.Contains(lowered, "<html") || !strings.Contains(lowered, "<body") || !strings.Contains(lowered, "</html>") {
+	if !looksLikeCompleteHTMLDocument(t.source) {
 		t.pdf = nil
 		t.lastErr = errors.New("candidate source is not a complete HTML document")
 		t.failures = append(t.failures, TemplateValidationFailure{Source: t.source, Error: t.lastErr})
@@ -118,6 +117,19 @@ func (t *renderHTMLPDFTool) Call(ctx context.Context, source string) (string, er
 }
 
 func (t *renderHTMLPDFTool) succeeded() bool { return len(t.pdf) > 0 && t.lastErr == nil }
+
+// looksLikeCompleteHTMLDocument requires the source to actually start with an
+// HTML document tag, not merely contain "<html"/"<body"/"</html>" somewhere
+// in its text — a model that wraps its HTML in a JSON object such as
+// {"html": "<!doctype html>...</html>"} would otherwise pass a naive
+// substring check while still leaking the JSON scaffolding into the PDF.
+func looksLikeCompleteHTMLDocument(source string) bool {
+	lowered := strings.ToLower(strings.TrimSpace(source))
+	if !strings.HasPrefix(lowered, "<!doctype") && !strings.HasPrefix(lowered, "<html") {
+		return false
+	}
+	return strings.Contains(lowered, "<body") && strings.Contains(lowered, "</html>")
+}
 
 func (t *renderHTMLPDFTool) loadAvatar(ctx context.Context) (string, []byte, error) {
 	if t.avatarLoaded {

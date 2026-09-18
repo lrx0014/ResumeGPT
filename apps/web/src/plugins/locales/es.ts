@@ -241,7 +241,7 @@ export default {
       viewDraft: 'Ver borrador', viewRawResponse: 'Ver respuesta sin procesar', viewLatexSource: 'Ver fuente LaTeX', viewHtmlCssSource: 'Ver fuente HTML/CSS', viewContent: 'Ver contenido',
       previewThisPdf: 'Previsualizar este PDF →', artifactEyebrow: 'Artefacto', stagePdf: 'PDF de la etapa', finalPdf: 'PDF final', showFinal: 'Mostrar final', previewPlaceholder: 'La vista previa en PDF aparece después de renderizar el diseño del documento.',
       refineEyebrow: 'Refinar', askForChange: 'Solicitar otro cambio', reviseDescription: 'Describe qué debe cambiar. El modelo recibe el borrador de referencia y el código fuente actual del documento, y añade el nuevo resultado a esta línea de tiempo.',
-      revisePlaceholder: 'Por ejemplo: Reduce el espacio en blanco sobre Experiencia y destaca el trabajo de migración a Go.', sendRevision: 'Enviar revisión',
+      revisePlaceholder: 'Por ejemplo: Reduce el espacio en blanco sobre Experiencia.', sendRevision: 'Enviar revisión',
       stage: { waiting: 'Esperando para empezar', writing: 'Escribiendo contenido', reviewing: 'Revisando el PDF', repairing: 'Reparando el diseño ({count}/2)', finalizing: 'Finalizando el PDF' },
       stepTitle: {
         writerDraft: 'Borrador del Writer', renderedPdfRepair: 'PDF renderizado · reparación {count}', templateAppliedPdf: 'PDF con plantilla aplicada', designerRenderedPdf: 'PDF renderizado por el Designer',

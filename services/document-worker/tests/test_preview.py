@@ -29,7 +29,7 @@ class FailedSyntax:
 
 def test_render_tex_preview_uses_no_shell_escape(monkeypatch) -> None:
     captured: list[str] = []
-    monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/pdflatex")
+    monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/xelatex")
 
     def run(command, *, cwd, capture_output, timeout, check, env):
         captured.extend(command)
@@ -67,7 +67,7 @@ def test_render_latex_zip_uses_selected_entry_and_archive_directory(monkeypatch)
     with zipfile.ZipFile(archive_data, "w") as archive:
         archive.writestr("project/resume.tex", "\\documentclass{article}")
         archive.writestr("project/style.sty", "")
-    monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/pdflatex")
+    monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/xelatex")
 
     def run(command, *, cwd, capture_output, timeout, check, env):
         captured.extend(command)
@@ -88,7 +88,7 @@ def test_render_preview_rejects_unsupported_format() -> None:
 
 
 def test_render_tex_preview_reports_missing_dependency(monkeypatch) -> None:
-    monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/pdflatex")
+    monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/xelatex")
     monkeypatch.setattr("subprocess.run", lambda *args, **kwargs: Failed())
 
     with pytest.raises(ExtractionError, match="fontawesome\\.sty"):
@@ -96,7 +96,7 @@ def test_render_tex_preview_reports_missing_dependency(monkeypatch) -> None:
 
 
 def test_render_tex_preview_reports_specific_latex_error(monkeypatch) -> None:
-    monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/pdflatex")
+    monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/xelatex")
     monkeypatch.setattr("subprocess.run", lambda *args, **kwargs: FailedSyntax())
 
     with pytest.raises(ExtractionError, match=r"Undefined control sequence.*unknowncommand"):

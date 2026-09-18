@@ -21,7 +21,7 @@ var (
 )
 
 type Gateway interface {
-	Complete(context.Context, settings.RuntimeConnection, string, string, string, []string, int) (string, error)
+	Complete(context.Context, settings.RuntimeConnection, string, string, string, []string, int, []string) (string, error)
 }
 
 type HTTPGateway struct{ client *http.Client }
@@ -30,7 +30,7 @@ func NewHTTPGateway() *HTTPGateway {
 	return &HTTPGateway{client: &http.Client{Timeout: 8 * time.Minute}}
 }
 
-func (g *HTTPGateway) Complete(ctx context.Context, runtime settings.RuntimeConnection, model, systemPrompt, userPrompt string, images []string, maxTokens int) (string, error) {
+func (g *HTTPGateway) Complete(ctx context.Context, runtime settings.RuntimeConnection, model, systemPrompt, userPrompt string, images []string, maxTokens int, stopWords []string) (string, error) {
 	base, err := url.Parse(strings.TrimRight(runtime.Connection.BaseURL, "/"))
 	if err != nil {
 		return "", ErrLLM
@@ -43,7 +43,11 @@ func (g *HTTPGateway) Complete(ctx context.Context, runtime settings.RuntimeConn
 		if len(images) > 0 {
 			message["images"] = images
 		}
-		body = map[string]any{"model": model, "stream": true, "think": false, "messages": []any{map[string]any{"role": "system", "content": systemPrompt}, message}, "options": map[string]any{"temperature": 0.2, "num_ctx": 16384, "num_predict": maxTokens}}
+		modelOptions := map[string]any{"temperature": 0.2, "num_ctx": 16384, "num_predict": maxTokens}
+		if len(stopWords) > 0 {
+			modelOptions["stop"] = stopWords
+		}
+		body = map[string]any{"model": model, "stream": true, "think": false, "messages": []any{map[string]any{"role": "system", "content": systemPrompt}, message}, "options": modelOptions}
 	} else {
 		if !strings.HasSuffix(base.Path, "/v1") {
 			endpoint = base.String() + "/v1/chat/completions"
@@ -59,6 +63,9 @@ func (g *HTTPGateway) Complete(ctx context.Context, runtime settings.RuntimeConn
 			userContent = parts
 		}
 		body = map[string]any{"model": model, "messages": []any{map[string]any{"role": "system", "content": systemPrompt}, map[string]any{"role": "user", "content": userContent}}}
+		if len(stopWords) > 0 {
+			body["stop"] = stopWords
+		}
 		if runtime.Connection.Provider == "openai" {
 			body["max_completion_tokens"] = maxTokens
 		} else {

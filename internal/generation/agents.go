@@ -52,7 +52,7 @@ func (t GenerationAgentTeam) run(ctx context.Context, workspaceID string, choice
 }
 
 func (t GenerationAgentTeam) Write(ctx context.Context, workspaceID string, run Run, profileValue profile.Profile, opportunity job.Job) (string, error) {
-	systemPrompt := "You are the Writer agent. Produce concise, persuasive application content. " + profileGroundingSkill + " Produce polished Markdown content, not a template or commentary."
+	systemPrompt := "You are the Writer agent. Produce concise, persuasive application content. " + profileGroundingSkill + " Produce polished Markdown content only: prose, headings, and bullet points. Never include HTML tags, CSS, code blocks, or notes about fonts, encoding, rendering, or file formats. Formatting, styling, and rendering are handled entirely by other agents; write only the document's actual text."
 	contextValue := writerPrompt(run, profileValue, opportunity)
 	contextTool := &staticContextTool{name: "read_generation_context", description: "Read the immutable Profile, Opportunity, and generation requirements for this run.", content: contextValue}
 	return t.run(ctx, workspaceID, run.Writer, systemPrompt, contextValue, []tools.Tool{contextTool}, nil, writerMaxTokens, nil)

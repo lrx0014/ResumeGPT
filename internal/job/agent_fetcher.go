@@ -25,7 +25,7 @@ type RuntimeResolver interface {
 }
 
 type AgentGateway interface {
-	Complete(context.Context, settings.RuntimeConnection, string, string, string, []string, int) (string, error)
+	Complete(context.Context, settings.RuntimeConnection, string, string, string, []string, int, []string) (string, error)
 }
 
 type JobImportAgent struct {
@@ -103,7 +103,7 @@ func (m *jobAgentModel) GenerateContent(ctx context.Context, messages []llms.Mes
 		option(&callOptions)
 	}
 	prompt := llmtext.FlattenMessages(messages)
-	content, err := m.gateway.Complete(ctx, m.runtime, m.model, m.systemPrompt, prompt, nil, callOptions.MaxTokens)
+	content, err := m.gateway.Complete(ctx, m.runtime, m.model, m.systemPrompt, prompt, nil, callOptions.MaxTokens, callOptions.StopWords)
 	if err != nil {
 		return nil, err
 	}

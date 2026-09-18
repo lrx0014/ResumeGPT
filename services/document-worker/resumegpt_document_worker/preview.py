@@ -49,7 +49,9 @@ def render_preview(name: str, data: bytes, entry_file: str = "") -> bytes:
         environment["openin_any"] = "p"
         environment["openout_any"] = "p"
         if suffix in {".tex", ".zip"}:
-            executable = shutil.which("pdflatex")
+            # xelatex (rather than pdflatex) is required so templates can load
+            # fontspec/xeCJK and render non-Latin scripts such as Chinese.
+            executable = shutil.which("xelatex")
             if executable is None:
                 raise ExtractionError("tex_renderer_unavailable", "LaTeX preview rendering is unavailable.")
             if suffix == ".zip":

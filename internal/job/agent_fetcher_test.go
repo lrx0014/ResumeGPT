@@ -15,7 +15,7 @@ func (agentTestConnections) RuntimeConnection(context.Context, string, string) (
 
 type agentTestGateway struct{}
 
-func (agentTestGateway) Complete(context.Context, settings.RuntimeConnection, string, string, string, []string, int) (string, error) {
+func (agentTestGateway) Complete(context.Context, settings.RuntimeConnection, string, string, string, []string, int, []string) (string, error) {
 	return `{"title":"Platform Engineer","company":"Example GmbH","location":"Berlin, Germany","country":"Germany","city":"Berlin","workMode":"Hybrid","employmentType":"Full-time","description":"Build reliable systems."}`, nil
 }
 

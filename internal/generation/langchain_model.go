@@ -66,7 +66,7 @@ func (m *gatewayModel) GenerateContent(ctx context.Context, messages []llms.Mess
 	if m.imageSource != nil {
 		images = m.imageSource()
 	}
-	content, err := m.gateway.Complete(ctx, m.runtime, m.model, m.systemPrompt, prompt, images, maxTokens)
+	content, err := m.gateway.Complete(ctx, m.runtime, m.model, m.systemPrompt, prompt, images, maxTokens, callOptions.StopWords)
 	if err != nil {
 		return nil, err
 	}
