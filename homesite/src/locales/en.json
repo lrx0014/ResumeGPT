@@ -1,0 +1,87 @@
+{
+  "htmlLang": "en",
+  "meta": {
+    "title": "ResumeGPT — Self-hosted AI CV & cover letter workspace",
+    "description": "ResumeGPT is a self-hosted workspace that tailors CVs and cover letters to every job opportunity with a multi-agent LLM pipeline, scheduled job discovery, and reusable templates.",
+    "ogDescription": "Profile management, job tracking, scheduled job discovery, reusable templates, and a multi-agent LLM pipeline — all in one self-hosted app."
+  },
+  "nav": {
+    "howItWorks": "How It Works",
+    "features": "Features",
+    "screenshots": "Screenshots",
+    "userManual": "User Manual",
+    "github": "GitHub"
+  },
+  "hero": {
+    "eyebrow": "Open Source · Self-Hosted",
+    "titleHtml": "Tailor every CV and cover letter with <em>AI agents</em> you control.",
+    "lead": "ResumeGPT combines profile management, job tracking, scheduled job discovery, reusable templates, and a multi-agent LLM pipeline in one self-hosted workspace — so every application gets a document actually written for it.",
+    "viewGithub": "View on GitHub",
+    "seeHow": "See how it works",
+    "cmd": "docker compose up -d",
+    "note": "Pulls the pre-built <code>latest</code> images from CI — the full stack is up in seconds. No account, no cloud dependency required."
+  },
+  "howItWorks": {
+    "eyebrow": "How It Works",
+    "title": "From a saved profile to a reviewed PDF",
+    "subtitle": "Four steps, most of which only need to happen once.",
+    "steps": {
+      "profile": { "title": "Add a Profile", "desc": "Save your experience, skills, and target role once — reuse it for every application." },
+      "job": { "title": "Track a Job", "desc": "Add an opportunity manually, or import public LinkedIn/Indeed URLs in bulk." },
+      "template": { "title": "Pick a Template", "desc": "Use a LaTeX template, or leave it empty and let an agent design the layout." },
+      "generate": { "title": "Generate &amp; Review", "desc": "Writer, Designer, and Visual Reviewer agents draft, render, and inspect the PDF." }
+    }
+  },
+  "features": {
+    "eyebrow": "Features",
+    "title": "Everything a focused job search needs",
+    "subtitle": "One application instead of a pile of documents, prompts, and spreadsheets.",
+    "items": {
+      "profiles": { "title": "Reusable Profiles", "desc": "Save your experience once — import it from TXT, Markdown, TeX, DOC, DOCX, PDF, or images — then generate as many tailored documents as you need." },
+      "jobs": { "title": "Track &amp; Import Jobs", "desc": "Add roles manually or import up to 50 public URLs at once. The Job Import Agent handles pages outside the fast-path extractors." },
+      "hunter": { "title": "Automated Job Hunter", "desc": "Schedule an agent to search the web on a recurring basis and surface new roles that match your goals — deduplicated automatically." },
+      "templates": { "title": "LaTeX or AI-Designed Layouts", "desc": "Bring your own LaTeX template, or let the Document Designer Agent build a print-ready HTML/CSS layout from scratch." },
+      "generation": { "title": "Multi-Agent Generation", "desc": "Writer, Template Applying / Document Designer, and Visual Reviewer agents collaborate — with up to two automatic layout-repair rounds." },
+      "llm": { "title": "Bring Your Own LLM", "desc": "Mix OpenAI, OpenAI-compatible, and local Ollama providers, with a different default model per agent role." }
+    }
+  },
+  "screenshots": {
+    "eyebrow": "Screenshots",
+    "title": "A look inside the workspace",
+    "subtitle": "Click any screenshot to zoom in.",
+    "items": {
+      "overview": { "title": "Workspace overview", "desc": "Profiles, job opportunities, templates, providers, and generated PDFs at a glance." },
+      "jobs": { "title": "Job Opportunities", "desc": "Track status and source, and queue a CV or cover letter for any listing." },
+      "hunter": { "title": "Job Hunter", "desc": "Scheduled searches that surface new opportunities automatically." },
+      "templates": { "title": "Templates", "desc": "The built-in Rezume LaTeX template alongside an uploaded custom one." },
+      "generation": { "title": "Live generation", "desc": "Staged PDF preview during generation, shown here for a Japanese résumé." },
+      "settings": { "title": "Agent model routing", "desc": "Choose a provider and model independently for every agent role." }
+    }
+  },
+  "manualBand": {
+    "title": "Need the full user manual?",
+    "subtitle": "A complete walkthrough of every screen and setting is on its way.",
+    "cta": "View User Manual"
+  },
+  "cta": {
+    "eyebrow": "Get Started",
+    "title": "Self-host it in one command",
+    "subtitle": "Docker Compose supplies development defaults, storage volumes, and database migrations out of the box.",
+    "cta": "Read the README on GitHub"
+  },
+  "footer": {
+    "license": "© <span id=\"year\"></span> ResumeGPT. Released under the Apache License 2.0.",
+    "github": "GitHub",
+    "license_link": "License",
+    "issues": "Report an Issue",
+    "userManual": "User Manual"
+  },
+  "manualPage": {
+    "title": "User Manual — ResumeGPT",
+    "description": "The full ResumeGPT user manual is on its way. In the meantime, the GitHub README covers setup, configuration, and every feature.",
+    "heading": "The user manual is on its way.",
+    "body": "We're writing a full, step-by-step walkthrough of every screen — Profiles, Job Opportunities, Job Hunter, Templates, Generation, and Settings. Until it's ready, the GitHub README covers installation, configuration, and every feature in detail.",
+    "readme": "Read the README",
+    "backHome": "Back to home"
+  }
+}

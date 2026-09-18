@@ -1,0 +1,9 @@
+{
+  "name": "resumegpt-homesite",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "npm run build && npx --yes serve dist"
+  }
+}

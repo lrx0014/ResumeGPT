@@ -1,0 +1,87 @@
+{
+  "htmlLang": "fr",
+  "meta": {
+    "title": "ResumeGPT — Espace de travail IA auto-hébergé pour CV et lettres de motivation",
+    "description": "ResumeGPT est un espace de travail auto-hébergé qui adapte CV et lettres de motivation à chaque offre d'emploi grâce à un pipeline LLM multi-agents, une veille d'offres planifiée et des modèles réutilisables.",
+    "ogDescription": "Gestion de profils, suivi des candidatures, veille d'offres planifiée, modèles réutilisables et pipeline LLM multi-agents — le tout dans une application auto-hébergée."
+  },
+  "nav": {
+    "howItWorks": "Fonctionnement",
+    "features": "Fonctionnalités",
+    "screenshots": "Captures d'écran",
+    "userManual": "Manuel utilisateur",
+    "github": "GitHub"
+  },
+  "hero": {
+    "eyebrow": "Open Source · Auto-hébergé",
+    "titleHtml": "Adaptez chaque CV et lettre de motivation avec des <em>agents IA</em> que vous contrôlez.",
+    "lead": "ResumeGPT réunit gestion de profils, suivi des candidatures, veille d'offres planifiée, modèles réutilisables et un pipeline LLM multi-agents dans un seul espace auto-hébergé — pour que chaque candidature reçoive un document réellement écrit pour elle.",
+    "viewGithub": "Voir sur GitHub",
+    "seeHow": "Voir le fonctionnement",
+    "cmd": "docker compose up -d",
+    "note": "Récupère les images <code>latest</code> pré-construites par la CI — toute la stack est prête en quelques secondes. Aucun compte, aucune dépendance cloud requise."
+  },
+  "howItWorks": {
+    "eyebrow": "Fonctionnement",
+    "title": "D'un profil enregistré à un PDF relu",
+    "subtitle": "Quatre étapes, la plupart à ne faire qu'une seule fois.",
+    "steps": {
+      "profile": { "title": "Ajouter un profil", "desc": "Enregistrez votre expérience, vos compétences et votre poste cible une fois — réutilisez-les pour chaque candidature." },
+      "job": { "title": "Suivre une offre", "desc": "Ajoutez une offre manuellement ou importez en masse des URLs publiques LinkedIn/Indeed." },
+      "template": { "title": "Choisir un modèle", "desc": "Utilisez un modèle LaTeX, ou laissez le champ vide et laissez un agent concevoir la mise en page." },
+      "generate": { "title": "Générer &amp; relire", "desc": "Les agents Writer, Designer et Visual Reviewer rédigent, rendent et vérifient le PDF." }
+    }
+  },
+  "features": {
+    "eyebrow": "Fonctionnalités",
+    "title": "Tout ce qu'il faut pour une recherche d'emploi ciblée",
+    "subtitle": "Une seule application au lieu d'un empilement de documents, de prompts et de tableurs.",
+    "items": {
+      "profiles": { "title": "Profils réutilisables", "desc": "Enregistrez votre expérience une fois — importée depuis TXT, Markdown, TeX, DOC, DOCX, PDF ou images — puis générez autant de documents sur mesure que nécessaire." },
+      "jobs": { "title": "Suivre &amp; importer des offres", "desc": "Ajoutez des postes manuellement ou importez jusqu'à 50 URLs publiques d'un coup. L'agent d'import d'offres gère les pages hors des extracteurs rapides." },
+      "hunter": { "title": "Veille d'offres automatisée", "desc": "Planifiez un agent pour parcourir le web régulièrement et faire remonter les nouvelles offres correspondant à vos objectifs — dédoublonnées automatiquement." },
+      "templates": { "title": "Mises en page LaTeX ou conçues par IA", "desc": "Apportez votre propre modèle LaTeX, ou laissez l'agent Document Designer construire une mise en page HTML/CSS prête à imprimer, de zéro." },
+      "generation": { "title": "Génération multi-agents", "desc": "Les agents Writer, Template Applying/Document Designer et Visual Reviewer collaborent — avec jusqu'à deux cycles automatiques de correction de mise en page." },
+      "llm": { "title": "Utilisez votre propre LLM", "desc": "Mixez fournisseurs OpenAI, compatibles OpenAI et Ollama en local, avec un modèle par défaut différent pour chaque rôle d'agent." }
+    }
+  },
+  "screenshots": {
+    "eyebrow": "Captures d'écran",
+    "title": "Un aperçu de l'espace de travail",
+    "subtitle": "Cliquez sur une capture pour l'agrandir.",
+    "items": {
+      "overview": { "title": "Vue d'ensemble de l'espace", "desc": "Profils, offres d'emploi, modèles, fournisseurs et PDF générés en un coup d'œil." },
+      "jobs": { "title": "Offres d'emploi", "desc": "Suivez le statut et la source, et lancez un CV ou une lettre de motivation pour n'importe quelle offre." },
+      "hunter": { "title": "Job Hunter", "desc": "Des recherches planifiées qui font remonter automatiquement de nouvelles offres." },
+      "templates": { "title": "Modèles", "desc": "Le modèle LaTeX Rezume intégré aux côtés d'un modèle personnalisé importé." },
+      "generation": { "title": "Génération en direct", "desc": "Aperçu PDF par étapes pendant la génération, ici pour un CV en japonais." },
+      "settings": { "title": "Routage des modèles d'agents", "desc": "Choisissez un fournisseur et un modèle indépendamment pour chaque rôle d'agent." }
+    }
+  },
+  "manualBand": {
+    "title": "Besoin du manuel utilisateur complet ?",
+    "subtitle": "Un guide complet de chaque écran et de chaque réglage arrive bientôt.",
+    "cta": "Voir le manuel utilisateur"
+  },
+  "cta": {
+    "eyebrow": "Pour commencer",
+    "title": "Auto-hébergez-le en une commande",
+    "subtitle": "Docker Compose fournit des valeurs par défaut de développement, des volumes de stockage et les migrations de base de données prêts à l'emploi.",
+    "cta": "Lire le README sur GitHub"
+  },
+  "footer": {
+    "license": "© <span id=\"year\"></span> ResumeGPT. Publié sous licence Apache 2.0.",
+    "github": "GitHub",
+    "license_link": "Licence",
+    "issues": "Signaler un problème",
+    "userManual": "Manuel utilisateur"
+  },
+  "manualPage": {
+    "title": "Manuel utilisateur — ResumeGPT",
+    "description": "Le manuel utilisateur complet de ResumeGPT arrive bientôt. En attendant, le README GitHub couvre l'installation, la configuration et toutes les fonctionnalités.",
+    "heading": "Le manuel utilisateur arrive bientôt.",
+    "body": "Nous rédigeons un guide complet, pas à pas, de chaque écran — Profils, Offres d'emploi, Job Hunter, Modèles, Génération et Réglages. En attendant, le README GitHub couvre en détail l'installation, la configuration et chaque fonctionnalité.",
+    "readme": "Lire le README",
+    "backHome": "Retour à l'accueil"
+  }
+}

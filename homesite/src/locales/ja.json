@@ -1,0 +1,87 @@
+{
+  "htmlLang": "ja",
+  "meta": {
+    "title": "ResumeGPT — 履歴書・カバーレター向けセルフホスト型 AI ワークスペース",
+    "description": "ResumeGPT は、マルチエージェント LLM パイプライン、定期的な求人自動収集、再利用可能なテンプレートによって、応募先ごとに履歴書とカバーレターを最適化するセルフホスト型ワークスペースです。",
+    "ogDescription": "プロフィール管理、求人トラッキング、定期的な求人自動収集、再利用可能なテンプレート、マルチエージェント LLM パイプライン — すべてを1つのセルフホスト型アプリに。"
+  },
+  "nav": {
+    "howItWorks": "使い方",
+    "features": "機能",
+    "screenshots": "スクリーンショット",
+    "userManual": "ユーザーマニュアル",
+    "github": "GitHub"
+  },
+  "hero": {
+    "eyebrow": "オープンソース・セルフホスト",
+    "titleHtml": "自分がコントロールする<em>AIエージェント</em>で、履歴書とカバーレターを一通ごとに最適化。",
+    "lead": "ResumeGPTは、プロフィール管理、求人トラッキング、定期的な求人自動収集、再利用可能なテンプレート、マルチエージェントLLMパイプラインを1つのセルフホスト型ワークスペースにまとめ、すべての応募に本当にその応募のために書かれた書類を用意します。",
+    "viewGithub": "GitHubで見る",
+    "seeHow": "使い方を見る",
+    "cmd": "docker compose up -d",
+    "note": "CIでビルド済みの<code>latest</code>イメージを取得します — 数秒でスタック全体が起動。アカウント登録もクラウド依存も不要です。"
+  },
+  "howItWorks": {
+    "eyebrow": "使い方",
+    "title": "保存したプロフィールからレビュー済みPDFまで",
+    "subtitle": "4つのステップ、ほとんどは一度だけ行えば十分です。",
+    "steps": {
+      "profile": { "title": "プロフィールを追加", "desc": "経歴・スキル・希望職種を一度登録すれば、すべての応募で再利用できます。" },
+      "job": { "title": "求人を登録", "desc": "手動で求人を追加するか、LinkedIn/Indeedの公開URLを一括インポートします。" },
+      "template": { "title": "テンプレートを選択", "desc": "LaTeXテンプレートを使うか、空のままエージェントにレイアウトを設計させます。" },
+      "generate": { "title": "生成してレビュー", "desc": "Writer、Designer、Visual Reviewerの各エージェントがPDFを下書き・レンダリング・検証します。" }
+    }
+  },
+  "features": {
+    "eyebrow": "機能",
+    "title": "集中した求職活動に必要なすべて",
+    "subtitle": "書類やプロンプト、スプレッドシートの山ではなく、1つのアプリで完結。",
+    "items": {
+      "profiles": { "title": "再利用可能なプロフィール", "desc": "TXT、Markdown、TeX、DOC、DOCX、PDF、画像からインポートして経歴を一度登録し、必要なだけ最適化された書類を生成できます。" },
+      "jobs": { "title": "求人のトラッキングとインポート", "desc": "求人を手動で追加するか、最大50件の公開URLを一括インポート。高速抽出の対象外のページはJob Import Agentが処理します。" },
+      "hunter": { "title": "自動求人ハンター", "desc": "エージェントを定期実行にスケジュールしてWebを巡回し、目標に合った新着求人を自動で重複なく発見します。" },
+      "templates": { "title": "LaTeXまたはAI設計のレイアウト", "desc": "自分のLaTeXテンプレートを持ち込むか、Document Designer Agentに印刷対応のHTML/CSSレイアウトをゼロから構築させます。" },
+      "generation": { "title": "マルチエージェント生成", "desc": "Writer、Template Applying/Document Designer、Visual Reviewerの各エージェントが連携し、最大2回の自動レイアウト修正を行います。" },
+      "llm": { "title": "好きなLLMを利用可能", "desc": "OpenAI、OpenAI互換、ローカルOllamaプロバイダーを組み合わせ、エージェントの役割ごとに既定モデルを設定できます。" }
+    }
+  },
+  "screenshots": {
+    "eyebrow": "スクリーンショット",
+    "title": "ワークスペースをのぞいてみる",
+    "subtitle": "画像をクリックすると拡大表示されます。",
+    "items": {
+      "overview": { "title": "ワークスペース概要", "desc": "プロフィール、求人、テンプレート、プロバイダー、生成済みPDFを一目で確認。" },
+      "jobs": { "title": "求人一覧", "desc": "ステータスと取得元を管理し、任意の求人に対して履歴書やカバーレターの生成をキューに入れられます。" },
+      "hunter": { "title": "Job Hunter", "desc": "スケジュール検索で新着求人を自動的に発見します。" },
+      "templates": { "title": "テンプレート", "desc": "組み込みのRezume LaTeXテンプレートと、アップロードしたカスタムテンプレートを並べて表示。" },
+      "generation": { "title": "リアルタイム生成", "desc": "生成中の段階的なPDFプレビュー。ここでは日本語の履歴書を表示しています。" },
+      "settings": { "title": "エージェントモデルのルーティング", "desc": "エージェントの役割ごとに個別にプロバイダーとモデルを選択できます。" }
+    }
+  },
+  "manualBand": {
+    "title": "完全なユーザーマニュアルが必要ですか？",
+    "subtitle": "すべての画面と設定を網羅した詳しいガイドを準備中です。",
+    "cta": "ユーザーマニュアルを見る"
+  },
+  "cta": {
+    "eyebrow": "はじめる",
+    "title": "コマンド1つでセルフホスト",
+    "subtitle": "Docker Composeが開発用の初期設定、ストレージボリューム、データベースマイグレーションを標準で提供します。",
+    "cta": "GitHubのREADMEを読む"
+  },
+  "footer": {
+    "license": "© <span id=\"year\"></span> ResumeGPT. Apache License 2.0のもとで公開。",
+    "github": "GitHub",
+    "license_link": "ライセンス",
+    "issues": "問題を報告",
+    "userManual": "ユーザーマニュアル"
+  },
+  "manualPage": {
+    "title": "ユーザーマニュアル — ResumeGPT",
+    "description": "ResumeGPTの完全なユーザーマニュアルは準備中です。それまでは、GitHubのREADMEでセットアップ・設定・各機能を確認できます。",
+    "heading": "ユーザーマニュアルは準備中です。",
+    "body": "プロフィール、求人、Job Hunter、テンプレート、生成、設定など、各画面を順を追って解説する完全なガイドを執筆中です。完成までは、GitHubのREADMEでインストール・設定・各機能の詳細を確認できます。",
+    "readme": "READMEを読む",
+    "backHome": "ホームに戻る"
+  }
+}

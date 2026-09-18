@@ -1,0 +1,87 @@
+{
+  "htmlLang": "de",
+  "meta": {
+    "title": "ResumeGPT — Selbst gehosteter KI-Arbeitsbereich für Lebenslauf & Anschreiben",
+    "description": "ResumeGPT ist ein selbst gehosteter Arbeitsbereich, der Lebensläufe und Anschreiben mit einer Multi-Agent-LLM-Pipeline, geplanter Job-Suche und wiederverwendbaren Vorlagen auf jedes Stellenangebot zuschneidet.",
+    "ogDescription": "Profilverwaltung, Job-Tracking, geplante Job-Suche, wiederverwendbare Vorlagen und eine Multi-Agent-LLM-Pipeline — alles in einer selbst gehosteten App."
+  },
+  "nav": {
+    "howItWorks": "So funktioniert's",
+    "features": "Funktionen",
+    "screenshots": "Screenshots",
+    "userManual": "Handbuch",
+    "github": "GitHub"
+  },
+  "hero": {
+    "eyebrow": "Open Source · Self-Hosted",
+    "titleHtml": "Jeden Lebenslauf und jedes Anschreiben mit <em>KI-Agenten</em> gestalten, die du kontrollierst.",
+    "lead": "ResumeGPT vereint Profilverwaltung, Job-Tracking, geplante Job-Suche, wiederverwendbare Vorlagen und eine Multi-Agent-LLM-Pipeline in einem selbst gehosteten Arbeitsbereich — damit jede Bewerbung ein Dokument bekommt, das wirklich für sie geschrieben wurde.",
+    "viewGithub": "Auf GitHub ansehen",
+    "seeHow": "So funktioniert's",
+    "cmd": "docker compose up -d",
+    "note": "Lädt die von CI vorgebauten <code>latest</code>-Images — der gesamte Stack ist in Sekunden startklar. Kein Account, keine Cloud-Abhängigkeit nötig."
+  },
+  "howItWorks": {
+    "eyebrow": "So funktioniert's",
+    "title": "Vom gespeicherten Profil zum geprüften PDF",
+    "subtitle": "Vier Schritte, die meisten davon nur einmal.",
+    "steps": {
+      "profile": { "title": "Profil anlegen", "desc": "Erfahrung, Fähigkeiten und Zielrolle einmal speichern — für jede Bewerbung wiederverwenden." },
+      "job": { "title": "Job erfassen", "desc": "Ein Angebot manuell anlegen oder öffentliche LinkedIn-/Indeed-URLs im Bulk importieren." },
+      "template": { "title": "Vorlage wählen", "desc": "Eine LaTeX-Vorlage nutzen oder leer lassen und einen Agenten das Layout gestalten lassen." },
+      "generate": { "title": "Erzeugen &amp; prüfen", "desc": "Writer-, Designer- und Visual-Reviewer-Agenten entwerfen, rendern und prüfen das PDF." }
+    }
+  },
+  "features": {
+    "eyebrow": "Funktionen",
+    "title": "Alles für eine fokussierte Jobsuche",
+    "subtitle": "Eine Anwendung statt eines Stapels aus Dokumenten, Prompts und Tabellen.",
+    "items": {
+      "profiles": { "title": "Wiederverwendbare Profile", "desc": "Erfahrung einmal speichern — importiert aus TXT, Markdown, TeX, DOC, DOCX, PDF oder Bildern — und beliebig viele maßgeschneiderte Dokumente daraus erzeugen." },
+      "jobs": { "title": "Jobs erfassen &amp; importieren", "desc": "Angebote manuell hinzufügen oder bis zu 50 öffentliche URLs auf einmal importieren. Der Job-Import-Agent übernimmt Seiten außerhalb der schnellen Extraktoren." },
+      "hunter": { "title": "Automatischer Job Hunter", "desc": "Einen Agenten regelmäßig das Web durchsuchen lassen — neue, zu deinen Zielen passende Rollen werden automatisch dedupliziert gefunden." },
+      "templates": { "title": "LaTeX- oder KI-gestaltete Layouts", "desc": "Eigene LaTeX-Vorlage mitbringen oder den Document-Designer-Agenten ein druckfertiges HTML/CSS-Layout von Grund auf erstellen lassen." },
+      "generation": { "title": "Multi-Agent-Generierung", "desc": "Writer-, Template-Applying-/Document-Designer- und Visual-Reviewer-Agenten arbeiten zusammen — mit bis zu zwei automatischen Layout-Reparaturrunden." },
+      "llm": { "title": "Eigenes LLM mitbringen", "desc": "OpenAI-, OpenAI-kompatible und lokale Ollama-Anbieter mischen, mit einem eigenen Standardmodell pro Agentenrolle." }
+    }
+  },
+  "screenshots": {
+    "eyebrow": "Screenshots",
+    "title": "Ein Blick in den Arbeitsbereich",
+    "subtitle": "Auf ein Bild klicken, um es zu vergrößern.",
+    "items": {
+      "overview": { "title": "Arbeitsbereich-Übersicht", "desc": "Profile, Stellenangebote, Vorlagen, Anbieter und erzeugte PDFs auf einen Blick." },
+      "jobs": { "title": "Stellenangebote", "desc": "Status und Quelle im Blick behalten und für jedes Angebot einen Lebenslauf oder ein Anschreiben anstoßen." },
+      "hunter": { "title": "Job Hunter", "desc": "Geplante Suchen, die automatisch neue Stellenangebote finden." },
+      "templates": { "title": "Vorlagen", "desc": "Die integrierte Rezume-LaTeX-Vorlage neben einer hochgeladenen eigenen Vorlage." },
+      "generation": { "title": "Live-Generierung", "desc": "Gestufte PDF-Vorschau während der Generierung, hier für einen japanischen Lebenslauf." },
+      "settings": { "title": "Agenten-Modell-Routing", "desc": "Anbieter und Modell für jede Agentenrolle unabhängig wählen." }
+    }
+  },
+  "manualBand": {
+    "title": "Das vollständige Handbuch gesucht?",
+    "subtitle": "Eine vollständige Anleitung zu jedem Bildschirm und jeder Einstellung ist unterwegs.",
+    "cta": "Handbuch ansehen"
+  },
+  "cta": {
+    "eyebrow": "Loslegen",
+    "title": "Mit einem Befehl selbst hosten",
+    "subtitle": "Docker Compose liefert Entwicklungs-Standardwerte, Speicher-Volumes und Datenbankmigrationen von Haus aus.",
+    "cta": "README auf GitHub lesen"
+  },
+  "footer": {
+    "license": "© <span id=\"year\"></span> ResumeGPT. Veröffentlicht unter der Apache License 2.0.",
+    "github": "GitHub",
+    "license_link": "Lizenz",
+    "issues": "Problem melden",
+    "userManual": "Handbuch"
+  },
+  "manualPage": {
+    "title": "Handbuch — ResumeGPT",
+    "description": "Das vollständige ResumeGPT-Handbuch ist unterwegs. Bis dahin deckt die GitHub-README Einrichtung, Konfiguration und jede Funktion ab.",
+    "heading": "Das Handbuch ist unterwegs.",
+    "body": "Wir schreiben gerade eine vollständige, schrittweise Anleitung zu jedem Bildschirm — Profile, Stellenangebote, Job Hunter, Vorlagen, Generierung und Einstellungen. Bis es fertig ist, deckt die GitHub-README Installation, Konfiguration und jede Funktion im Detail ab.",
+    "readme": "README lesen",
+    "backHome": "Zurück zur Startseite"
+  }
+}

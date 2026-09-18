@@ -1,0 +1,38 @@
+{
+  "siteUrl": "https://resumegpt.dev",
+  "githubUrl": "https://github.com/lrx0014/ResumeGPT",
+  "licenseUrl": "https://github.com/lrx0014/ResumeGPT/blob/master/LICENSE",
+  "issuesUrl": "https://github.com/lrx0014/ResumeGPT/issues",
+  "readmeUrl": "https://github.com/lrx0014/ResumeGPT#readme",
+  "languages": [
+    { "code": "en", "urlPrefix": "/", "nativeName": "English", "shortName": "EN" },
+    { "code": "de", "urlPrefix": "/de/", "nativeName": "Deutsch", "shortName": "DE" },
+    { "code": "fr", "urlPrefix": "/fr/", "nativeName": "Français", "shortName": "FR" },
+    { "code": "es", "urlPrefix": "/es/", "nativeName": "Español", "shortName": "ES" },
+    { "code": "ja", "urlPrefix": "/ja/", "nativeName": "日本語", "shortName": "日本" },
+    { "code": "zh-CN", "urlPrefix": "/zh-CN/", "nativeName": "简体中文", "shortName": "简" },
+    { "code": "zh-TW", "urlPrefix": "/zh-TW/", "nativeName": "繁體中文", "shortName": "繁" }
+  ],
+  "steps": [
+    { "id": "profile" },
+    { "id": "job" },
+    { "id": "template" },
+    { "id": "generate" }
+  ],
+  "features": [
+    { "id": "profiles", "icon": "◎" },
+    { "id": "jobs", "icon": "◇" },
+    { "id": "hunter", "icon": "⌖" },
+    { "id": "templates", "icon": "▧" },
+    { "id": "generation", "icon": "✦" },
+    { "id": "llm", "icon": "⚙" }
+  ],
+  "screenshots": [
+    { "id": "overview", "file": "overview.png", "alt": "ResumeGPT workspace overview" },
+    { "id": "jobs", "file": "job-opportunities.png", "alt": "Job Opportunities list" },
+    { "id": "hunter", "file": "job-hunter.png", "alt": "Job Hunter schedules" },
+    { "id": "templates", "file": "templates.png", "alt": "Templates library" },
+    { "id": "generation", "file": "generation-progress.png", "alt": "Generation progress and PDF preview" },
+    { "id": "settings", "file": "settings.png", "alt": "Settings: default models" }
+  ]
+}

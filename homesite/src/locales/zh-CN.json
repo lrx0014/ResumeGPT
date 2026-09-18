@@ -1,0 +1,87 @@
+{
+  "htmlLang": "zh-CN",
+  "meta": {
+    "title": "ResumeGPT — 自托管的简历与求职信 AI 工作台",
+    "description": "ResumeGPT 是一个自托管工作台,通过多智能体 LLM 流水线、定时职位搜寻和可复用模板,为每一个职位机会量身定制简历与求职信。",
+    "ogDescription": "档案管理、职位跟踪、定时职位搜寻、可复用模板,以及多智能体 LLM 流水线 —— 一个自托管应用全部搞定。"
+  },
+  "nav": {
+    "howItWorks": "工作原理",
+    "features": "功能特性",
+    "screenshots": "截图预览",
+    "userManual": "用户手册",
+    "github": "GitHub"
+  },
+  "hero": {
+    "eyebrow": "开源 · 自托管",
+    "titleHtml": "用你可以掌控的 <em>AI 智能体</em>,为每一份简历和求职信量身定制。",
+    "lead": "ResumeGPT 将档案管理、职位跟踪、定时职位搜寻、可复用模板与多智能体 LLM 流水线整合进同一个自托管工作台 —— 让每一次投递都拿到真正为它而写的文档。",
+    "viewGithub": "在 GitHub 上查看",
+    "seeHow": "查看工作原理",
+    "cmd": "docker compose up -d",
+    "note": "拉取由 CI 预先构建的 <code>latest</code> 镜像 —— 整套服务几秒内即可启动,无需账号、无需依赖云服务。"
+  },
+  "howItWorks": {
+    "eyebrow": "工作原理",
+    "title": "从保存的档案到审阅完成的 PDF",
+    "subtitle": "四个步骤,其中大多数只需要做一次。",
+    "steps": {
+      "profile": { "title": "添加档案", "desc": "一次性保存你的经历、技能和目标职位 —— 之后每次投递都可复用。" },
+      "job": { "title": "记录职位", "desc": "手动添加一个职位机会,或批量导入 LinkedIn / Indeed 的公开链接。" },
+      "template": { "title": "选择模板", "desc": "使用 LaTeX 模板,或留空让智能体自动设计排版。" },
+      "generate": { "title": "生成并审阅", "desc": "Writer、Designer 和 Visual Reviewer 智能体分别负责撰写、渲染和检查 PDF。" }
+    }
+  },
+  "features": {
+    "eyebrow": "功能特性",
+    "title": "专注求职所需的一切",
+    "subtitle": "一个应用,取代一堆文档、提示词和表格。",
+    "items": {
+      "profiles": { "title": "可复用档案", "desc": "一次性保存你的经历 —— 支持从 TXT、Markdown、TeX、DOC、DOCX、PDF 或图片导入 —— 然后按需生成任意数量的定制文档。" },
+      "jobs": { "title": "跟踪与导入职位", "desc": "手动添加职位,或一次性导入最多 50 个公开链接。超出快速提取器覆盖范围的页面由职位导入智能体处理。" },
+      "hunter": { "title": "自动职位猎手", "desc": "让智能体定期自动搜索全网,发现符合你目标的新职位 —— 自动去重。" },
+      "templates": { "title": "LaTeX 或 AI 设计排版", "desc": "使用你自己的 LaTeX 模板,或让文档设计智能体从零构建一份可直接打印的 HTML/CSS 排版。" },
+      "generation": { "title": "多智能体协同生成", "desc": "Writer、模板应用/文档设计与 Visual Reviewer 智能体协同工作 —— 最多可进行两轮自动排版修复。" },
+      "llm": { "title": "自带 LLM", "desc": "自由组合 OpenAI、OpenAI 兼容接口与本地 Ollama 服务商,为每个智能体角色单独设置默认模型。" }
+    }
+  },
+  "screenshots": {
+    "eyebrow": "截图预览",
+    "title": "工作台内部一览",
+    "subtitle": "点击任意截图可放大查看。",
+    "items": {
+      "overview": { "title": "工作台总览", "desc": "档案、职位机会、模板、服务商与已生成的 PDF 一目了然。" },
+      "jobs": { "title": "职位机会", "desc": "跟踪状态与来源,为任意职位一键生成简历或求职信。" },
+      "hunter": { "title": "职位猎手", "desc": "定时搜索自动发现新的职位机会。" },
+      "templates": { "title": "模板库", "desc": "内置的 Rezume LaTeX 模板与上传的自定义模板并列展示。" },
+      "generation": { "title": "实时生成", "desc": "生成过程中的分阶段 PDF 预览,此处展示的是一份中文简历。" },
+      "settings": { "title": "智能体模型路由", "desc": "为每个智能体角色独立选择服务商和模型。" }
+    }
+  },
+  "manualBand": {
+    "title": "需要完整的用户手册?",
+    "subtitle": "涵盖每个界面和每项设置的完整指南正在编写中。",
+    "cta": "查看用户手册"
+  },
+  "cta": {
+    "eyebrow": "开始使用",
+    "title": "一条命令即可自托管",
+    "subtitle": "Docker Compose 开箱即提供开发环境默认配置、存储卷和数据库迁移。",
+    "cta": "在 GitHub 上阅读 README"
+  },
+  "footer": {
+    "license": "© <span id=\"year\"></span> ResumeGPT. 基于 Apache License 2.0 发布。",
+    "github": "GitHub",
+    "license_link": "许可证",
+    "issues": "反馈问题",
+    "userManual": "用户手册"
+  },
+  "manualPage": {
+    "title": "用户手册 — ResumeGPT",
+    "description": "ResumeGPT 的完整用户手册正在编写中。在此之前,GitHub 的 README 已涵盖安装、配置和各项功能。",
+    "heading": "用户手册即将上线。",
+    "body": "我们正在编写一份完整的分步指南,涵盖档案、职位机会、职位猎手、模板、生成与设置等每个界面。在完成之前,GitHub 的 README 已详细涵盖安装、配置和每一项功能。",
+    "readme": "阅读 README",
+    "backHome": "返回首页"
+  }
+}

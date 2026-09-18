@@ -1,0 +1,87 @@
+{
+  "htmlLang": "zh-TW",
+  "meta": {
+    "title": "ResumeGPT — 自架的履歷與求職信 AI 工作台",
+    "description": "ResumeGPT 是一個自架工作台,透過多智能體 LLM 流程、排程職缺搜尋與可重複使用的範本,為每個職缺量身打造履歷與求職信。",
+    "ogDescription": "檔案管理、職缺追蹤、排程職缺搜尋、可重複使用範本,以及多智能體 LLM 流程 —— 全部整合在一個自架應用程式中。"
+  },
+  "nav": {
+    "howItWorks": "運作方式",
+    "features": "功能特色",
+    "screenshots": "畫面截圖",
+    "userManual": "使用手冊",
+    "github": "GitHub"
+  },
+  "hero": {
+    "eyebrow": "開源 · 自架",
+    "titleHtml": "用你可以掌控的 <em>AI 智能體</em>,為每份履歷與求職信量身打造。",
+    "lead": "ResumeGPT 將檔案管理、職缺追蹤、排程職缺搜尋、可重複使用範本與多智能體 LLM 流程整合進同一個自架工作台 —— 讓每次投遞都拿到真正為它而寫的文件。",
+    "viewGithub": "在 GitHub 上查看",
+    "seeHow": "查看運作方式",
+    "cmd": "docker compose up -d",
+    "note": "拉取由 CI 預先建置的 <code>latest</code> 映像檔 —— 整套服務幾秒內即可啟動,不需要帳號、也不依賴雲端服務。"
+  },
+  "howItWorks": {
+    "eyebrow": "運作方式",
+    "title": "從已儲存的檔案到審閱完成的 PDF",
+    "subtitle": "四個步驟,其中大多數只需要做一次。",
+    "steps": {
+      "profile": { "title": "新增檔案", "desc": "一次儲存你的經歷、技能與目標職位 —— 之後每次投遞都能重複使用。" },
+      "job": { "title": "記錄職缺", "desc": "手動新增一個職缺,或批次匯入 LinkedIn / Indeed 的公開連結。" },
+      "template": { "title": "選擇範本", "desc": "使用 LaTeX 範本,或留空讓智能體自動設計版面。" },
+      "generate": { "title": "產生並審閱", "desc": "Writer、Designer 與 Visual Reviewer 智能體分別負責撰寫、轉譯與檢查 PDF。" }
+    }
+  },
+  "features": {
+    "eyebrow": "功能特色",
+    "title": "專注求職所需的一切",
+    "subtitle": "一個應用程式,取代一堆文件、提示詞與表格。",
+    "items": {
+      "profiles": { "title": "可重複使用的檔案", "desc": "一次儲存你的經歷 —— 支援從 TXT、Markdown、TeX、DOC、DOCX、PDF 或圖片匯入 —— 接著依需求產生任意數量的客製化文件。" },
+      "jobs": { "title": "追蹤與匯入職缺", "desc": "手動新增職缺,或一次匯入最多 50 個公開連結。超出快速擷取器範圍的頁面會由職缺匯入智能體處理。" },
+      "hunter": { "title": "自動職缺獵手", "desc": "讓智能體定期自動搜尋全網,找出符合你目標的新職缺 —— 自動去除重複。" },
+      "templates": { "title": "LaTeX 或 AI 設計版面", "desc": "帶入你自己的 LaTeX 範本,或讓文件設計智能體從零打造一份可直接列印的 HTML/CSS 版面。" },
+      "generation": { "title": "多智能體協同產生", "desc": "Writer、範本套用/文件設計與 Visual Reviewer 智能體協同運作 —— 最多可進行兩輪自動版面修正。" },
+      "llm": { "title": "自帶 LLM", "desc": "自由混搭 OpenAI、OpenAI 相容介面與本機 Ollama 服務商,並為每個智能體角色個別設定預設模型。" }
+    }
+  },
+  "screenshots": {
+    "eyebrow": "畫面截圖",
+    "title": "工作台內部一覽",
+    "subtitle": "點擊任一截圖即可放大檢視。",
+    "items": {
+      "overview": { "title": "工作台總覽", "desc": "檔案、職缺、範本、服務商與已產生的 PDF 一目了然。" },
+      "jobs": { "title": "職缺列表", "desc": "追蹤狀態與來源,為任一職缺一鍵產生履歷或求職信。" },
+      "hunter": { "title": "職缺獵手", "desc": "排程搜尋自動發掘新的職缺機會。" },
+      "templates": { "title": "範本庫", "desc": "內建的 Rezume LaTeX 範本與上傳的自訂範本並列顯示。" },
+      "generation": { "title": "即時產生", "desc": "產生過程中的分階段 PDF 預覽,這裡展示的是一份中文履歷。" },
+      "settings": { "title": "智能體模型路由", "desc": "為每個智能體角色獨立選擇服務商與模型。" }
+    }
+  },
+  "manualBand": {
+    "title": "需要完整的使用手冊?",
+    "subtitle": "涵蓋每個畫面與每項設定的完整指南正在編寫中。",
+    "cta": "查看使用手冊"
+  },
+  "cta": {
+    "eyebrow": "開始使用",
+    "title": "一行指令即可自架",
+    "subtitle": "Docker Compose 開箱即提供開發環境預設值、儲存磁碟區與資料庫遷移。",
+    "cta": "在 GitHub 上閱讀 README"
+  },
+  "footer": {
+    "license": "© <span id=\"year\"></span> ResumeGPT. 依 Apache License 2.0 授權釋出。",
+    "github": "GitHub",
+    "license_link": "授權條款",
+    "issues": "回報問題",
+    "userManual": "使用手冊"
+  },
+  "manualPage": {
+    "title": "使用手冊 — ResumeGPT",
+    "description": "ResumeGPT 的完整使用手冊正在編寫中。在此之前,GitHub 的 README 已涵蓋安裝、設定與各項功能。",
+    "heading": "使用手冊即將推出。",
+    "body": "我們正在撰寫一份完整的逐步指南,涵蓋檔案、職缺、職缺獵手、範本、產生與設定等每個畫面。在完成之前,GitHub 的 README 已詳細涵蓋安裝、設定與每項功能。",
+    "readme": "閱讀 README",
+    "backHome": "返回首頁"
+  }
+}
