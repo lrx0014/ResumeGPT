@@ -54,7 +54,7 @@
       "jobs": { "title": "职位机会", "desc": "跟踪状态与来源,为任意职位一键生成简历或求职信。" },
       "hunter": { "title": "职位猎手", "desc": "定时搜索自动发现新的职位机会。" },
       "templates": { "title": "模板库", "desc": "内置的 Rezume LaTeX 模板与上传的自定义模板并列展示。" },
-      "generation": { "title": "实时生成", "desc": "生成过程中的分阶段 PDF 预览,此处展示的是一份中文简历。" },
+      "generation": { "title": "实时生成", "desc": "生成过程中的分阶段 PDF 预览,此处展示的是一份日文简历。" },
       "settings": { "title": "智能体模型路由", "desc": "为每个智能体角色独立选择服务商和模型。" }
     }
   },

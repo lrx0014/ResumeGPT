@@ -54,7 +54,7 @@
       "jobs": { "title": "職缺列表", "desc": "追蹤狀態與來源,為任一職缺一鍵產生履歷或求職信。" },
       "hunter": { "title": "職缺獵手", "desc": "排程搜尋自動發掘新的職缺機會。" },
       "templates": { "title": "範本庫", "desc": "內建的 Rezume LaTeX 範本與上傳的自訂範本並列顯示。" },
-      "generation": { "title": "即時產生", "desc": "產生過程中的分階段 PDF 預覽,這裡展示的是一份中文履歷。" },
+      "generation": { "title": "即時產生", "desc": "產生過程中的分階段 PDF 預覽,這裡展示的是一份日文履歷。" },
       "settings": { "title": "智能體模型路由", "desc": "為每個智能體角色獨立選擇服務商與模型。" }
     }
   },
