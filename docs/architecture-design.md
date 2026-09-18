@@ -10,7 +10,7 @@ ResumeGPT is a self-hosted web application built around a Go modular monolith an
 flowchart LR
     B[Vue web application] -->|REST /api/v1| A[Go API]
     A --> P[(PostgreSQL)]
-    A --> C[(Redis)]
+    A -->|Provider model cache| C[(Redis)]
     A --> S[(S3 / MinIO)]
     W[Go background worker] --> P
     W --> S
@@ -38,7 +38,7 @@ The default Docker Compose deployment includes the web application, API, backgro
 - Task Monitor
 - Settings
 
-The frontend uses Vue Router for navigation, Pinia and Vue state for client state, and polling for background workflow progress. List endpoints return compact summaries and load large profile, opportunity, and generation content only from detail endpoints. List pages currently perform their search, filtering, and pagination in the browser, except the Task Monitor, which uses server-side filtering and pagination.
+The frontend uses Vue Router for navigation, Pinia and Vue state for client state, and polling for background workflow progress. Collection endpoints return compact read models rather than complete domain records. Large profile, opportunity, and generation fields are fetched from detail endpoints only when the user opens an item. List pages currently perform their search, filtering, and pagination in the browser, except the Task Monitor, which uses server-side filtering and pagination.
 
 ### 2.2 Go API
 
@@ -86,13 +86,21 @@ The container runs read-only with a temporary filesystem. The HTML renderer bloc
 
 The service blocks private and non-global network destinations, non-HTTPS URLs, non-standard ports, downloads, service workers, images, media, and fonts. It does not receive database credentials or LLM API tokens.
 
-### 2.6 PostgreSQL, Redis, and object storage
+### 2.6 PostgreSQL
 
 PostgreSQL stores domain records, encrypted LLM provider metadata, durable jobs, task events, audit records, outbox records, and generation timelines. Row-level security and application-level workspace filters isolate workspace data.
 
-S3-compatible object storage contains uploaded documents, profile avatars, template sources, cached previews, intermediate generation PDFs, and final artifacts. MinIO supplies this interface in the local Compose stack.
+Repository list queries use dedicated projections so PostgreSQL does not read large text bodies or generation snapshots that the browser will not display. Detail queries continue to return the complete record. This separation reduces database I/O, JSON encoding work, response size, and frontend parsing time without making mutable business records stale through a cache.
+
+### 2.7 Redis
 
 Redis stores expiring results from external LLM provider model-list APIs. Cache keys include the workspace, provider record, and provider update timestamp; the default TTL is ten minutes. Explicit provider tests bypass and refresh the cache.
+
+Redis is enabled when `REDIS_URL` is set. The API verifies the configured Redis connection during startup. A cache read or write failure during a request does not make model discovery unusable: the Settings service falls back to the provider API, and cache writes are best effort. Redis never stores API tokens or complete provider records.
+
+### 2.8 Object storage
+
+S3-compatible object storage contains uploaded documents, profile avatars, template sources, cached previews, intermediate generation PDFs, and final artifacts. MinIO supplies this interface in the local Compose stack.
 
 ## 3. Backend Structure
 
@@ -147,6 +155,48 @@ Development authentication maps requests to the seeded `ws_personal_dev` workspa
 ### 4.2 LLM credentials
 
 LLM provider records contain provider type, local or cloud execution mode, Base URL, and encrypted API-token ciphertext. AES-GCM encryption uses `SETTINGS_ENCRYPTION_KEY`. API responses expose only whether a token exists; plaintext tokens are decrypted only when a backend Agent needs the provider.
+
+### 4.3 Collection read models
+
+Collection and detail representations intentionally have different payload sizes:
+
+| Collection | Summary behavior | Loaded on demand |
+|---|---|---|
+| Profiles | Metadata, a bounded content preview, and `hasContent` | Complete profile text and avatar metadata |
+| Job Opportunities | Card metadata and `hasDescription` | Complete job description and editable fields |
+| Templates | Metadata and preparation state; source content is omitted | Extracted source, preview, and download information |
+| Generations | Inputs by name, state, stage, selected models, timestamps, and `hasWarning` | Frozen snapshots, drafts, rendered sources, reviews, steps, and artifacts |
+
+The boolean presence fields let the frontend enable actions and display readiness without transferring the corresponding large body. Opening an opportunity preview, editor, profile editor, template view, or generation detail triggers its specific detail request. Updating an opportunity status uses a dedicated status endpoint so a list interaction does not first load and then resubmit the full job description.
+
+These collection APIs currently return all compact summaries for client-side search, filtering, and pagination. Server-side pagination remains a future scaling step for the general product lists; the Task Monitor already implements it.
+
+### 4.4 External-read caching
+
+Provider model discovery is read-heavy, relatively slow, and changes infrequently, so it uses a cache-aside flow:
+
+```mermaid
+sequenceDiagram
+    participant UI as Web application
+    participant API as Settings API
+    participant Cache as Redis
+    participant Provider as LLM provider
+
+    UI->>API: POST provider /test
+    API->>Cache: Read versioned model-list key
+    alt Cache hit
+        Cache-->>API: Model names
+    else Cache miss or read failure
+        API->>Provider: GET /models or GET /api/tags
+        Provider-->>API: Model names
+        API->>Cache: Store with TTL (best effort)
+    end
+    API-->>UI: Connection status and models
+```
+
+The key contains the workspace ID, provider ID, and provider `updated_at` value. Editing a provider therefore creates a new cache namespace without requiring a broad delete. Normal model-selector requests may use the cached value. An explicit **Test provider** action sends `refresh=true`, bypasses the cached read, verifies the upstream provider, and replaces the cached value after success. Failed provider responses are not cached.
+
+Mutable application collections are not stored in Redis. Their latency is addressed with compact SQL projections and detail-on-demand requests, which preserve immediate consistency after edits and deletes.
 
 ## 5. Durable Background Work
 
@@ -288,6 +338,7 @@ Agents receive role-specific prompts and least-privilege tools. Tool loops, outp
 - Inbox records prevent duplicate asynchronous side effects.
 - Transactional outbox records are dispatched with stable event IDs and retry backoff.
 - Core mutations persist audit events.
+- External provider model discovery uses a bounded Redis TTL and falls back to the upstream provider when an in-request cache operation fails.
 - API and worker logs use structured JSON.
 - OpenTelemetry instruments HTTP requests and propagates W3C trace context. Spans are exported when `OTEL_EXPORTER_OTLP_ENDPOINT` is configured.
 - Backup and restore-check scripts operate on the local PostgreSQL deployment.
@@ -302,7 +353,9 @@ The supported complete local deployment is:
 docker compose up -d --build
 ```
 
-Compose supplies PostgreSQL and S3 persistence, Redis caching, development authentication, migrations, health checks, and internal service URLs. The browser application is available at `http://localhost:5173`.
+Compose supplies PostgreSQL and S3 persistence, Redis caching, development authentication, migrations, health checks, and internal service URLs. The API waits for healthy PostgreSQL, Redis, and migration services before starting. The browser application is available at `http://localhost:5173`.
+
+The Compose API uses `redis://redis:6379/0`. `MODEL_CACHE_TTL` controls the model-discovery lifetime and defaults to `10m`; `REDIS_PORT` controls optional host access to Redis. PostgreSQL, Redis, and MinIO each use a named volume.
 
 ### 10.2 Host development
 
@@ -319,5 +372,6 @@ The API can use in-memory repositories and storage by setting `PERSISTENCE_MODE=
 - Generation currently applies ready LaTeX templates. Word templates can be uploaded, inspected, and previewed, but are not used as generation-time layout sources.
 - Visual review depends on the selected model's image capability and degrades to a warning when unsupported.
 - Job crawling covers public content only and does not bypass access controls.
-- General list views use client-side pagination; the Task Monitor uses server-side pagination.
+- General list views use compact collection read models with client-side pagination; the Task Monitor uses server-side pagination.
+- Redis currently caches external provider model lists only; it is not a general domain-record or session cache.
 - Generation progress is polled by the browser rather than streamed.
