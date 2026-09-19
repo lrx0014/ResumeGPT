@@ -20,8 +20,27 @@ type Counts struct {
 	Attention int `json:"attention"`
 }
 
+// Filter drives Search: server-side pagination, text search (matched against
+// title, company, location, city, country), and exact-match status/origin
+// filters ("" means no filter on that field).
+type Filter struct {
+	Search   string
+	Status   string
+	Origin   string
+	Page     int
+	PageSize int
+}
+
+type Page struct {
+	Items    []Job `json:"items"`
+	Total    int   `json:"total"`
+	Page     int   `json:"page"`
+	PageSize int   `json:"pageSize"`
+}
+
 type Repository interface {
 	List(ctx context.Context, workspaceID string) ([]Job, error)
+	Search(ctx context.Context, workspaceID string, filter Filter) (Page, error)
 	Get(ctx context.Context, workspaceID, jobID string) (Job, error)
 	Create(ctx context.Context, value Job) (Job, error)
 	Update(ctx context.Context, value Job) (Job, error)

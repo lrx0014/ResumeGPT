@@ -86,6 +86,12 @@ export type JobHunterInput = Pick<JobHunter, 'name' | 'roleQuery' | 'location' |
 export interface ListResponse<T> {
   items: T[]
 }
+export interface Page<T> {
+  items: T[]
+  total: number
+  page: number
+  pageSize: number
+}
 
 export type BackgroundTaskState = 'queued' | 'running' | 'retry_wait' | 'succeeded' | 'failed' | 'cancelled'
 export interface BackgroundTaskEvent {

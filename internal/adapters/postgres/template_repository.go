@@ -45,6 +45,41 @@ func (r *TemplateRepository) List(ctx context.Context, workspaceID string) ([]re
 	return items, err
 }
 
+func (r *TemplateRepository) Search(ctx context.Context, workspaceID, search, kind string, limit, offset int) ([]resumetemplate.Template, int, error) {
+	items := make([]resumetemplate.Template, 0)
+	total := 0
+	err := withWorkspaceTx(ctx, r.pool, workspaceID, func(tx pgx.Tx) error {
+		pattern := "%" + search + "%"
+		if err := tx.QueryRow(ctx, `
+			SELECT COUNT(*) FROM templates WHERE workspace_id=$1
+				AND ($2='' OR name ILIKE $2 OR description ILIKE $2 OR source_name ILIKE $2 OR format ILIKE $2)
+				AND ($3='' OR kind=$3)`,
+			workspaceID, pattern, kind).Scan(&total); err != nil {
+			return fmt.Errorf("count templates: %w", err)
+		}
+		rows, err := tx.Query(ctx, `SELECT id,workspace_id,name,kind,format,description,source_name,entry_file,declared_media_type,object_id,
+            COALESCE(preview_object_id,''),'',state,COALESCE(job_id,''),COALESCE(error_code,''),COALESCE(error_message,''),created_at,updated_at
+            FROM templates WHERE workspace_id=$1
+				AND ($2='' OR name ILIKE $2 OR description ILIKE $2 OR source_name ILIKE $2 OR format ILIKE $2)
+				AND ($3='' OR kind=$3)
+            ORDER BY created_at DESC,id
+            LIMIT $4 OFFSET $5`, workspaceID, pattern, kind, limit, offset)
+		if err != nil {
+			return fmt.Errorf("query templates: %w", err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var item resumetemplate.Template
+			if err := scanTemplate(rows, &item); err != nil {
+				return err
+			}
+			items = append(items, item)
+		}
+		return rows.Err()
+	})
+	return items, total, err
+}
+
 func (r *TemplateRepository) Count(ctx context.Context, workspaceID string) (resumetemplate.Counts, error) {
 	var counts resumetemplate.Counts
 	err := withWorkspaceTx(ctx, r.pool, workspaceID, func(tx pgx.Tx) error {

@@ -88,8 +88,28 @@ type Counts struct {
 	Custom int `json:"custom"`
 }
 
+// Filter drives Search: server-side pagination, text search (matched against
+// name, description, source name, format), and an exact-match kind filter.
+type Filter struct {
+	Search   string
+	Kind     string
+	Page     int
+	PageSize int
+}
+
+type Page struct {
+	Items    []Template `json:"items"`
+	Total    int        `json:"total"`
+	Page     int        `json:"page"`
+	PageSize int        `json:"pageSize"`
+}
+
 type Repository interface {
 	List(context.Context, string) ([]Template, error)
+	// Search returns DB-stored templates only (never the synthetic built-in
+	// Rezume template), sliced by the given raw limit/offset — the Service
+	// splices the built-in entry in and adjusts this window accordingly.
+	Search(ctx context.Context, workspaceID, search, kind string, limit, offset int) ([]Template, int, error)
 	Get(context.Context, string, string) (Template, error)
 	Stage(context.Context, Template) error
 	Restage(context.Context, Template) error

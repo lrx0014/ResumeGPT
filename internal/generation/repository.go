@@ -11,9 +11,27 @@ type Counts struct {
 	Active int `json:"active"`
 }
 
+// Filter drives Search: server-side pagination, text search (matched against
+// the linked profile name, opportunity title/company, template name, writer
+// model, document type, and stage), and an exact-match state filter.
+type Filter struct {
+	Search   string
+	State    string
+	Page     int
+	PageSize int
+}
+
+type Page struct {
+	Items    []Run `json:"items"`
+	Total    int   `json:"total"`
+	Page     int   `json:"page"`
+	PageSize int   `json:"pageSize"`
+}
+
 type Repository interface {
 	Create(context.Context, Run, workqueue.Job) (Run, error)
 	List(context.Context, string) ([]Run, error)
+	Search(context.Context, string, Filter) (Page, error)
 	Count(context.Context, string) (Counts, error)
 	Get(context.Context, string, string) (Run, error)
 	Delete(context.Context, string, string) error

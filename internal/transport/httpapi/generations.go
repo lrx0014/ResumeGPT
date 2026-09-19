@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 
 	"github.com/lrx0014/ResumeGPT/internal/generation"
 	"github.com/lrx0014/ResumeGPT/internal/identity"
@@ -92,12 +93,26 @@ func (a *API) reviseGeneration(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func (a *API) listGenerations(w http.ResponseWriter, r *http.Request) {
-	items, err := a.generations.List(r.Context(), workspaceID(r))
+	if !r.URL.Query().Has("page") {
+		items, err := a.generations.List(r.Context(), workspaceID(r))
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "generations_list_failed", "Could not load generations.")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": items})
+		return
+	}
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	pageSize, _ := strconv.Atoi(r.URL.Query().Get("pageSize"))
+	result, err := a.generations.Search(r.Context(), workspaceID(r), generation.Filter{
+		Search: r.URL.Query().Get("search"), State: r.URL.Query().Get("state"), Page: page, PageSize: pageSize,
+	})
 	if err != nil {
+		a.logger.Error("search generations", "error", err)
 		writeError(w, http.StatusInternalServerError, "generations_list_failed", "Could not load generations.")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+	writeJSON(w, http.StatusOK, result)
 }
 func (a *API) createGeneration(w http.ResponseWriter, r *http.Request) {
 	var input generation.CreateInput

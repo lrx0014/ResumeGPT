@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
@@ -10,11 +10,13 @@ import ListFilters from '../components/ListFilters.vue'
 import ListPagination from '../components/ListPagination.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { api } from '../lib/api'
-import { usePagedList } from '../lib/pagination'
 import { toast } from '../lib/toast'
 import type { Profile } from '../lib/types'
 
 const profiles = ref<Profile[]>([])
+const total = ref(0)
+const page = ref(1)
+const pageSize = ref(8)
 const router = useRouter()
 const loading = ref(true)
 const saving = ref(false)
@@ -24,24 +26,36 @@ const error = ref('')
 const showForm = ref(false)
 const search = ref('')
 const form = reactive({ name: '', targetRole: '', defaultLanguage: 'English', content: '', avatarObjectId: '' })
-
-const filteredProfiles = computed(() => {
-  const query = search.value.trim().toLocaleLowerCase()
-  return profiles.value.filter(profile => !query || [profile.name, profile.targetRole, profile.contentPreview].some(value => value?.toLocaleLowerCase().includes(query)))
-})
-const { page, pageSize, visible: visibleProfiles } = usePagedList(filteredProfiles, [search])
+let searchTimer: number | undefined
 
 async function load() {
   loading.value = true
   error.value = ''
   try {
-    profiles.value = (await api.listProfiles()).items
+    const result = await api.searchProfiles({ search: search.value.trim(), page: page.value, pageSize: pageSize.value })
+    if (!result.items.length && result.total > 0 && page.value > 1) {
+      page.value = Math.max(1, Math.ceil(result.total / pageSize.value))
+      return load()
+    }
+    profiles.value = result.items
+    total.value = result.total
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : t('profiles.errors.load')
   } finally {
     loading.value = false
   }
 }
+
+function resetPageAndLoad() {
+  if (page.value !== 1) page.value = 1
+  else void load()
+}
+watch(pageSize, resetPageAndLoad)
+watch(page, () => void load())
+watch(search, () => {
+  if (searchTimer) window.clearTimeout(searchTimer)
+  searchTimer = window.setTimeout(resetPageAndLoad, 800)
+})
 
 async function createProfile() {
   saving.value = true
@@ -64,9 +78,9 @@ async function removeProfile() {
   error.value = ''
   try {
     await api.deleteProfile(profile.id)
-    profiles.value = profiles.value.filter(candidate => candidate.id !== profile.id)
     pendingDelete.value = null
     toast.success(t('profiles.toasts.deleted'))
+    await load()
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : t('profiles.errors.delete')
   } finally {
@@ -75,6 +89,7 @@ async function removeProfile() {
 }
 
 onMounted(load)
+onBeforeUnmount(() => { if (searchTimer) window.clearTimeout(searchTimer) })
 </script>
 
 <template>
@@ -97,21 +112,21 @@ onMounted(load)
 
     <p v-if="error" class="notice error">{{ error }}</p>
     <div v-if="loading" class="empty-state">{{ t('profiles.loading') }}</div>
-    <template v-else-if="profiles.length">
-      <ListFilters v-model:search="search" :total="filteredProfiles.length" :search-placeholder="t('profiles.searchPlaceholder')" />
-    <TransitionGroup v-if="visibleProfiles.length" name="card-list" tag="div" class="card-grid">
-      <article v-for="profile in visibleProfiles" :key="profile.id" class="entity-card">
+    <div v-else-if="!total && !search" class="empty-state">
+      <span class="empty-icon">◎</span><h2>{{ t('profiles.emptyState.title') }}</h2><p>{{ t('profiles.emptyState.message') }}</p>
+    </div>
+    <template v-else>
+      <ListFilters v-model:search="search" :total="total" :search-placeholder="t('profiles.searchPlaceholder')" />
+    <TransitionGroup v-if="profiles.length" name="card-list" tag="div" class="card-grid">
+      <article v-for="profile in profiles" :key="profile.id" class="entity-card">
         <span class="entity-icon">◎</span>
         <div><p class="eyebrow">{{ profile.targetRole || t('profiles.generalProfile') }}</p><h2>{{ profile.name }}</h2><p>{{ profile.hasContent ? `${profile.contentPreview || ''}${(profile.contentPreview?.length || 0) >= 140 ? '…' : ''}` : t('profiles.contentPlaceholder') }}</p></div>
         <footer><span>{{ profile.defaultLanguage }}</span><div class="card-actions"><button class="text-button danger-text" type="button" @click="pendingDelete = profile">{{ t('common.delete') }}</button><RouterLink class="text-button" :to="`/profiles/${profile.id}`">{{ t('profiles.openProfile') }}</RouterLink></div></footer>
       </article>
     </TransitionGroup>
     <div v-else class="empty-state compact"><h2>{{ t('profiles.emptyFiltered.title') }}</h2><p>{{ t('profiles.emptyFiltered.message') }}</p></div>
-    <ListPagination v-if="filteredProfiles.length" v-model:page="page" v-model:page-size="pageSize" :total="filteredProfiles.length" />
+    <ListPagination v-if="total" v-model:page="page" v-model:page-size="pageSize" :total="total" />
     </template>
-    <div v-else class="empty-state">
-      <span class="empty-icon">◎</span><h2>{{ t('profiles.emptyState.title') }}</h2><p>{{ t('profiles.emptyState.message') }}</p>
-    </div>
     <ConfirmDialog :open="Boolean(pendingDelete)" :title="t('profiles.deleteConfirmTitle')" :message="t('profiles.deleteConfirmMessage', { name: pendingDelete?.name ?? '' })" :busy="deletingId === pendingDelete?.id" @cancel="pendingDelete = null" @confirm="removeProfile" />
   </div>
 </template>

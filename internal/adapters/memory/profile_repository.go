@@ -2,6 +2,8 @@ package memory
 
 import (
 	"context"
+	"sort"
+	"strings"
 	"sync"
 
 	"github.com/lrx0014/ResumeGPT/internal/profile"
@@ -31,6 +33,32 @@ func (r *ProfileRepository) List(_ context.Context, workspaceID string) ([]profi
 			item.Content = ""
 			result = append(result, item)
 		}
+	}
+	return result, nil
+}
+
+func (r *ProfileRepository) Search(_ context.Context, workspaceID string, filter profile.Filter) (profile.Page, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	query := strings.ToLower(filter.Search)
+	matches := make([]profile.Profile, 0)
+	for _, item := range r.items {
+		if item.WorkspaceID != workspaceID {
+			continue
+		}
+		if query == "" || strings.Contains(strings.ToLower(item.Name), query) || strings.Contains(strings.ToLower(item.TargetRole), query) || strings.Contains(strings.ToLower(item.Content), query) {
+			matches = append(matches, item)
+		}
+	}
+	sort.Slice(matches, func(i, j int) bool { return matches[i].CreatedAt.After(matches[j].CreatedAt) })
+	result := profile.Page{Items: make([]profile.Profile, 0), Total: len(matches), Page: filter.Page, PageSize: filter.PageSize}
+	start := (filter.Page - 1) * filter.PageSize
+	if start < len(matches) {
+		end := start + filter.PageSize
+		if end > len(matches) {
+			end = len(matches)
+		}
+		result.Items = append(result.Items, matches[start:end]...)
 	}
 	return result, nil
 }

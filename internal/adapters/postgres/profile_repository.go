@@ -44,6 +44,39 @@ func (r *ProfileRepository) List(ctx context.Context, workspaceID string) ([]pro
 	return items, err
 }
 
+func (r *ProfileRepository) Search(ctx context.Context, workspaceID string, filter profile.Filter) (profile.Page, error) {
+	result := profile.Page{Items: make([]profile.Profile, 0), Page: filter.Page, PageSize: filter.PageSize}
+	err := withWorkspaceTx(ctx, r.pool, workspaceID, func(tx pgx.Tx) error {
+		search := "%" + filter.Search + "%"
+		if err := tx.QueryRow(ctx, `
+			SELECT COUNT(*) FROM profiles WHERE workspace_id=$1
+				AND ($2='' OR name ILIKE $2 OR target_role ILIKE $2 OR content ILIKE $2)`,
+			workspaceID, search).Scan(&result.Total); err != nil {
+			return fmt.Errorf("count profiles: %w", err)
+		}
+		rows, err := tx.Query(ctx, `
+			SELECT id, workspace_id, name, target_role, default_language, '', COALESCE(avatar_object_id, ''), created_at, updated_at,
+				LEFT(content, 140), LENGTH(BTRIM(content)) > 0
+			FROM profiles
+			WHERE workspace_id = $1 AND ($2='' OR name ILIKE $2 OR target_role ILIKE $2 OR content ILIKE $2)
+			ORDER BY created_at DESC, id
+			LIMIT $3 OFFSET $4`, workspaceID, search, filter.PageSize, (filter.Page-1)*filter.PageSize)
+		if err != nil {
+			return fmt.Errorf("query profiles: %w", err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var item profile.Profile
+			if err := rows.Scan(&item.ID, &item.WorkspaceID, &item.Name, &item.TargetRole, &item.DefaultLanguage, &item.Content, &item.AvatarObjectID, &item.CreatedAt, &item.UpdatedAt, &item.ContentPreview, &item.HasContent); err != nil {
+				return fmt.Errorf("scan profile: %w", err)
+			}
+			result.Items = append(result.Items, item)
+		}
+		return rows.Err()
+	})
+	return result, err
+}
+
 func (r *ProfileRepository) Count(ctx context.Context, workspaceID string) (profile.Counts, error) {
 	var counts profile.Counts
 	err := withWorkspaceTx(ctx, r.pool, workspaceID, func(tx pgx.Tx) error {

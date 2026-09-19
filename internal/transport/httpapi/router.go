@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -138,12 +139,25 @@ func (a *API) capabilities(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (a *API) listProfiles(w http.ResponseWriter, r *http.Request) {
-	items, err := a.profiles.List(r.Context(), workspaceID(r))
+	if !r.URL.Query().Has("page") {
+		items, err := a.profiles.List(r.Context(), workspaceID(r))
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "profiles_list_failed", "Could not load profiles.")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": items})
+		return
+	}
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	pageSize, _ := strconv.Atoi(r.URL.Query().Get("pageSize"))
+	result, err := a.profiles.Search(r.Context(), workspaceID(r), profile.Filter{
+		Search: r.URL.Query().Get("search"), Page: page, PageSize: pageSize,
+	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "profiles_list_failed", "Could not load profiles.")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (a *API) getProfile(w http.ResponseWriter, r *http.Request) {
@@ -211,12 +225,26 @@ func (a *API) deleteProfile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) listJobs(w http.ResponseWriter, r *http.Request) {
-	items, err := a.jobs.List(r.Context(), workspaceID(r))
+	if !r.URL.Query().Has("page") {
+		items, err := a.jobs.List(r.Context(), workspaceID(r))
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "jobs_list_failed", "Could not load jobs.")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": items})
+		return
+	}
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	pageSize, _ := strconv.Atoi(r.URL.Query().Get("pageSize"))
+	result, err := a.jobs.Search(r.Context(), workspaceID(r), job.Filter{
+		Search: r.URL.Query().Get("search"), Status: r.URL.Query().Get("status"), Origin: r.URL.Query().Get("origin"),
+		Page: page, PageSize: pageSize,
+	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "jobs_list_failed", "Could not load jobs.")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (a *API) getJob(w http.ResponseWriter, r *http.Request) {

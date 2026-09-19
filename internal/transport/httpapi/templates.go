@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/lrx0014/ResumeGPT/internal/identity"
 	resumetemplate "github.com/lrx0014/ResumeGPT/internal/template"
@@ -48,13 +49,27 @@ func (a *API) replaceTemplateSource(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) listTemplates(w http.ResponseWriter, r *http.Request) {
-	items, err := a.templates.List(r.Context(), workspaceID(r))
+	if !r.URL.Query().Has("page") {
+		items, err := a.templates.List(r.Context(), workspaceID(r))
+		if err != nil {
+			a.logger.Error("list templates", "error", err)
+			writeError(w, http.StatusInternalServerError, "templates_list_failed", "Could not load templates.")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": items})
+		return
+	}
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	pageSize, _ := strconv.Atoi(r.URL.Query().Get("pageSize"))
+	result, err := a.templates.Search(r.Context(), workspaceID(r), resumetemplate.Filter{
+		Search: r.URL.Query().Get("search"), Kind: r.URL.Query().Get("kind"), Page: page, PageSize: pageSize,
+	})
 	if err != nil {
-		a.logger.Error("list templates", "error", err)
+		a.logger.Error("search templates", "error", err)
 		writeError(w, http.StatusInternalServerError, "templates_list_failed", "Could not load templates.")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+	writeJSON(w, http.StatusOK, result)
 }
 func (a *API) getTemplate(w http.ResponseWriter, r *http.Request) {
 	item, err := a.templates.Get(r.Context(), workspaceID(r), r.PathValue("templateID"))

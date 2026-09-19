@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/lrx0014/ResumeGPT/internal/platform/workqueue"
@@ -30,6 +31,39 @@ func (r *TemplateRepository) List(_ context.Context, workspaceID string) ([]resu
 	sort.Slice(items, func(i, j int) bool { return items[i].CreatedAt.After(items[j].CreatedAt) })
 	return items, nil
 }
+func (r *TemplateRepository) Search(_ context.Context, workspaceID, search, kind string, limit, offset int) ([]resumetemplate.Template, int, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	query := strings.ToLower(search)
+	matches := make([]resumetemplate.Template, 0)
+	for _, item := range r.items {
+		if item.WorkspaceID != workspaceID {
+			continue
+		}
+		if kind != "" && item.Kind != kind {
+			continue
+		}
+		if query != "" && !containsAny(query, item.Name, item.Description, item.SourceName, item.Format) {
+			continue
+		}
+		item.Content = ""
+		matches = append(matches, item)
+	}
+	sort.Slice(matches, func(i, j int) bool { return matches[i].CreatedAt.After(matches[j].CreatedAt) })
+	total := len(matches)
+	items := make([]resumetemplate.Template, 0)
+	if offset < len(matches) {
+		end := offset + limit
+		if end > len(matches) {
+			end = len(matches)
+		}
+		if end > offset {
+			items = append(items, matches[offset:end]...)
+		}
+	}
+	return items, total, nil
+}
+
 func (r *TemplateRepository) Count(_ context.Context, workspaceID string) (resumetemplate.Counts, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

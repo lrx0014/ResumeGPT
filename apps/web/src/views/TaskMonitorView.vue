@@ -88,7 +88,7 @@ watch([stateFilter, kindFilter, pageSize], resetPageAndLoad)
 watch(page, () => { void load() })
 watch(search, () => {
   if (searchTimer) window.clearTimeout(searchTimer)
-  searchTimer = window.setTimeout(resetPageAndLoad, 250)
+  searchTimer = window.setTimeout(resetPageAndLoad, 800)
 })
 
 onMounted(async () => {

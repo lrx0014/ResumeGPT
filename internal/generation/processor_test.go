@@ -31,7 +31,10 @@ type processorRepository struct {
 func (r *processorRepository) Create(context.Context, Run, workqueue.Job) (Run, error) {
 	panic("not used")
 }
-func (r *processorRepository) List(context.Context, string) ([]Run, error)        { panic("not used") }
+func (r *processorRepository) List(context.Context, string) ([]Run, error) { panic("not used") }
+func (r *processorRepository) Search(context.Context, string, Filter) (Page, error) {
+	panic("not used")
+}
 func (r *processorRepository) Count(context.Context, string) (Counts, error)      { panic("not used") }
 func (r *processorRepository) Get(context.Context, string, string) (Run, error)   { return r.run, nil }
 func (r *processorRepository) Delete(context.Context, string, string) error       { panic("not used") }

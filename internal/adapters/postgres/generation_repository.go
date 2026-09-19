@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -12,6 +13,7 @@ import (
 	"github.com/lrx0014/ResumeGPT/internal/generation"
 	"github.com/lrx0014/ResumeGPT/internal/platform/workqueue"
 	"github.com/lrx0014/ResumeGPT/internal/shared/id"
+	resumetemplate "github.com/lrx0014/ResumeGPT/internal/template"
 )
 
 const generationColumns = `id,workspace_id,profile_id,opportunity_id,COALESCE(template_id,''),document_type,language,page_target,custom_instructions,pipeline_mode,writer,renderer,reviewer,state,stage,COALESCE(draft,''),COALESCE(rendered_source,''),COALESCE(review,''),repair_count,COALESCE(artifact_object_id,''),COALESCE(error_code,''),COALESCE(error_message,''),profile_snapshot,opportunity_snapshot,template_snapshot,created_at,updated_at`
@@ -61,6 +63,66 @@ func (r *GenerationRepository) List(ctx context.Context, workspaceID string) ([]
 	})
 	return items, err
 }
+
+// generationSearchMatch builds the joined-table search predicate. builtInParam
+// is the placeholder number for the built-in-template-matches boolean, which
+// differs between the count query (4 params) and the page query (6 params) —
+// every placeholder must appear in the query text or Postgres cannot infer
+// its type.
+func generationSearchMatch(builtInParam int) string {
+	return fmt.Sprintf(`
+		(p.name ILIKE $2 OR j.title ILIKE $2 OR j.company ILIKE $2 OR t.name ILIKE $2
+			OR gr.writer->>'model' ILIKE $2 OR gr.document_type ILIKE $2 OR gr.stage ILIKE $2
+			OR ($%d AND gr.template_id = '%s'))`, builtInParam, resumetemplate.DefaultResumeID)
+}
+
+func (r *GenerationRepository) Search(ctx context.Context, workspaceID string, filter generation.Filter) (generation.Page, error) {
+	result := generation.Page{Items: make([]generation.Run, 0), Page: filter.Page, PageSize: filter.PageSize}
+	err := withWorkspaceTx(ctx, r.pool, workspaceID, func(tx pgx.Tx) error {
+		pattern := "%" + filter.Search + "%"
+		builtInMatches := filter.Search == "" || strings.Contains("rezume", strings.ToLower(filter.Search))
+		if err := tx.QueryRow(ctx, `
+			SELECT COUNT(*) FROM generation_runs
+			WHERE workspace_id=$1 AND ($3='' OR state=$3)
+				AND ($2='' OR id IN (
+					SELECT gr.id FROM generation_runs gr
+					LEFT JOIN profiles p ON p.id=gr.profile_id
+					LEFT JOIN jobs j ON j.id=gr.opportunity_id
+					LEFT JOIN templates t ON t.id=gr.template_id
+					WHERE gr.workspace_id=$1 AND `+generationSearchMatch(4)+`
+				))`,
+			workspaceID, pattern, filter.State, builtInMatches).Scan(&result.Total); err != nil {
+			return fmt.Errorf("count generation runs: %w", err)
+		}
+		rows, err := tx.Query(ctx, `
+			SELECT `+generationSummaryColumns+` FROM generation_runs
+			WHERE workspace_id=$1 AND ($3='' OR state=$3)
+				AND ($2='' OR id IN (
+					SELECT gr.id FROM generation_runs gr
+					LEFT JOIN profiles p ON p.id=gr.profile_id
+					LEFT JOIN jobs j ON j.id=gr.opportunity_id
+					LEFT JOIN templates t ON t.id=gr.template_id
+					WHERE gr.workspace_id=$1 AND `+generationSearchMatch(6)+`
+				))
+			ORDER BY created_at DESC
+			LIMIT $4 OFFSET $5`,
+			workspaceID, pattern, filter.State, filter.PageSize, (filter.Page-1)*filter.PageSize, builtInMatches)
+		if err != nil {
+			return fmt.Errorf("query generation runs: %w", err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var item generation.Run
+			if err := scanGenerationSummary(rows, &item); err != nil {
+				return err
+			}
+			result.Items = append(result.Items, item)
+		}
+		return rows.Err()
+	})
+	return result, err
+}
+
 func (r *GenerationRepository) Count(ctx context.Context, workspaceID string) (generation.Counts, error) {
 	var counts generation.Counts
 	err := withWorkspaceTx(ctx, r.pool, workspaceID, func(tx pgx.Tx) error {

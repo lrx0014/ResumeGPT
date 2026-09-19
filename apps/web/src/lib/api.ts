@@ -1,4 +1,4 @@
-import type { AgentDefault, APIError, BackgroundTask, BackgroundTaskPage, Job, JobHunter, JobHunterInput, JobHunterReviewItem, JobImportInput, JobInput, ListResponse, Profile, DocumentUpload, SignedURL, StagedDocumentUpload, SettingsPreferences, LLMConnection, LLMConnectionInput, LLMConnectionTest, StagedTemplate, Template, TemplateKind, GenerationInput, GenerationRun, GenerationStep, WorkspaceOverview } from './types'
+import type { AgentDefault, APIError, BackgroundTask, BackgroundTaskPage, Job, JobHunter, JobHunterInput, JobHunterReviewItem, JobImportInput, JobInput, ListResponse, Page, Profile, DocumentUpload, SignedURL, StagedDocumentUpload, SettingsPreferences, LLMConnection, LLMConnectionInput, LLMConnectionTest, StagedTemplate, Template, TemplateKind, GenerationInput, GenerationRun, GenerationStep, WorkspaceOverview } from './types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
 
@@ -45,12 +45,28 @@ export const api = {
   createAvatarUpload: (profileId: string, contentType: string) => request<SignedURL>(`/v1/profiles/${encodeURIComponent(profileId)}/avatar-upload`, { method: 'POST', body: JSON.stringify({ contentType }) }),
   profileAvatar: (profileId: string) => request<SignedURL>(`/v1/profiles/${encodeURIComponent(profileId)}/avatar`),
   listProfiles: () => request<ListResponse<Profile>>('/v1/profiles'),
+  searchProfiles: (input: { search?: string; page: number; pageSize: number }) => {
+    const query = new URLSearchParams()
+    if (input.search) query.set('search', input.search)
+    query.set('page', String(input.page))
+    query.set('pageSize', String(input.pageSize))
+    return request<Page<Profile>>(`/v1/profiles?${query}`)
+  },
   createProfile: (input: Pick<Profile, 'name' | 'targetRole' | 'defaultLanguage' | 'content' | 'avatarObjectId'>) =>
     request<Profile>('/v1/profiles', { method: 'POST', body: JSON.stringify(input) }),
   updateProfile: (id: string, input: Pick<Profile, 'name' | 'targetRole' | 'defaultLanguage' | 'content' | 'avatarObjectId'>) =>
     request<Profile>(`/v1/profiles/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(input) }),
   deleteProfile: (id: string) => request<void>(`/v1/profiles/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   listJobs: () => request<ListResponse<Job>>('/v1/jobs'),
+  searchJobs: (input: { search?: string; status?: string; origin?: string; page: number; pageSize: number }) => {
+    const query = new URLSearchParams()
+    if (input.search) query.set('search', input.search)
+    if (input.status && input.status !== 'all') query.set('status', input.status)
+    if (input.origin && input.origin !== 'all') query.set('origin', input.origin)
+    query.set('page', String(input.page))
+    query.set('pageSize', String(input.pageSize))
+    return request<Page<Job>>(`/v1/jobs?${query}`)
+  },
   getJob: (id: string) => request<Job>(`/v1/jobs/${encodeURIComponent(id)}`),
   createJob: (input: JobInput) =>
     request<Job>('/v1/jobs', { method: 'POST', body: JSON.stringify(input) }),
@@ -83,6 +99,14 @@ export const api = {
   testLLMConnection: (id: string, refresh = false) =>
     request<LLMConnectionTest>(`/v1/settings/llm-connections/${encodeURIComponent(id)}/test${refresh ? '?refresh=true' : ''}`, { method: 'POST' }),
   listTemplates: () => request<ListResponse<Template>>('/v1/templates'),
+  searchTemplates: (input: { search?: string; kind?: string; page: number; pageSize: number }) => {
+    const query = new URLSearchParams()
+    if (input.search) query.set('search', input.search)
+    if (input.kind && input.kind !== 'all') query.set('kind', input.kind)
+    query.set('page', String(input.page))
+    query.set('pageSize', String(input.pageSize))
+    return request<Page<Template>>(`/v1/templates?${query}`)
+  },
   getTemplate: (id: string) => request<Template>(`/v1/templates/${encodeURIComponent(id)}`),
   stageTemplate: (input: { name: string; kind: TemplateKind; description: string; entryFile: string; file: File }) =>
     request<StagedTemplate>('/v1/templates/uploads', { method: 'POST', body: JSON.stringify({ name: input.name, kind: input.kind, description: input.description, sourceName: input.file.name, contentType: input.file.type || 'application/octet-stream', entryFile: input.entryFile }) }),
@@ -110,6 +134,14 @@ export const api = {
     return response.blob()
   },
   listGenerations: () => request<ListResponse<GenerationRun>>('/v1/generations'),
+  searchGenerations: (input: { search?: string; state?: string; page: number; pageSize: number }) => {
+    const query = new URLSearchParams()
+    if (input.search) query.set('search', input.search)
+    if (input.state && input.state !== 'all') query.set('state', input.state)
+    query.set('page', String(input.page))
+    query.set('pageSize', String(input.pageSize))
+    return request<Page<GenerationRun>>(`/v1/generations?${query}`)
+  },
   getGeneration: (id: string) => request<GenerationRun>(`/v1/generations/${encodeURIComponent(id)}`),
   createGeneration: (input: GenerationInput) => request<GenerationRun>('/v1/generations', { method: 'POST', body: JSON.stringify(input) }),
   reconfigureGeneration: (id: string, input: GenerationInput) => request<GenerationRun>(`/v1/generations/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(input) }),

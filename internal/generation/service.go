@@ -93,6 +93,26 @@ func validChoice(value ModelChoice) bool {
 func (s *Service) List(ctx context.Context, workspaceID string) ([]Run, error) {
 	return s.repository.List(ctx, workspaceID)
 }
+
+var validGenerationStates = map[string]bool{"queued": true, "running": true, "ready": true, "failed": true}
+
+func (s *Service) Search(ctx context.Context, workspaceID string, filter Filter) (Page, error) {
+	filter.Search = strings.TrimSpace(filter.Search)
+	if len(filter.Search) > 200 {
+		filter.Search = ""
+	}
+	if !validGenerationStates[filter.State] {
+		filter.State = ""
+	}
+	if filter.Page < 1 {
+		filter.Page = 1
+	}
+	if filter.PageSize < 1 || filter.PageSize > 100 {
+		filter.PageSize = 20
+	}
+	return s.repository.Search(ctx, workspaceID, filter)
+}
+
 func (s *Service) Count(ctx context.Context, workspaceID string) (Counts, error) {
 	return s.repository.Count(ctx, workspaceID)
 }

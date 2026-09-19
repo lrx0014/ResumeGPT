@@ -3,6 +3,8 @@ package memory
 import (
 	"context"
 	"encoding/json"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -109,6 +111,50 @@ func (r *JobRepository) List(_ context.Context, workspaceID string) ([]job.Job, 
 		}
 	}
 	return result, nil
+}
+
+func (r *JobRepository) Search(_ context.Context, workspaceID string, filter job.Filter) (job.Page, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	query := strings.ToLower(filter.Search)
+	matches := make([]job.Job, 0)
+	for _, item := range r.items {
+		if item.WorkspaceID != workspaceID {
+			continue
+		}
+		if filter.Status != "" && item.Status != filter.Status {
+			continue
+		}
+		if filter.Origin != "" && item.Origin != filter.Origin {
+			continue
+		}
+		if query != "" && !containsAny(query, item.Title, item.Company, item.Location, item.City, item.Country) {
+			continue
+		}
+		item.HasDescription = len(item.Description) > 0
+		item.Description = ""
+		matches = append(matches, item)
+	}
+	sort.Slice(matches, func(i, j int) bool { return matches[i].CreatedAt.After(matches[j].CreatedAt) })
+	result := job.Page{Items: make([]job.Job, 0), Total: len(matches), Page: filter.Page, PageSize: filter.PageSize}
+	start := (filter.Page - 1) * filter.PageSize
+	if start < len(matches) {
+		end := start + filter.PageSize
+		if end > len(matches) {
+			end = len(matches)
+		}
+		result.Items = append(result.Items, matches[start:end]...)
+	}
+	return result, nil
+}
+
+func containsAny(query string, values ...string) bool {
+	for _, value := range values {
+		if strings.Contains(strings.ToLower(value), query) {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *JobRepository) Count(_ context.Context, workspaceID string) (job.Counts, error) {

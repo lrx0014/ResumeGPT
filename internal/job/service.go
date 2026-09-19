@@ -41,6 +41,28 @@ func (s *Service) List(ctx context.Context, workspaceID string) ([]Job, error) {
 	return s.repository.List(ctx, workspaceID)
 }
 
+var validOrigins = map[string]bool{"manual": true, "url_import": true, "hunter": true}
+
+func (s *Service) Search(ctx context.Context, workspaceID string, filter Filter) (Page, error) {
+	filter.Search = strings.TrimSpace(filter.Search)
+	if len(filter.Search) > 200 {
+		filter.Search = ""
+	}
+	if !validStatuses[filter.Status] {
+		filter.Status = ""
+	}
+	if !validOrigins[filter.Origin] {
+		filter.Origin = ""
+	}
+	if filter.Page < 1 {
+		filter.Page = 1
+	}
+	if filter.PageSize < 1 || filter.PageSize > 100 {
+		filter.PageSize = 20
+	}
+	return s.repository.Search(ctx, workspaceID, filter)
+}
+
 func (s *Service) Count(ctx context.Context, workspaceID string) (Counts, error) {
 	return s.repository.Count(ctx, workspaceID)
 }

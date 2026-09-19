@@ -68,6 +68,71 @@ func (s *Service) Count(ctx context.Context, workspaceID string) (Counts, error)
 	return counts, nil
 }
 
+// builtInMatchesFilter reports whether the synthetic built-in Rezume template
+// (never stored in the repository) would match filter, using the same
+// search/kind semantics as the DB query.
+func builtInMatchesFilter(filter Filter) bool {
+	if filter.Kind != "" && filter.Kind != "resume" {
+		return false
+	}
+	if filter.Search == "" {
+		return true
+	}
+	query := strings.ToLower(filter.Search)
+	builtin := defaultResume("", false)
+	return strings.Contains(strings.ToLower(builtin.Name), query) ||
+		strings.Contains(strings.ToLower(builtin.Description), query) ||
+		strings.Contains(strings.ToLower(builtin.SourceName), query) ||
+		strings.Contains(strings.ToLower(builtin.AuthorName), query) ||
+		strings.Contains(strings.ToLower(builtin.Format), query)
+}
+
+// Search paginates and filters templates, splicing the synthetic built-in
+// Rezume template (always logically first) into the DB-backed page.
+func (s *Service) Search(ctx context.Context, workspaceID string, filter Filter) (Page, error) {
+	filter.Search = strings.TrimSpace(filter.Search)
+	if len(filter.Search) > 200 {
+		filter.Search = ""
+	}
+	if filter.Kind != "resume" && filter.Kind != "cover_letter" {
+		filter.Kind = ""
+	}
+	if filter.Page < 1 {
+		filter.Page = 1
+	}
+	if filter.PageSize < 1 || filter.PageSize > 100 {
+		filter.PageSize = 20
+	}
+
+	includeBuiltIn := builtInMatchesFilter(filter)
+	globalOffset := (filter.Page - 1) * filter.PageSize
+	dbOffset, dbLimit := globalOffset, filter.PageSize
+	prependBuiltIn := false
+	if includeBuiltIn {
+		if globalOffset == 0 {
+			prependBuiltIn = true
+			dbLimit--
+		} else {
+			dbOffset--
+		}
+	}
+
+	items, dbTotal, err := s.repository.Search(ctx, workspaceID, filter.Search, filter.Kind, dbLimit, dbOffset)
+	if err != nil {
+		return Page{}, err
+	}
+
+	result := Page{Items: make([]Template, 0, len(items)+1), Page: filter.Page, PageSize: filter.PageSize, Total: dbTotal}
+	if includeBuiltIn {
+		result.Total++
+	}
+	if prependBuiltIn {
+		result.Items = append(result.Items, defaultResume(workspaceID, false))
+	}
+	result.Items = append(result.Items, items...)
+	return result, nil
+}
+
 func (s *Service) Get(ctx context.Context, workspaceID, templateID string) (Template, error) {
 	if templateID == DefaultResumeID {
 		return defaultResume(workspaceID, true), nil

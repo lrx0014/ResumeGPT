@@ -15,11 +15,13 @@ import PageHeader from '../components/PageHeader.vue'
 import { api } from '../lib/api'
 import { jobStatuses, jobStatusLabel } from '../lib/jobStatus'
 import { useListSelection } from '../lib/listSelection'
-import { usePagedList } from '../lib/pagination'
 import { toast } from '../lib/toast'
 import type { AgentDefault, Job, JobInput, LLMConnection, TemplateKind } from '../lib/types'
 
 const jobs = ref<Job[]>([])
+const total = ref(0)
+const page = ref(1)
+const pageSize = ref(10)
 const route = useRoute()
 const loading = ref(true)
 const busy = ref(false)
@@ -56,17 +58,10 @@ let pollTimer: number | undefined
 
 const pending = computed(() => jobs.value.some(item => ['queued', 'fetching', 'analyzing'].includes(item.importState)))
 const statusOptions = jobStatuses
-const filteredJobs = computed(() => {
-  const query = search.value.trim().toLocaleLowerCase()
-  return jobs.value.filter(item => {
-    const matchesSearch = !query || [item.title, item.company, item.location, item.city, item.country].some(value => value?.toLocaleLowerCase().includes(query))
-    return matchesSearch && (statusFilter.value === 'all' || item.status === statusFilter.value) && (originFilter.value === 'all' || item.origin === originFilter.value)
-  })
-})
-const { page, pageSize, visible: visibleJobs } = usePagedList(filteredJobs, [search, statusFilter, originFilter], 10)
-const selectableFilteredJobs = computed(() => filteredJobs.value.filter(canGenerate))
-const allFilteredSelected = computed(() => Boolean(selectableFilteredJobs.value.length) && selectableFilteredJobs.value.every(item => selection.isSelected(item.id)))
+const selectablePageJobs = computed(() => jobs.value.filter(canGenerate))
+const allPageSelected = computed(() => Boolean(selectablePageJobs.value.length) && selectablePageJobs.value.every(item => selection.isSelected(item.id)))
 watch(() => jobs.value.map(item => item.id).join(','), () => selection.retain(jobs.value.filter(canGenerate).map(item => item.id)))
+let searchTimer: number | undefined
 
 function canGenerate(item: Job) {
   return Boolean(item.hasDescription || item.description?.trim()) && ['manual', 'ready'].includes(item.importState)
@@ -111,8 +106,8 @@ function openSelectedGeneration(documentType: TemplateKind) {
   openGeneration(jobs.value.filter(item => selection.isSelected(item.id)), documentType)
 }
 
-function selectAllFiltered() {
-  selection.toggleMany(selectableFilteredJobs.value.map(item => item.id), true)
+function selectAllOnPage() {
+  selection.toggleMany(selectablePageJobs.value.map(item => item.id), true)
 }
 
 function handleGenerationQueued(result: { createdOpportunityIds: string[]; failedOpportunityIds: string[] }) {
@@ -127,7 +122,13 @@ function handleGenerationQueued(result: { createdOpportunityIds: string[]; faile
 async function load(showLoading = true) {
   if (showLoading) loading.value = true
   try {
-    jobs.value = (await api.listJobs()).items
+    const result = await api.searchJobs({ search: search.value.trim(), status: statusFilter.value, origin: originFilter.value, page: page.value, pageSize: pageSize.value })
+    if (!result.items.length && result.total > 0 && page.value > 1) {
+      page.value = Math.max(1, Math.ceil(result.total / pageSize.value))
+      return load(showLoading)
+    }
+    jobs.value = result.items
+    total.value = result.total
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : t('jobs.errors.load')
   } finally {
@@ -135,18 +136,23 @@ async function load(showLoading = true) {
   }
 }
 
-function mergeJobs(items: Job[]) {
-  const byId = new Map(jobs.value.map(item => [item.id, item]))
-  for (const item of items) byId.set(item.id, item)
-  jobs.value = [...byId.values()].sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+function resetPageAndLoad() {
+  if (page.value !== 1) page.value = 1
+  else void load()
 }
+watch([statusFilter, originFilter, pageSize], resetPageAndLoad)
+watch(page, () => void load())
+watch(search, () => {
+  if (searchTimer) window.clearTimeout(searchTimer)
+  searchTimer = window.setTimeout(resetPageAndLoad, 800)
+})
 
 async function importURLs(urls: string[]) {
   busy.value = true
   error.value = ''
   try {
     const result = await api.importJobs({ urls, aiAssisted: aiAssisted.value, connectionId: aiAssisted.value ? importConnectionId.value : undefined, model: aiAssisted.value ? importModel.value : undefined })
-    mergeJobs(result.items)
+    await load()
     toast.success(t('jobs.toast.imported', { count: result.items.length }, result.items.length))
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : t('jobs.errors.queueImports')
@@ -207,8 +213,8 @@ async function createManual() {
   busy.value = true
   error.value = ''
   try {
-    const created = await api.createJob({ ...manual })
-    mergeJobs([created])
+    await api.createJob({ ...manual })
+    await load()
     if (manualReviewHunterId.value && manualReviewId.value) {
       try {
         await api.dismissJobHunterReviewItem(manualReviewHunterId.value, manualReviewId.value)
@@ -243,9 +249,9 @@ async function removeJob() {
   error.value = ''
   try {
     await api.deleteJob(item.id)
-    jobs.value = jobs.value.filter(candidate => candidate.id !== item.id)
     pendingDelete.value = null
     toast.success(t('jobs.toast.deleted'))
+    await load()
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : t('jobs.errors.delete')
   } finally {
@@ -287,6 +293,7 @@ onMounted(async () => {
 })
 onBeforeUnmount(() => {
   if (pollTimer) window.clearInterval(pollTimer)
+  if (searchTimer) window.clearTimeout(searchTimer)
   window.removeEventListener('keydown', handleKeydown)
 })
 </script>
@@ -329,17 +336,20 @@ onBeforeUnmount(() => {
 
     <p v-if="error" class="notice error" role="alert">{{ error }}</p>
     <div v-if="loading" class="empty-state">{{ t('jobs.loading') }}</div>
-    <template v-else-if="jobs.length">
-      <ListFilters v-model:search="search" :total="filteredJobs.length" :search-placeholder="t('jobs.filters.searchPlaceholder')">
+    <div v-else-if="!total && !search && statusFilter === 'all' && originFilter === 'all'" class="empty-state">
+      <span class="empty-icon">◇</span><h2>{{ t('jobs.empty.title') }}</h2><p>{{ t('jobs.empty.message') }}</p>
+    </div>
+    <template v-else>
+      <ListFilters v-model:search="search" :total="total" :search-placeholder="t('jobs.filters.searchPlaceholder')">
         <label>{{ t('jobs.filters.statusLabel') }} <select v-model="statusFilter"><option value="all">{{ t('jobs.filters.allStatuses') }}</option><option v-for="status in statusOptions" :key="status.value" :value="status.value">{{ t(status.labelKey) }}</option></select></label>
         <label>{{ t('jobs.filters.sourceLabel') }} <select v-model="originFilter"><option value="all">{{ t('jobs.filters.allSources') }}</option><option value="manual">{{ t('jobs.filters.addedManually') }}</option><option value="url_import">{{ t('jobs.filters.importedViaUrl') }}</option><option value="hunter">{{ t('jobs.filters.foundByHunter') }}</option></select></label>
       </ListFilters>
-    <BulkSelectionBar :selected-count="selection.selectedCount.value" :all-count="selectableFilteredJobs.length" :all-selected="allFilteredSelected" @select-all="selectAllFiltered" @clear="selection.clear">
+    <BulkSelectionBar :selected-count="selection.selectedCount.value" :all-count="selectablePageJobs.length" :all-selected="allPageSelected" @select-all="selectAllOnPage" @clear="selection.clear">
       <button class="button primary" type="button" @click="openSelectedGeneration('resume')">{{ t('jobs.createCvs') }}</button>
       <button class="button" type="button" @click="openSelectedGeneration('cover_letter')">{{ t('jobs.createCoverLetters') }}</button>
     </BulkSelectionBar>
-    <TransitionGroup v-if="visibleJobs.length" name="card-list" tag="div" class="list-panel">
-      <article v-for="item in visibleJobs" :key="item.id" class="job-row" :class="{ selected: selection.isSelected(item.id) }">
+    <TransitionGroup v-if="jobs.length" name="card-list" tag="div" class="list-panel">
+      <article v-for="item in jobs" :key="item.id" class="job-row" :class="{ selected: selection.isSelected(item.id) }">
         <input class="row-selector" type="checkbox" :checked="selection.isSelected(item.id)" :disabled="!canGenerate(item)" :aria-label="t('jobs.selectAriaLabel', { title: item.title || t('jobs.genericTitle') })" :title="canGenerate(item) ? t('jobs.selectForBatchTitle') : t('jobs.addDescriptionTitle')" @change="selection.toggle(item.id)" />
         <button class="company-mark company-preview-button" type="button" :aria-label="t('jobs.previewAriaLabel', { title: item.title || t('jobs.genericTitle') })" @click="openJobPreview(item)">{{ (item.company || '?').slice(0, 2).toUpperCase() }}</button>
         <div class="job-main job-preview-trigger" role="button" tabindex="0" :aria-label="t('jobs.previewAriaLabel', { title: item.title || t('jobs.genericTitle') })" @click="openJobPreview(item)" @keydown.enter="openJobPreview(item)" @keydown.space.prevent="openJobPreview(item)">
@@ -354,11 +364,8 @@ onBeforeUnmount(() => {
       </article>
     </TransitionGroup>
     <div v-else class="empty-state compact"><h2>{{ t('jobs.emptyFiltered.title') }}</h2><p>{{ t('jobs.emptyFiltered.message') }}</p></div>
-    <ListPagination v-if="filteredJobs.length" v-model:page="page" v-model:page-size="pageSize" :total="filteredJobs.length" :page-sizes="[10, 20, 50]" />
+    <ListPagination v-if="total" v-model:page="page" v-model:page-size="pageSize" :total="total" :page-sizes="[10, 20, 50]" />
     </template>
-    <div v-else class="empty-state">
-      <span class="empty-icon">◇</span><h2>{{ t('jobs.empty.title') }}</h2><p>{{ t('jobs.empty.message') }}</p>
-    </div>
     <ConfirmDialog :open="Boolean(pendingDelete)" :title="t('jobs.deleteConfirm.title')" :message="t('jobs.deleteConfirm.message', { name: [pendingDelete?.title, pendingDelete?.company].filter(Boolean).join(' at ') || t('jobs.deleteConfirm.defaultName') })" :busy="deletingId === pendingDelete?.id" @cancel="pendingDelete = null" @confirm="removeJob" />
     <DocumentGenerationDialog :open="showGeneration" :opportunities="generationTargets" :initial-document-type="generationDocumentType" @close="showGeneration = false" @queued="handleGenerationQueued" />
     <Teleport to="body">

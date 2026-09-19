@@ -50,6 +50,45 @@ func (r *JobRepository) List(ctx context.Context, workspaceID string) ([]job.Job
 	return items, err
 }
 
+func (r *JobRepository) Search(ctx context.Context, workspaceID string, filter job.Filter) (job.Page, error) {
+	result := job.Page{Items: make([]job.Job, 0), Page: filter.Page, PageSize: filter.PageSize}
+	err := withWorkspaceTx(ctx, r.pool, workspaceID, func(tx pgx.Tx) error {
+		search := "%" + filter.Search + "%"
+		if err := tx.QueryRow(ctx, `
+			SELECT COUNT(*) FROM jobs
+			WHERE workspace_id=$1 AND (origin <> 'hunter' OR import_state IN ('ready','manual'))
+				AND ($2='' OR title ILIKE $2 OR company ILIKE $2 OR location ILIKE $2 OR city ILIKE $2 OR country ILIKE $2)
+				AND ($3='' OR status=$3)
+				AND ($4='' OR origin=$4)`,
+			workspaceID, search, filter.Status, filter.Origin).Scan(&result.Total); err != nil {
+			return fmt.Errorf("count jobs: %w", err)
+		}
+		rows, err := tx.Query(ctx, `
+			SELECT id,workspace_id,title,company,location,country,city,work_mode,employment_type,source_url,
+				'',status,import_state,import_error,origin,COALESCE(hunter_id,''),created_at,updated_at,LENGTH(BTRIM(description)) > 0
+			FROM jobs
+			WHERE workspace_id=$1 AND (origin <> 'hunter' OR import_state IN ('ready','manual'))
+				AND ($2='' OR title ILIKE $2 OR company ILIKE $2 OR location ILIKE $2 OR city ILIKE $2 OR country ILIKE $2)
+				AND ($3='' OR status=$3)
+				AND ($4='' OR origin=$4)
+			ORDER BY created_at DESC, id
+			LIMIT $5 OFFSET $6`, workspaceID, search, filter.Status, filter.Origin, filter.PageSize, (filter.Page-1)*filter.PageSize)
+		if err != nil {
+			return fmt.Errorf("query jobs: %w", err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var item job.Job
+			if err := rows.Scan(append(jobFields(&item), &item.HasDescription)...); err != nil {
+				return fmt.Errorf("scan job: %w", err)
+			}
+			result.Items = append(result.Items, item)
+		}
+		return rows.Err()
+	})
+	return result, err
+}
+
 func (r *JobRepository) Count(ctx context.Context, workspaceID string) (job.Counts, error) {
 	var counts job.Counts
 	err := withWorkspaceTx(ctx, r.pool, workspaceID, func(tx pgx.Tx) error {

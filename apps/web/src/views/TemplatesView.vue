@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 const { t } = useI18n()
 import ConfirmDialog from '../components/ConfirmDialog.vue'
@@ -8,11 +8,13 @@ import ListFilters from '../components/ListFilters.vue'
 import ListPagination from '../components/ListPagination.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { api } from '../lib/api'
-import { usePagedList } from '../lib/pagination'
 import { toast } from '../lib/toast'
 import type { Template, TemplateKind, TemplateState } from '../lib/types'
 
 const items = ref<Template[]>([])
+const total = ref(0)
+const page = ref(1)
+const pageSize = ref(8)
 const loading = ref(true)
 const saving = ref(false)
 const deletingId = ref('')
@@ -25,15 +27,7 @@ const kindFilter = ref('all')
 const file = ref<File | null>(null)
 const form = reactive({ name: '', kind: 'resume' as TemplateKind, description: '', entryFile: '' })
 let pollTimer: number | undefined
-
-const filteredItems = computed(() => {
-  const query = search.value.trim().toLocaleLowerCase()
-  return items.value.filter(item => {
-    const matchesSearch = !query || [item.name, item.description, item.sourceName, item.authorName, item.format].some(value => value?.toLocaleLowerCase().includes(query))
-    return matchesSearch && (kindFilter.value === 'all' || item.kind === kindFilter.value)
-  })
-})
-const { page, pageSize, visible: visibleItems } = usePagedList(filteredItems, [search, kindFilter])
+let searchTimer: number | undefined
 
 function kindLabel(kind: TemplateKind) { return kind === 'resume' ? t('templates.kindResume') : t('templates.kindCoverLetter') }
 function formatLabel(item: Template) { return item.sourceName.toLowerCase().endsWith('.zip') ? t('templates.formatLatexZip') : item.format === 'latex' ? t('templates.formatTex') : item.format.toUpperCase() }
@@ -41,18 +35,38 @@ const stateLabelKeys: Record<TemplateState, string> = { staged: 'templates.state
 function stateLabel(state: TemplateState) { return t(stateLabelKeys[state]) }
 function isZipFile() { return file.value?.name.toLowerCase().endsWith('.zip') ?? false }
 
-async function load() {
+async function load(showLoading = true) {
+  if (showLoading) loading.value = true
   try {
-    const [templates, capabilities] = await Promise.all([api.listTemplates(), api.capabilities()])
+    const [templates, capabilities] = await Promise.all([
+      api.searchTemplates({ search: search.value.trim(), kind: kindFilter.value, page: page.value, pageSize: pageSize.value }),
+      api.capabilities(),
+    ])
+    if (!templates.items.length && templates.total > 0 && page.value > 1) {
+      page.value = Math.max(1, Math.ceil(templates.total / pageSize.value))
+      return load(showLoading)
+    }
     items.value = templates.items
+    total.value = templates.total
     uploadsEnabled.value = Boolean(capabilities.features.templateUploads)
   } catch (cause) { error.value = cause instanceof Error ? cause.message : t('templates.errors.load') }
   finally { loading.value = false }
 }
 
+function resetPageAndLoad() {
+  if (page.value !== 1) page.value = 1
+  else void load()
+}
+watch([kindFilter, pageSize], resetPageAndLoad)
+watch(page, () => void load())
+watch(search, () => {
+  if (searchTimer) window.clearTimeout(searchTimer)
+  searchTimer = window.setTimeout(resetPageAndLoad, 800)
+})
+
 function schedulePoll() {
   window.clearTimeout(pollTimer)
-  pollTimer = window.setTimeout(async () => { await load(); if (items.value.some(item => item.state === 'queued')) schedulePoll() }, 1800)
+  pollTimer = window.setTimeout(async () => { await load(false); if (items.value.some(item => item.state === 'queued')) schedulePoll() }, 1800)
 }
 
 function chooseFile(event: Event) {
@@ -79,7 +93,7 @@ async function remove() {
   const item = pendingDelete.value
   if (!item) return
   deletingId.value = item.id
-  try { await api.deleteTemplate(item.id); items.value = items.value.filter(candidate => candidate.id !== item.id); pendingDelete.value = null; toast.success(t('templates.toasts.deleted')) }
+  try { await api.deleteTemplate(item.id); pendingDelete.value = null; toast.success(t('templates.toasts.deleted')); await load() }
   catch (cause) { error.value = cause instanceof Error ? cause.message : t('templates.errors.delete') }
   finally { deletingId.value = '' }
 }
@@ -89,7 +103,7 @@ async function download(item: Template) {
 }
 
 onMounted(async () => { await load(); if (items.value.some(item => item.state === 'queued')) schedulePoll() })
-onBeforeUnmount(() => window.clearTimeout(pollTimer))
+onBeforeUnmount(() => { window.clearTimeout(pollTimer); if (searchTimer) window.clearTimeout(searchTimer) })
 </script>
 
 <template>
@@ -107,12 +121,13 @@ onBeforeUnmount(() => window.clearTimeout(pollTimer))
       <div class="full form-actions"><button class="button primary" :disabled="saving">{{ saving ? t('templates.uploading') : t('templates.uploadAndProcess') }}</button></div>
     </form>
     <div v-if="loading" class="empty-state">{{ t('templates.loading') }}</div>
-    <template v-else-if="items.length">
-    <ListFilters v-model:search="search" :total="filteredItems.length" :search-placeholder="t('templates.searchPlaceholder')">
+    <div v-else-if="!total && !search && kindFilter === 'all'" class="empty-state"><span class="empty-icon">▧</span><h2>{{ t('templates.emptyState.title') }}</h2><p>{{ t('templates.emptyState.message') }}</p></div>
+    <template v-else>
+    <ListFilters v-model:search="search" :total="total" :search-placeholder="t('templates.searchPlaceholder')">
       <label>{{ t('templates.typeFilterLabel') }} <select v-model="kindFilter"><option value="all">{{ t('templates.allTypes') }}</option><option value="resume">{{ t('templates.kindResume') }}</option><option value="cover_letter">{{ t('templates.kindCoverLetter') }}</option></select></label>
     </ListFilters>
-    <TransitionGroup v-if="visibleItems.length" name="card-list" tag="div" class="card-grid">
-      <article v-for="item in visibleItems" :key="item.id" class="entity-card template-card">
+    <TransitionGroup v-if="items.length" name="card-list" tag="div" class="card-grid">
+      <article v-for="item in items" :key="item.id" class="entity-card template-card">
         <div class="template-content"><p class="eyebrow">{{ kindLabel(item.kind) }}</p><h2>{{ item.name }}</h2><p>{{ item.description || item.sourceName }}</p></div>
         <div class="template-meta">
           <div class="template-tags"><span class="format-pill">{{ formatLabel(item) }}</span><span class="status-pill">{{ item.builtIn ? t('templates.builtIn') : stateLabel(item.state) }}</span></div>
@@ -123,9 +138,8 @@ onBeforeUnmount(() => window.clearTimeout(pollTimer))
       </article>
     </TransitionGroup>
     <div v-else class="empty-state compact"><h2>{{ t('templates.emptyFiltered.title') }}</h2><p>{{ t('templates.emptyFiltered.message') }}</p></div>
-    <ListPagination v-if="filteredItems.length" v-model:page="page" v-model:page-size="pageSize" :total="filteredItems.length" />
+    <ListPagination v-if="total" v-model:page="page" v-model:page-size="pageSize" :total="total" />
     </template>
-    <div v-else-if="!loading" class="empty-state"><span class="empty-icon">▧</span><h2>{{ t('templates.emptyState.title') }}</h2><p>{{ t('templates.emptyState.message') }}</p></div>
     <ConfirmDialog :open="Boolean(pendingDelete)" :title="t('templates.deleteConfirmTitle')" :message="t('templates.deleteConfirmMessage', { name: pendingDelete?.name ?? '' })" :busy="deletingId === pendingDelete?.id" @cancel="pendingDelete = null" @confirm="remove" />
   </div>
 </template>
