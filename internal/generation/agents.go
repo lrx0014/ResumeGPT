@@ -10,6 +10,7 @@ import (
 	"github.com/lrx0014/ResumeGPT/internal/job"
 	"github.com/lrx0014/ResumeGPT/internal/profile"
 	"github.com/lrx0014/ResumeGPT/internal/prompts"
+	"github.com/lrx0014/ResumeGPT/internal/settings"
 	resumetemplate "github.com/lrx0014/ResumeGPT/internal/template"
 	"github.com/tmc/langchaingo/agents"
 	"github.com/tmc/langchaingo/chains"
@@ -47,7 +48,7 @@ func (t GenerationAgentTeam) run(ctx context.Context, workspaceID string, choice
 func (t GenerationAgentTeam) Write(ctx context.Context, workspaceID string, run Run, profileValue profile.Profile, opportunity job.Job) (string, error) {
 	contextValue := writerPrompt(run, profileValue, opportunity)
 	contextTool := &staticContextTool{name: "read_generation_context", description: "Read the immutable Profile, Opportunity, and generation requirements for this run.", content: contextValue}
-	return t.run(ctx, workspaceID, run.Writer, prompts.WriterSystem(run.DocumentType), contextValue, []tools.Tool{contextTool}, nil, writerMaxTokens, nil)
+	return t.run(ctx, workspaceID, run.Writer, prompts.WriterSystem(run.DocumentType), contextValue, []tools.Tool{contextTool}, nil, settings.EffectiveMaxTokens(settings.AgentWriter, run.Writer.MaxTokens), nil)
 }
 
 type TemplateApplyResult struct {
@@ -86,7 +87,7 @@ func (t GenerationAgentTeam) DesignDocument(ctx context.Context, workspaceID str
 	briefTool := &staticContextTool{name: "read_document_design_brief", description: "Read the immutable document requirements, grounded draft, page target, and available profile assets before designing.", content: designBrief}
 	renderTool := &renderHTMLPDFTool{documents: t.documents, blobs: t.blobs, workspaceID: workspaceID, avatarObjectID: avatarObjectID, avatarName: avatarName, avatar: avatar, avatarLoaded: true}
 	requirements := []requiredAgentTool{{name: briefTool.Name(), satisfied: briefTool.succeeded}, {name: renderTool.Name(), satisfied: renderTool.succeeded}}
-	source, err := t.run(ctx, workspaceID, run.Renderer, prompts.DesignerSystem, prompt, []tools.Tool{briefTool, renderTool}, nil, rendererMaxTokens, requirements)
+	source, err := t.run(ctx, workspaceID, run.Renderer, prompts.DesignerSystem, prompt, []tools.Tool{briefTool, renderTool}, nil, settings.EffectiveMaxTokens(settings.AgentDocumentDesigner, run.Renderer.MaxTokens), requirements)
 	if err != nil {
 		if renderTool.succeeded() {
 			err = nil
@@ -129,7 +130,7 @@ func (t GenerationAgentTeam) ApplyTemplate(ctx context.Context, workspaceID stri
 	templateTool := &staticContextTool{name: "read_template_source", description: "Read the complete extracted template project before applying it. Identify the entry structure, custom macros, usage examples, local assets, and any supported avatar or photo command.", content: limit(templateValue.Content, 100000)}
 	renderTool := &renderPDFTool{documents: t.documents, blobs: t.blobs, workspaceID: workspaceID, template: templateValue, avatarObjectID: avatarObjectID, avatarName: avatarName, avatar: avatar, avatarLoaded: true}
 	requirements := []requiredAgentTool{{name: templateTool.Name(), satisfied: templateTool.succeeded}, {name: renderTool.Name(), satisfied: renderTool.succeeded}}
-	source, err := t.run(ctx, workspaceID, run.Renderer, prompts.TemplateApplierSystem, prompt, []tools.Tool{templateTool, renderTool}, nil, rendererMaxTokens, requirements)
+	source, err := t.run(ctx, workspaceID, run.Renderer, prompts.TemplateApplierSystem, prompt, []tools.Tool{templateTool, renderTool}, nil, settings.EffectiveMaxTokens(settings.AgentTemplateApplier, run.Renderer.MaxTokens), requirements)
 	if err != nil {
 		if renderTool.succeeded() {
 			err = nil
@@ -169,7 +170,7 @@ func (t GenerationAgentTeam) Polish(ctx context.Context, workspaceID string, run
 		return "", err
 	}
 	renderTool := &renderPDFTool{documents: t.documents, blobs: t.blobs, workspaceID: workspaceID, template: templateValue, avatarObjectID: avatarObjectID, avatarName: avatarName, avatar: avatar, avatarLoaded: true}
-	result, err := t.run(ctx, workspaceID, run.Renderer, prompts.LayoutPolishSystem, prompt, []tools.Tool{renderTool}, nil, rendererMaxTokens, []requiredAgentTool{{name: renderTool.Name(), satisfied: renderTool.succeeded}})
+	result, err := t.run(ctx, workspaceID, run.Renderer, prompts.LayoutPolishSystem, prompt, []tools.Tool{renderTool}, nil, settings.EffectiveMaxTokens(settings.AgentTemplateApplier, run.Renderer.MaxTokens), []requiredAgentTool{{name: renderTool.Name(), satisfied: renderTool.succeeded}})
 	if renderTool.source != "" {
 		result = renderTool.source
 	}
@@ -192,7 +193,7 @@ func (t GenerationAgentTeam) PolishDesign(ctx context.Context, workspaceID strin
 		return "", err
 	}
 	renderTool := &renderHTMLPDFTool{documents: t.documents, blobs: t.blobs, workspaceID: workspaceID, avatarObjectID: avatarObjectID, avatarName: avatarName, avatar: avatar, avatarLoaded: true}
-	result, err := t.run(ctx, workspaceID, run.Renderer, prompts.DesignerRepairSystem, prompt, []tools.Tool{renderTool}, nil, rendererMaxTokens, []requiredAgentTool{{name: renderTool.Name(), satisfied: renderTool.succeeded}})
+	result, err := t.run(ctx, workspaceID, run.Renderer, prompts.DesignerRepairSystem, prompt, []tools.Tool{renderTool}, nil, settings.EffectiveMaxTokens(settings.AgentDocumentDesigner, run.Renderer.MaxTokens), []requiredAgentTool{{name: renderTool.Name(), satisfied: renderTool.succeeded}})
 	if renderTool.source != "" {
 		result = renderTool.source
 	}
@@ -213,7 +214,7 @@ func (t GenerationAgentTeam) Review(ctx context.Context, workspaceID string, run
 	if _, err := pageTool.Call(ctx, "current PDF"); err != nil {
 		return document.PDFPages{}, false, "", "", err
 	}
-	response, err := t.run(ctx, workspaceID, run.Reviewer, prompts.VisualReviewerSystem, reviewerPrompt(run, pageTool.pages.PageCount), []tools.Tool{pageTool}, func() []string { return pageTool.pages.Images }, reviewerMaxTokens, nil)
+	response, err := t.run(ctx, workspaceID, run.Reviewer, prompts.VisualReviewerSystem, reviewerPrompt(run, pageTool.pages.PageCount), []tools.Tool{pageTool}, func() []string { return pageTool.pages.Images }, settings.EffectiveMaxTokens(settings.AgentVisualReviewer, run.Reviewer.MaxTokens), nil)
 	if err != nil {
 		return pageTool.pages, false, "", "", err
 	}

@@ -36,8 +36,10 @@ const showBatch = ref(false)
 const showManual = ref(false)
 const aiAssisted = ref(false)
 const connections = ref<LLMConnection[]>([])
+const defaultImportMaxTokens = 6000
 const importConnectionId = ref('')
 const importModel = ref('')
+const importMaxTokens = ref<number | undefined>(defaultImportMaxTokens)
 const importModels = reactive<Record<string, string[]>>({})
 const loadingImportModels = ref(false)
 const importsAvailable = ref(true)
@@ -151,7 +153,7 @@ async function importURLs(urls: string[]) {
   busy.value = true
   error.value = ''
   try {
-    const result = await api.importJobs({ urls, aiAssisted: aiAssisted.value, connectionId: aiAssisted.value ? importConnectionId.value : undefined, model: aiAssisted.value ? importModel.value : undefined })
+    const result = await api.importJobs({ urls, aiAssisted: aiAssisted.value, connectionId: aiAssisted.value ? importConnectionId.value : undefined, model: aiAssisted.value ? importModel.value : undefined, maxTokens: aiAssisted.value ? importMaxTokens.value : undefined })
     await load()
     toast.success(t('jobs.toast.imported', { count: result.items.length }, result.items.length))
   } catch (cause) {
@@ -191,9 +193,11 @@ async function openBatchImport() {
     if (configured && connections.value.some(item => item.id === configured.connectionId)) {
       importConnectionId.value = configured.connectionId
       importModel.value = configured.model
+      importMaxTokens.value = configured.maxTokens ?? defaultImportMaxTokens
     } else if (!connections.value.some(item => item.id === importConnectionId.value)) {
       importConnectionId.value = connections.value[0]?.id ?? ''
       importModel.value = ''
+      importMaxTokens.value = defaultImportMaxTokens
     }
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : t('jobs.errors.loadProviders')
@@ -317,6 +321,7 @@ onBeforeUnmount(() => {
         <p v-if="!connections.length" class="full notice setup-notice">{{ t('jobs.batchForm.setupNoticeBefore') }}<RouterLink to="/settings">{{ t('jobs.batchForm.setupNoticeLink') }}</RouterLink>{{ t('jobs.batchForm.setupNoticeAfter') }}</p>
         <label><span>{{ t('jobs.batchForm.providerLabel') }}</span><select v-model="importConnectionId" required><option value="" disabled>{{ t('jobs.batchForm.selectProvider') }}</option><option v-for="item in connections" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
         <label><span>{{ t('jobs.batchForm.modelLabel') }}</span><select v-if="importModels[importConnectionId]?.length" v-model="importModel" required><option value="" disabled>{{ t('jobs.batchForm.selectModel') }}</option><option v-for="model in importModels[importConnectionId]" :key="model" :value="model">{{ model }}</option></select><input v-else v-model="importModel" required :disabled="loadingImportModels" :placeholder="loadingImportModels ? t('jobs.batchForm.loadingModels') : t('jobs.batchForm.enterModelName')" /></label>
+        <label><span>{{ t('jobs.batchForm.maxTokensLabel') }}</span><input v-model.number="importMaxTokens" type="number" min="1" max="32768" :placeholder="String(defaultImportMaxTokens)" /></label>
       </template>
       <label class="full"><span>{{ t('jobs.batchForm.urlsLabel') }}</span><textarea v-model="batchText" required rows="8" :placeholder="aiAssisted ? t('jobs.batchForm.urlsPlaceholderAi') : t('jobs.batchForm.urlsPlaceholderStandard')" /></label>
       <div class="full form-actions"><button class="button primary" :disabled="busy || (aiAssisted && (!importConnectionId || !importModel))">{{ busy ? t('jobs.batchForm.queuing') : t('jobs.batchForm.submit') }}</button></div>

@@ -62,7 +62,7 @@ func (a *JobImportAgent) Fetch(ctx context.Context, workspaceID string, payload 
 	}
 	systemPrompt := prompts.JobImportSystem
 	model := &jobAgentModel{gateway: a.gateway, runtime: runtime, model: payload.Model, systemPrompt: systemPrompt,
-		maxTokens: 6000, finish: finish}
+		maxTokens: settings.EffectiveMaxTokens(settings.AgentJobImport, payload.MaxTokens), finish: finish}
 	agent := agents.NewOneShotAgent(model, agentTools,
 		agents.WithPromptPrefix(prompts.WithOnlyScopedTools(systemPrompt)))
 	executor := agents.NewExecutor(agent, agents.WithMaxIterations(7))

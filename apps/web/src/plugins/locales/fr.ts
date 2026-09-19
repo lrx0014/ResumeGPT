@@ -28,6 +28,7 @@ export default {
     agents: {
       eyebrow: 'Routage des Agents', title: 'Modèles par défaut', description: 'Choisissez le fournisseur et le modèle que chaque Agent doit utiliser automatiquement. Ces valeurs par défaut préremplissent les nouveaux flux de travail et peuvent toujours être remplacées pour une tâche donnée.',
       chooseEachTime: 'Choisir à chaque fois', modelLabel: 'Modèle', selectModelOption: 'Sélectionner un modèle', loadingModelsPlaceholder: 'Chargement des modèles…', modelNamePlaceholder: 'Saisissez le nom du modèle',
+      maxTokensLabel: 'Jetons de sortie max.', maxTokensHelp: 'Nombre maximal de jetons que cet Agent peut générer par appel. Pré-rempli avec une valeur par défaut raisonnable ; augmentez-la si la sortie est tronquée.',
       capabilityTips: 'Conseils sur les capacités des modèles', saveButton: 'Enregistrer les paramètres par défaut des Agents', savedToast: 'Paramètres par défaut des Agents enregistrés.',
       validation: { missingField: 'Choisissez à la fois un fournisseur et un modèle pour {name}, ou videz les deux champs.' },
       definitions: {
@@ -84,6 +85,7 @@ export default {
       aiModeHelp: 'L’Agent d’import d’offres analysera entièrement chaque page HTTPS accessible publiquement.', standardModeHelp: 'Import rapide pour les pages d’offres publiques LinkedIn et Indeed.',
       setupNoticeBefore: 'Ajoutez un ', setupNoticeLink: 'fournisseur LLM dans les Paramètres', setupNoticeAfter: ' avant d’utiliser l’import assisté par IA.',
       providerLabel: 'Fournisseur LLM', selectProvider: 'Sélectionner un fournisseur', modelLabel: 'Modèle', selectModel: 'Sélectionner un modèle', loadingModels: 'Chargement des modèles…', enterModelName: 'Saisissez le nom du modèle',
+      maxTokensLabel: 'Jetons de sortie max.',
       urlsLabel: 'URL des offres d’emploi', urlsPlaceholderAi: 'Collez jusqu’à 50 URL de pages d’offres HTTPS publiques, une par ligne. Une seule URL fonctionne aussi.', urlsPlaceholderStandard: 'Collez jusqu’à 50 URL LinkedIn ou Indeed, une par ligne. Une seule URL fonctionne aussi.',
       queuing: 'Mise en file d’attente…', submit: 'Importer les offres d’emploi',
     },
@@ -127,6 +129,7 @@ export default {
       additionalPromptLabel: 'Consigne supplémentaire', additionalPromptPlaceholder: 'Par exemple : privilégier les entreprises produit et exclure les cabinets de recrutement.',
       profileLabel: 'Profil de référence', optional: 'Facultatif', noProfileReference: 'Aucun profil de référence', maxResultsLabel: 'Offres par exécution', maxResultsHint: 'Jusqu’à 10 nouvelles offres par exécution planifiée.',
       scheduleLabel: 'Planification', providerLabel: 'Fournisseur LLM', selectProvider: 'Sélectionner un fournisseur', modelLabel: 'Modèle', selectModel: 'Sélectionner un modèle', loadingModels: 'Chargement des modèles…', enterModelName: 'Saisissez le nom du modèle',
+      maxTokensLabel: 'Jetons de sortie max.',
       enableAutomaticRuns: 'Activer les exécutions automatiques', noticeBefore: 'Ajoutez un ', noticeLinkText: 'fournisseur LLM dans les Paramètres', noticeAfter: ' avant de créer un Job Hunter.', saveChanges: 'Enregistrer les modifications', createAndSchedule: 'Créer et planifier',
     },
     schedule: { every6h: 'Toutes les 6 heures', every12h: 'Toutes les 12 heures', daily: 'Quotidienne', weekly: 'Hebdomadaire', minutes: '{minutes} minutes' },

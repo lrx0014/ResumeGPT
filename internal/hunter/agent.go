@@ -70,7 +70,7 @@ func (a *JobHunterAgent) Hunt(ctx context.Context, value Hunter) ([]string, erro
 	defaultQuery += " (site:indeed.com/viewjob OR site:linkedin.com/jobs/view)"
 	systemPrompt := prompts.JobHunterSystem(value.MaxResults, maxHunterSearches)
 	model := &hunterAgentModel{gateway: a.gateway, runtime: runtime, model: value.Model, systemPrompt: systemPrompt,
-		maxTokens: 5000, search: searchTool, finish: finish, defaultQuery: defaultQuery}
+		maxTokens: settings.EffectiveMaxTokens(settings.AgentJobHunter, value.MaxTokens), search: searchTool, finish: finish, defaultQuery: defaultQuery}
 	agentTools := []tools.Tool{searchTool, finish}
 	agent := agents.NewOneShotAgent(model, agentTools,
 		agents.WithPromptPrefix(prompts.WithOnlyScopedTools(systemPrompt)))

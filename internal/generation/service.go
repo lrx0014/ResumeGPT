@@ -88,7 +88,8 @@ func (s *Service) prepareInputs(ctx context.Context, workspaceID string, input C
 }
 
 func validChoice(value ModelChoice) bool {
-	return strings.TrimSpace(value.ConnectionID) != "" && strings.TrimSpace(value.Model) != "" && len(value.Model) <= 200
+	return strings.TrimSpace(value.ConnectionID) != "" && strings.TrimSpace(value.Model) != "" && len(value.Model) <= 200 &&
+		value.MaxTokens >= 0 && value.MaxTokens <= settings.MaxTokensCeiling
 }
 func (s *Service) List(ctx context.Context, workspaceID string) ([]Run, error) {
 	return s.repository.List(ctx, workspaceID)

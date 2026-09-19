@@ -28,6 +28,7 @@ export default {
     agents: {
       eyebrow: 'Enrutamiento de Agents', title: 'Modelos predeterminados', description: 'Elige el proveedor y el modelo que cada Agent debe usar automáticamente. Estos valores predeterminados rellenan los nuevos flujos de trabajo y aún pueden anularse para una tarea individual.',
       chooseEachTime: 'Elegir cada vez', modelLabel: 'Modelo', selectModelOption: 'Seleccionar modelo', loadingModelsPlaceholder: 'Cargando modelos…', modelNamePlaceholder: 'Introduce el nombre del modelo',
+      maxTokensLabel: 'Tokens de salida máximos', maxTokensHelp: 'Número máximo de tokens que este Agent puede generar por llamada. Viene con un valor predeterminado razonable; auméntalo si la salida se corta.',
       capabilityTips: 'Consejos sobre capacidades del modelo', saveButton: 'Guardar valores predeterminados del Agent', savedToast: 'Valores predeterminados del Agent guardados.',
       validation: { missingField: 'Elige un proveedor y un modelo para {name}, o deja ambos campos vacíos.' },
       definitions: {
@@ -84,6 +85,7 @@ export default {
       aiModeHelp: 'El Job Import Agent analizará desde el principio cada página HTTPS de acceso público.', standardModeHelp: 'Importación rápida para páginas públicas de empleo de LinkedIn e Indeed.',
       setupNoticeBefore: 'Añade un ', setupNoticeLink: 'proveedor LLM en Ajustes', setupNoticeAfter: ' antes de usar la importación asistida por IA.',
       providerLabel: 'Proveedor LLM', selectProvider: 'Seleccionar proveedor', modelLabel: 'Modelo', selectModel: 'Seleccionar modelo', loadingModels: 'Cargando modelos…', enterModelName: 'Introduce el nombre del modelo',
+      maxTokensLabel: 'Tokens de salida máximos',
       urlsLabel: 'URLs de oportunidades laborales', urlsPlaceholderAi: 'Pega hasta 50 URLs públicas de páginas de empleo HTTPS, una por línea. También funciona con una sola URL.', urlsPlaceholderStandard: 'Pega hasta 50 URLs de LinkedIn o Indeed, una por línea. También funciona con una sola URL.',
       queuing: 'Poniendo en cola…', submit: 'Importar oportunidades laborales',
     },
@@ -127,6 +129,7 @@ export default {
       additionalPromptLabel: 'Instrucción adicional', additionalPromptPlaceholder: 'Por ejemplo: Prefiere empresas de producto y excluye agencias de contratación.',
       profileLabel: 'Perfil de referencia', optional: 'Opcional', noProfileReference: 'Sin perfil de referencia', maxResultsLabel: 'Empleos por ejecución', maxResultsHint: 'Hasta 10 nuevas oportunidades por ejecución programada.',
       scheduleLabel: 'Programación', providerLabel: 'Proveedor LLM', selectProvider: 'Seleccionar proveedor', modelLabel: 'Modelo', selectModel: 'Seleccionar modelo', loadingModels: 'Cargando modelos…', enterModelName: 'Introduce el nombre del modelo',
+      maxTokensLabel: 'Tokens de salida máximos',
       enableAutomaticRuns: 'Activar ejecuciones automáticas', noticeBefore: 'Añade un ', noticeLinkText: 'proveedor LLM en Ajustes', noticeAfter: ' antes de crear un Job Hunter.', saveChanges: 'Guardar cambios', createAndSchedule: 'Crear y programar',
     },
     schedule: { every6h: 'Cada 6 horas', every12h: 'Cada 12 horas', daily: 'Diaria', weekly: 'Semanal', minutes: '{minutes} minutos' },

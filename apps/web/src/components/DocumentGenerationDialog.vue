@@ -63,7 +63,7 @@ async function prepare() {
     connections.value = connectionList.items
     if (!profiles.value.some(item => item.id === form.profileId)) form.profileId = profiles.value[0]?.id ?? ''
     const defaults = Object.fromEntries(storedDefaults.items.map((item: AgentDefault) => [item.agent, item])) as Partial<Record<AgentDefault['agent'], AgentDefault>>
-    const valid = (choice?: AgentDefault) => choice && connections.value.some(item => item.id === choice.connectionId) ? { connectionId: choice.connectionId, model: choice.model } : undefined
+    const valid = (choice?: AgentDefault) => choice && connections.value.some(item => item.id === choice.connectionId) ? { connectionId: choice.connectionId, model: choice.model, maxTokens: choice.maxTokens } : undefined
     const fallback = valid(defaults.writer) ?? { connectionId: connections.value[0]?.id ?? '', model: '' }
     writerDefault.value = { ...fallback }
     templateApplierDefault.value = valid(defaults.template_applier) ?? { ...fallback }

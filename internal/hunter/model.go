@@ -18,6 +18,7 @@ type Hunter struct {
 	ProfileID        string     `json:"profileId,omitempty"`
 	ConnectionID     string     `json:"connectionId"`
 	Model            string     `json:"model"`
+	MaxTokens        int        `json:"maxTokens,omitempty"`
 	MaxResults       int        `json:"maxResults"`
 	IntervalMinutes  int        `json:"intervalMinutes"`
 	Enabled          bool       `json:"enabled"`
@@ -54,6 +55,7 @@ type SaveInput struct {
 	ProfileID        string `json:"profileId"`
 	ConnectionID     string `json:"connectionId"`
 	Model            string `json:"model"`
+	MaxTokens        int    `json:"maxTokens"`
 	MaxResults       int    `json:"maxResults"`
 	IntervalMinutes  int    `json:"intervalMinutes"`
 	Enabled          bool   `json:"enabled"`

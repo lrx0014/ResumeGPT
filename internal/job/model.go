@@ -49,6 +49,7 @@ type ImportInput struct {
 	AIAssisted   bool     `json:"aiAssisted"`
 	ConnectionID string   `json:"connectionId"`
 	Model        string   `json:"model"`
+	MaxTokens    int      `json:"maxTokens"`
 }
 
 type ImportPayload struct {
@@ -57,6 +58,7 @@ type ImportPayload struct {
 	Mode         string `json:"mode,omitempty"`
 	ConnectionID string `json:"connectionId,omitempty"`
 	Model        string `json:"model,omitempty"`
+	MaxTokens    int    `json:"maxTokens,omitempty"`
 }
 
 type ParsedJob struct {

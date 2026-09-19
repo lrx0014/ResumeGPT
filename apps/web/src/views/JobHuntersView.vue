@@ -22,12 +22,13 @@ const busy = ref(false)
 const loadingModels = ref(false)
 const error = ref('')
 const pendingDelete = ref<JobHunter | null>(null)
-const hunterDefault = reactive<GenerationModelChoice>({ connectionId: '', model: '' })
+const defaultHunterMaxTokens = 5000
+const hunterDefault = reactive<GenerationModelChoice>({ connectionId: '', model: '', maxTokens: defaultHunterMaxTokens })
 let pollTimer: number | undefined
 
 function blankForm(): JobHunterInput {
   return { name: '', roleQuery: '', location: '', workMode: '', employmentType: '', experienceYears: undefined,
-    keywords: '', additionalPrompt: '', profileId: '', connectionId: '', model: '', maxResults: 10, intervalMinutes: 1440, enabled: true }
+    keywords: '', additionalPrompt: '', profileId: '', connectionId: '', model: '', maxTokens: defaultHunterMaxTokens, maxResults: 10, intervalMinutes: 1440, enabled: true }
 }
 const form = reactive<JobHunterInput>(blankForm())
 const activeCount = computed(() => hunters.value.filter(item => item.enabled).length)
@@ -81,7 +82,7 @@ async function discoverModels(resetModel = false) {
 function openCreate() {
   editingId.value = ''
   const configured = connections.value.some(item => item.id === hunterDefault.connectionId) ? hunterDefault : undefined
-  Object.assign(form, blankForm(), { connectionId: configured?.connectionId ?? connections.value[0]?.id ?? '', model: configured?.model ?? '' })
+  Object.assign(form, blankForm(), { connectionId: configured?.connectionId ?? connections.value[0]?.id ?? '', model: configured?.model ?? '', maxTokens: configured?.maxTokens ?? defaultHunterMaxTokens })
   void discoverModels()
   showForm.value = true
 }
@@ -92,6 +93,7 @@ function openEdit(item: JobHunter) {
     name: item.name, roleQuery: item.roleQuery, location: item.location ?? '', workMode: item.workMode ?? '',
     employmentType: item.employmentType ?? '', experienceYears: item.experienceYears, keywords: item.keywords ?? '',
     additionalPrompt: item.additionalPrompt ?? '', profileId: item.profileId ?? '', connectionId: item.connectionId, model: item.model,
+    maxTokens: item.maxTokens ?? defaultHunterMaxTokens,
     maxResults: item.maxResults,
     intervalMinutes: item.intervalMinutes, enabled: item.enabled,
   })
@@ -170,7 +172,7 @@ onMounted(async () => {
   connections.value = connectionResult.items
   profiles.value = profileResult.items
   const configured = storedDefaults.items.find(item => item.agent === 'job_hunter')
-  if (configured) Object.assign(hunterDefault, { connectionId: configured.connectionId, model: configured.model })
+  if (configured) Object.assign(hunterDefault, { connectionId: configured.connectionId, model: configured.model, maxTokens: configured.maxTokens ?? defaultHunterMaxTokens })
   pollTimer = window.setInterval(() => { void load(false) }, 5000)
 })
 onBeforeUnmount(() => { if (pollTimer) window.clearInterval(pollTimer) })
@@ -203,6 +205,7 @@ onBeforeUnmount(() => { if (pollTimer) window.clearInterval(pollTimer) })
       <label><span>{{ t('hunters.form.scheduleLabel') }}</span><select v-model.number="form.intervalMinutes"><option :value="360">{{ t('hunters.schedule.every6h') }}</option><option :value="720">{{ t('hunters.schedule.every12h') }}</option><option :value="1440">{{ t('hunters.schedule.daily') }}</option><option :value="10080">{{ t('hunters.schedule.weekly') }}</option></select></label>
       <label><span>{{ t('hunters.form.providerLabel') }}</span><select v-model="form.connectionId" required @change="discoverModels(true)"><option value="" disabled>{{ t('hunters.form.selectProvider') }}</option><option v-for="item in connections" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
       <label><span>{{ t('hunters.form.modelLabel') }}</span><select v-if="models[form.connectionId]?.length" v-model="form.model" required><option value="" disabled>{{ t('hunters.form.selectModel') }}</option><option v-if="form.model && !models[form.connectionId].includes(form.model)" :value="form.model">{{ form.model }}</option><option v-for="model in models[form.connectionId]" :key="model" :value="model">{{ model }}</option></select><input v-else v-model="form.model" required :disabled="loadingModels" :placeholder="loadingModels ? t('hunters.form.loadingModels') : t('hunters.form.enterModelName')" /></label>
+      <label><span>{{ t('hunters.form.maxTokensLabel') }}</span><input v-model.number="form.maxTokens" type="number" min="1" max="32768" :placeholder="String(defaultHunterMaxTokens)" /></label>
       <label class="enabled-field"><input v-model="form.enabled" type="checkbox" /><span>{{ t('hunters.form.enableAutomaticRuns') }}</span></label>
       <p v-if="!connections.length" class="full notice">{{ t('hunters.form.noticeBefore') }}<RouterLink to="/settings">{{ t('hunters.form.noticeLinkText') }}</RouterLink>{{ t('hunters.form.noticeAfter') }}</p>
       <div class="full form-actions"><button class="button primary" :disabled="busy || !connections.length || !form.model">{{ busy ? t('common.saving') : editingId ? t('hunters.form.saveChanges') : t('hunters.form.createAndSchedule') }}</button></div>

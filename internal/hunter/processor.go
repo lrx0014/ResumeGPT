@@ -56,7 +56,7 @@ func (p *Processor) handle(ctx context.Context, task workqueue.Job) {
 	for _, sourceURL := range urls {
 		jobID := id.New("job")
 		importPayload, _ := json.Marshal(job.ImportPayload{JobID: jobID, SourceURL: sourceURL, Mode: "agent",
-			ConnectionID: value.ConnectionID, Model: value.Model})
+			ConnectionID: value.ConnectionID, Model: value.Model, MaxTokens: value.MaxTokens})
 		discovered = append(discovered, DiscoveredJob{JobID: jobID, TaskID: id.New("task"), SourceURL: sourceURL, Payload: importPayload})
 	}
 	created, err := p.Repository.Complete(ctx, task, value, discovered)

@@ -40,13 +40,21 @@ const pendingDestination = ref('')
 let allowNavigation = false
 const connectionResults = reactive<Record<string, string>>({})
 const agentModels = reactive<Record<string, string[]>>({})
+const defaultAgentMaxTokens: Record<AgentKind, number> = {
+  writer: 4096,
+  template_applier: 12288,
+  document_designer: 12288,
+  visual_reviewer: 1536,
+  job_import: 6000,
+  job_hunter: 5000,
+}
 const agentDefaults = reactive<Record<AgentKind, GenerationModelChoice>>({
-  writer: { connectionId: '', model: '' },
-  template_applier: { connectionId: '', model: '' },
-  document_designer: { connectionId: '', model: '' },
-  visual_reviewer: { connectionId: '', model: '' },
-  job_import: { connectionId: '', model: '' },
-  job_hunter: { connectionId: '', model: '' },
+  writer: { connectionId: '', model: '', maxTokens: defaultAgentMaxTokens.writer },
+  template_applier: { connectionId: '', model: '', maxTokens: defaultAgentMaxTokens.template_applier },
+  document_designer: { connectionId: '', model: '', maxTokens: defaultAgentMaxTokens.document_designer },
+  visual_reviewer: { connectionId: '', model: '', maxTokens: defaultAgentMaxTokens.visual_reviewer },
+  job_import: { connectionId: '', model: '', maxTokens: defaultAgentMaxTokens.job_import },
+  job_hunter: { connectionId: '', model: '', maxTokens: defaultAgentMaxTokens.job_hunter },
 })
 const agentDefinitions: { kind: AgentKind; requirementCount: number }[] = [
   { kind: 'writer', requirementCount: 4 },
@@ -151,7 +159,7 @@ async function load() {
     Object.assign(preferences, { interfaceLanguage: storedPreferences.interfaceLanguage, theme: storedPreferences.theme })
     connections.value = storedConnections.items
     capabilities.value = system.features
-    for (const item of storedAgentDefaults.items) Object.assign(agentDefaults[item.agent], { connectionId: item.connectionId, model: item.model })
+    for (const item of storedAgentDefaults.items) Object.assign(agentDefaults[item.agent], { connectionId: item.connectionId, model: item.model, maxTokens: item.maxTokens || defaultAgentMaxTokens[item.agent] })
     const nextLocale = normalizeInterfaceLocale(storedPreferences.interfaceLanguage)
     await loadLocaleMessages(nextLocale)
     locale.value = nextLocale
@@ -274,7 +282,7 @@ async function saveConnection() {
     else connections.value.push(saved)
     connections.value.sort((left, right) => left.name.localeCompare(right.name))
     if (assignToAllAgents) {
-      const items: AgentDefault[] = agentDefinitions.map(({ kind }) => ({ agent: kind, connectionId: saved.id, model }))
+      const items: AgentDefault[] = agentDefinitions.map(({ kind }) => ({ agent: kind, connectionId: saved.id, model, maxTokens: agentDefaults[kind].maxTokens }))
       try {
         await api.updateAgentDefaults(items)
         for (const { kind } of agentDefinitions) Object.assign(agentDefaults[kind], { connectionId: saved.id, model })
@@ -431,6 +439,7 @@ onMounted(load)
             <div class="agent-fields">
               <label><span>{{ t('settings.connections.form.providerLabel') }}</span><select v-model="agentDefaults[definition.kind].connectionId" @change="changeAgentConnection(definition.kind)"><option value="">{{ t('settings.agents.chooseEachTime') }}</option><option v-for="item in connections" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
               <label><span>{{ t('settings.agents.modelLabel') }}</span><div class="model-input-row"><select v-if="agentModels[agentDefaults[definition.kind].connectionId]?.length" v-model="agentDefaults[definition.kind].model"><option value="" disabled>{{ t('settings.agents.selectModelOption') }}</option><option v-if="agentDefaults[definition.kind].model && !agentModels[agentDefaults[definition.kind].connectionId].includes(agentDefaults[definition.kind].model)" :value="agentDefaults[definition.kind].model">{{ agentDefaults[definition.kind].model }}</option><option v-for="model in agentModels[agentDefaults[definition.kind].connectionId]" :key="model" :value="model">{{ model }}</option></select><input v-else v-model="agentDefaults[definition.kind].model" :disabled="!agentDefaults[definition.kind].connectionId || loadingAgentModels === definition.kind" :placeholder="loadingAgentModels === definition.kind ? t('settings.agents.loadingModelsPlaceholder') : t('settings.agents.modelNamePlaceholder')" maxlength="200" /><button class="button compact-button" type="button" :disabled="!agentDefaults[definition.kind].connectionId || loadingAgentModels === definition.kind" @click="loadAgentModels(definition.kind, true)">{{ loadingAgentModels === definition.kind ? t('common.loading') : t('common.refresh') }}</button></div></label>
+              <label class="max-tokens-field"><span>{{ t('settings.agents.maxTokensLabel') }}</span><input type="number" v-model.number="agentDefaults[definition.kind].maxTokens" min="1" max="32768" :placeholder="String(defaultAgentMaxTokens[definition.kind])" /><small class="field-hint">{{ t('settings.agents.maxTokensHelp') }}</small></label>
             </div>
             <aside class="agent-tip"><strong>{{ t('settings.agents.capabilityTips') }}</strong><div><span v-for="index in definition.requirementCount" :key="index">{{ t(agentRequirementKey(definition.kind, index - 1)) }}</span></div></aside>
           </article>
@@ -483,11 +492,16 @@ onMounted(load)
 .connection-card .test-result { margin-top: .3rem; color: var(--accent); font-weight: 700; }
 .connection-actions { display: flex; align-items: center; gap: .75rem; }
 .agent-defaults { display: grid; gap: .8rem; }
-.agent-default-card { display: grid; grid-template-columns: minmax(190px, .9fr) minmax(320px, 1.4fr) minmax(220px, 1fr); align-items: center; gap: 1.2rem; }
+.agent-default-card { display: grid; grid-template-columns: minmax(190px, .9fr) minmax(320px, 1.4fr) minmax(220px, 1fr); align-items: start; gap: 1.2rem; }
 .agent-copy h3 { display: inline; margin: 0; }
 .agent-copy p { margin: .45rem 0 0; color: var(--muted); font-size: .78rem; line-height: 1.5; }
 .agent-fields { display: grid; grid-template-columns: 1fr 1.35fr; gap: .75rem; }
+.agent-fields label { display: grid; gap: 7px; }
+.agent-fields label > span { color: #3d4843; font-size: 12px; font-weight: 700; }
 .model-input-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .45rem; }
+.max-tokens-field { grid-column: 1 / -1; }
+.max-tokens-field input { max-width: 220px; }
+.field-hint { color: var(--muted); font-size: 10px; line-height: 1.4; }
 .compact-button { padding-inline: .7rem; white-space: nowrap; }
 .agent-tip { padding: .75rem; border-radius: 10px; background: var(--surface-soft); }
 .agent-tip strong { display: block; margin-bottom: .45rem; font-size: .7rem; }

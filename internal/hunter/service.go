@@ -11,6 +11,7 @@ import (
 
 	"github.com/lrx0014/ResumeGPT/internal/platform/workqueue"
 	"github.com/lrx0014/ResumeGPT/internal/profile"
+	"github.com/lrx0014/ResumeGPT/internal/settings"
 	"github.com/lrx0014/ResumeGPT/internal/shared/id"
 )
 
@@ -132,12 +133,14 @@ func prepare(input SaveInput) (Hunter, error) {
 		}
 	}
 	if !validIntervals[input.IntervalMinutes] || input.MaxResults < 1 || input.MaxResults > 10 ||
+		input.MaxTokens < 0 || input.MaxTokens > settings.MaxTokensCeiling ||
 		(input.ExperienceYears != nil && (*input.ExperienceYears < 0 || *input.ExperienceYears > 60)) {
 		return Hunter{}, ErrInvalid
 	}
 	return Hunter{Name: input.Name, RoleQuery: input.RoleQuery, Location: input.Location, WorkMode: input.WorkMode,
 		EmploymentType: input.EmploymentType, ExperienceYears: input.ExperienceYears, Keywords: input.Keywords,
 		AdditionalPrompt: input.AdditionalPrompt, ProfileID: input.ProfileID, ConnectionID: input.ConnectionID, Model: input.Model,
+		MaxTokens:       input.MaxTokens,
 		MaxResults:      input.MaxResults,
 		IntervalMinutes: input.IntervalMinutes, Enabled: input.Enabled}, nil
 }

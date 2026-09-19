@@ -30,6 +30,7 @@ export default {
     agents: {
       eyebrow: 'Agent routing', title: 'Default models', description: 'Choose the provider and model each Agent should use automatically. These defaults prefill new workflows and can still be overridden for an individual task.',
       chooseEachTime: 'Choose each time', modelLabel: 'Model', selectModelOption: 'Select model', loadingModelsPlaceholder: 'Loading models…', modelNamePlaceholder: 'Enter model name',
+      maxTokensLabel: 'Max output tokens', maxTokensHelp: 'Maximum tokens this Agent may generate per call. Pre-filled with a sensible default; raise it if output gets cut off.',
       capabilityTips: 'Model capability tips', saveButton: 'Save Agent defaults', savedToast: 'Agent defaults saved.',
       validation: { missingField: 'Choose both a provider and model for {name}, or clear both fields.' },
       definitions: {
@@ -95,6 +96,7 @@ export default {
       aiModeHelp: 'The Job Import Agent will analyze each publicly accessible HTTPS page from the beginning.', standardModeHelp: 'Fast import for public LinkedIn and Indeed job pages.',
       setupNoticeBefore: 'Add an ', setupNoticeLink: 'LLM provider in Settings', setupNoticeAfter: ' before using AI-assisted import.',
       providerLabel: 'LLM provider', selectProvider: 'Select provider', modelLabel: 'Model', selectModel: 'Select model', loadingModels: 'Loading models…', enterModelName: 'Enter model name',
+      maxTokensLabel: 'Max output tokens',
       urlsLabel: 'Job opportunity URLs', urlsPlaceholderAi: 'Paste up to 50 public HTTPS job page URLs, one per line. A single URL works too.', urlsPlaceholderStandard: 'Paste up to 50 LinkedIn or Indeed URLs, one per line. A single URL works too.',
       queuing: 'Queuing…', submit: 'Import job opportunities',
     },
@@ -138,6 +140,7 @@ export default {
       additionalPromptLabel: 'Additional prompt', additionalPromptPlaceholder: 'For example: Prefer product companies and exclude recruiting agencies.',
       profileLabel: 'Profile reference', optional: 'Optional', noProfileReference: 'No profile reference', maxResultsLabel: 'Jobs per run', maxResultsHint: 'Up to 10 new opportunities per scheduled run.',
       scheduleLabel: 'Schedule', providerLabel: 'LLM provider', selectProvider: 'Select provider', modelLabel: 'Model', selectModel: 'Select model', loadingModels: 'Loading models…', enterModelName: 'Enter model name',
+      maxTokensLabel: 'Max output tokens',
       enableAutomaticRuns: 'Enable automatic runs', noticeBefore: 'Add an ', noticeLinkText: 'LLM provider in Settings', noticeAfter: ' before creating a Job Hunter.', saveChanges: 'Save changes', createAndSchedule: 'Create and schedule',
     },
     schedule: { every6h: 'Every 6 hours', every12h: 'Every 12 hours', daily: 'Daily', weekly: 'Weekly', minutes: '{minutes} minutes' },

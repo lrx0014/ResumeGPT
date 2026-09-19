@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/lrx0014/ResumeGPT/internal/platform/workqueue"
+	"github.com/lrx0014/ResumeGPT/internal/settings"
 	"github.com/lrx0014/ResumeGPT/internal/shared/id"
 )
 
@@ -230,6 +231,9 @@ func (s *ImportService) Create(ctx context.Context, workspaceID string, input Im
 	if input.AIAssisted && (!validText(input.ConnectionID, 200, true) || !validText(input.Model, 200, true)) {
 		return nil, ErrInvalidAIConfig
 	}
+	if input.MaxTokens < 0 || input.MaxTokens > settings.MaxTokensCeiling {
+		return nil, ErrInvalidAIConfig
+	}
 	normalizedURLs := make([]string, 0, len(input.URLs))
 	seen := make(map[string]bool, len(input.URLs))
 	for _, raw := range input.URLs {
@@ -259,7 +263,7 @@ func (s *ImportService) Create(ctx context.Context, workspaceID string, input Im
 			mode = "agent"
 		}
 		payload, err := json.Marshal(ImportPayload{JobID: value.ID, SourceURL: sourceURL, Mode: mode,
-			ConnectionID: input.ConnectionID, Model: input.Model})
+			ConnectionID: input.ConnectionID, Model: input.Model, MaxTokens: input.MaxTokens})
 		if err != nil {
 			return nil, err
 		}
