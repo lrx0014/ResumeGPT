@@ -16,6 +16,7 @@ import (
 	"github.com/lrx0014/ResumeGPT/internal/platform/blobstore"
 	"github.com/lrx0014/ResumeGPT/internal/platform/workqueue"
 	"github.com/lrx0014/ResumeGPT/internal/profile"
+	"github.com/lrx0014/ResumeGPT/internal/prompts"
 	"github.com/lrx0014/ResumeGPT/internal/settings"
 	"github.com/lrx0014/ResumeGPT/internal/shared/id"
 	resumetemplate "github.com/lrx0014/ResumeGPT/internal/template"
@@ -292,31 +293,66 @@ func (p *Processor) fail(ctx context.Context, task workqueue.Job, code, message 
 }
 
 func writerPrompt(run Run, p profile.Profile, j job.Job) string {
-	return fmt.Sprintf("Create a tailored %s in %s for a %s target. Page target: %s. Custom instructions: %s\n\nPROFILE:\n%s\n\nOPPORTUNITY:\nTitle: %s\nCompany: %s\nLocation: %s\nDescription:\n%s", run.DocumentType, run.Language, p.TargetRole, run.PageTarget, run.CustomInstructions, limit(p.Content, 60000), j.Title, j.Company, j.Location, limit(j.Description, 50000))
+	return prompts.WriterTask(run.DocumentType, run.Language, p.TargetRole, run.PageTarget, run.CustomInstructions, p.Content, j.Title, j.Company, j.Location, j.Description)
 }
 func rendererPrompt(run Run, t resumetemplate.Template, draft, avatarName string) string {
-	assetInstruction := "No profile avatar is available. Do not invent or reference one."
+	assetInstruction := prompts.TemplateApplierNoAvatarInstruction
 	if avatarName != "" {
-		assetInstruction = fmt.Sprintf("A profile avatar is available in the entry file directory as %s. If the template exposes a portrait, photo, profile image, or headshot mechanism, use that mechanism with this exact filename. Do not replace the template's photo macro with an improvised layout. If the template has no photo capability, leave its structure unchanged.", avatarName)
+		assetInstruction = prompts.TemplateApplierAvatarInstruction(avatarName)
 	}
-	return fmt.Sprintf("Render this %s draft into the selected LaTeX template. Target %s. First call read_template_source and study how the template is intended to be used, including its custom commands and examples. The source may contain File markers identifying project files. Return the complete entry .tex only.\n\nTEMPLATE METADATA:\nName: %s\nSource: %s\nEntry file: %s\n\nPROFILE ASSETS:\n%s\n\nDRAFT:\n%s", run.DocumentType, run.PageTarget, t.Name, t.SourceName, t.EntryFile, assetInstruction, limit(draft, 50000))
+	return prompts.RendererTask(run.DocumentType, run.PageTarget, t.Name, t.SourceName, t.EntryFile, assetInstruction, draft)
 }
 func revisionPrompt(run Run, draft, source, instruction string) string {
-	return fmt.Sprintf("Revise the current %s LaTeX using the user's follow-up instruction. Return only the complete compilable entry .tex file. Preserve all factual claims from the grounded draft; do not invent facts. Preserve safe template structure and assets.\n\nUSER INSTRUCTION:\n%s\n\nGROUNDED DRAFT:\n%s\n\nCURRENT LATEX:\n%s", run.DocumentType, limit(instruction, 4000), limit(draft, 50000), limit(source, 70000))
+	return prompts.RendererRevisionTask(run.DocumentType, instruction, draft, source)
 }
 func reviewerPrompt(run Run, pageCount int) string {
-	return fmt.Sprintf("Review this generated %s. Page target: %s. Actual pages: %d. Reject if the page target is violated or any visible layout defect exists.", run.DocumentType, run.PageTarget, pageCount)
+	return prompts.ReviewerTask(run.DocumentType, run.PageTarget, pageCount)
 }
-func parseReview(value string) (bool, string) {
+
+// parseReview parses the Visual Reviewer's JSON response. visionUnsupported
+// reports the model's own self-declared "I was not given a usable image"
+// signal (see prompts.VisualReviewerSystem) — distinct from a provider-level
+// rejection, which surfaces as ErrVisionUnsupported from the HTTP gateway
+// instead. Both end up handled the same way by the caller.
+//
+// Models don't reliably follow the exact {"visionUnsupported":true} escape
+// hatch the prompt asks for — some paraphrase the same complaint in their
+// own words instead (e.g. "no rasterized page images ... were available for
+// visual review"). reviewerReportsNoImage catches that free-text case too,
+// the same way gateway.go's visionUnsupported() pattern-matches a provider's
+// own error text rather than relying on a fixed error code.
+func parseReview(value string) (approved bool, feedback string, visionUnsupported bool) {
 	clean := cleanModelSource(value)
 	var result struct {
-		Approved bool   `json:"approved"`
-		Feedback string `json:"feedback"`
+		Approved          bool   `json:"approved"`
+		Feedback          string `json:"feedback"`
+		VisionUnsupported bool   `json:"visionUnsupported"`
 	}
 	if json.Unmarshal([]byte(clean), &result) == nil {
-		return result.Approved, strings.TrimSpace(result.Feedback)
+		feedback = strings.TrimSpace(result.Feedback)
+		return result.Approved, feedback, result.VisionUnsupported || reviewerReportsNoImage(feedback)
 	}
-	return false, limit(clean, 4000)
+	return false, limit(clean, 4000), false
+}
+
+func reviewerReportsNoImage(feedback string) bool {
+	value := strings.ToLower(feedback)
+	if !strings.Contains(value, "image") && !strings.Contains(value, "pdf") {
+		return false
+	}
+	patterns := []string{
+		"no image", "no page image", "no rasterized", "no inspectable",
+		"not available for visual review", "no usable image", "no visual content",
+		"cannot inspect", "unable to inspect", "cannot see", "unable to see", "unable to view",
+		"was not provided", "were not available", "not supplied", "no supported pdf",
+		"did not receive", "no image data", "missing image",
+	}
+	for _, pattern := range patterns {
+		if strings.Contains(value, pattern) {
+			return true
+		}
+	}
+	return false
 }
 func expectedPages(target string) int {
 	if target == "one_page" {
