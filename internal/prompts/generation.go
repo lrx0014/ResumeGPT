@@ -41,7 +41,7 @@ const (
 const DesignerNoAvatarInstruction = "No profile avatar is available. Do not create an empty portrait frame."
 
 func DesignerAvatarInstruction(avatarSrcPlaceholder string) string {
-	return "A profile avatar is available. Use the exact src value " + avatarSrcPlaceholder + " if a portrait suits this document's design."
+	return "A profile avatar is available and must be included as a portrait image in the layout, positioned neatly near the name or contact details. Use the exact src value " + avatarSrcPlaceholder + "."
 }
 
 const TemplateApplierNoAvatarInstruction = "No profile avatar is available. Do not invent or reference one."
