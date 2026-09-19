@@ -304,5 +304,6 @@ export default {
       },
     },
     actions: { continue: 'Continuer : {title}', createDocument: 'Créer un CV ou une lettre de motivation', reviewSetup: 'Vérifier la configuration de la génération' },
+    links: { github: 'Voir sur GitHub', homepage: 'Page d\'accueil du projet' },
   },
 }

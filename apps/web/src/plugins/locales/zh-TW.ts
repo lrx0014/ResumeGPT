@@ -304,5 +304,6 @@ export default {
       },
     },
     actions: { continue: '繼續：{title}', createDocument: '建立履歷或求職信', reviewSetup: '檢視產生設定' },
+    links: { github: '在 GitHub 上查看', homepage: '專案首頁' },
   },
 }

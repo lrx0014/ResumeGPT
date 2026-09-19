@@ -304,5 +304,6 @@ export default {
       },
     },
     actions: { continue: 'Continuar: {title}', createDocument: 'Crear CV o carta de presentación', reviewSetup: 'Revisar la configuración de generación' },
+    links: { github: 'Ver en GitHub', homepage: 'Página de inicio del proyecto' },
   },
 }

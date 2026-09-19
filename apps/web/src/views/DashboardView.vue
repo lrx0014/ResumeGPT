@@ -73,6 +73,12 @@ onMounted(load)
 
 <template>
   <div class="page dashboard-page">
+    <div class="page-corner-links">
+      <a class="icon-link" href="https://github.com/lrx0014/ResumeGPT" target="_blank" rel="noopener noreferrer" :aria-label="t('overview.links.github')" :title="t('overview.links.github')">
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"></path></svg>
+      </a>
+      <a class="icon-link brand-mark" href="https://resumegpt.tech-fun.net" target="_blank" rel="noopener noreferrer" :aria-label="t('overview.links.homepage')" :title="t('overview.links.homepage')">Ré</a>
+    </div>
     <PageHeader
       :eyebrow="t('pages.overview.eyebrow')"
       :title="t('pages.overview.title')"
@@ -121,8 +127,13 @@ onMounted(load)
 </template>
 
 <style scoped>
-.dashboard-page { display: grid; gap: 1.25rem; }
+.dashboard-page { position: relative; display: grid; gap: 1.25rem; }
 .dashboard-page :deep(.page-header) { margin-bottom: .5rem; }
+.page-corner-links { position: absolute; top: 4px; right: 0; display: flex; align-items: center; gap: .5rem; }
+.icon-link { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); transition: transform .18s ease, border-color .18s ease; }
+.icon-link:hover { border-color: var(--accent); transform: translateY(-1px); }
+.icon-link svg { width: 17px; height: 17px; }
+.icon-link.brand-mark { border-color: transparent; font-size: 15px; }
 .overview-metrics { grid-template-columns: repeat(5, minmax(0, 1fr)); margin-bottom: 0; }
 .metric-card { transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease; }
 .metric-card:hover { border-color: #b8c9bf; transform: translateY(-2px); box-shadow: 0 22px 55px rgba(29, 48, 40, .11); }
@@ -142,5 +153,6 @@ onMounted(load)
 .recent-item p { margin: .25rem 0 0; color: var(--muted); font-size: .75rem; }
 .recent-item .status-pill { font-size: .62rem; }
 @media (max-width: 1050px) { .overview-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .page-corner-links { position: static; justify-content: flex-end; margin-bottom: .75rem; } }
 @media (max-width: 620px) { .overview-metrics { grid-template-columns: 1fr; } .recent-item { grid-template-columns: auto minmax(0, 1fr); } .recent-item .status-pill { grid-column: 2; } }
 </style>

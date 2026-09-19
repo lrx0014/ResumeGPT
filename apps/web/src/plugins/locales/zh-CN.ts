@@ -304,5 +304,6 @@ export default {
       },
     },
     actions: { continue: '继续：{title}', createDocument: '创建简历或求职信', reviewSetup: '查看生成设置' },
+    links: { github: '在 GitHub 上查看', homepage: '项目主页' },
   },
 }

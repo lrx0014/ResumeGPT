@@ -304,5 +304,6 @@ export default {
       },
     },
     actions: { continue: 'Weiter: {title}', createDocument: 'Lebenslauf oder Anschreiben erstellen', reviewSetup: 'Einrichtung der Erstellung prüfen' },
+    links: { github: 'Auf GitHub ansehen', homepage: 'Projekt-Homepage' },
   },
 }

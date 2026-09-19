@@ -304,5 +304,6 @@ export default {
       },
     },
     actions: { continue: '続ける: {title}', createDocument: 'CVまたはカバーレターを作成', reviewSetup: '生成の設定を確認' },
+    links: { github: 'GitHubで見る', homepage: 'プロジェクトホームページ' },
   },
 }

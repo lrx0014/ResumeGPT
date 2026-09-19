@@ -315,5 +315,6 @@ export default {
       },
     },
     actions: { continue: 'Continue: {title}', createDocument: 'Create CV or Cover Letter', reviewSetup: 'Review generation setup' },
+    links: { github: 'View on GitHub', homepage: 'Project Homepage' },
   },
 }
