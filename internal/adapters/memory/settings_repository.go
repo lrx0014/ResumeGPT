@@ -69,6 +69,18 @@ func (r *SettingsRepository) ListConnections(_ context.Context, workspaceID stri
 	return result, nil
 }
 
+func (r *SettingsRepository) CountConnections(_ context.Context, workspaceID string) (int, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	total := 0
+	for _, item := range r.connections {
+		if item.Connection.WorkspaceID == workspaceID {
+			total++
+		}
+	}
+	return total, nil
+}
+
 func (r *SettingsRepository) GetConnection(_ context.Context, workspaceID, connectionID string) (settings.StoredConnection, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

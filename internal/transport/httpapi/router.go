@@ -85,6 +85,7 @@ func New(deps Dependencies) http.Handler {
 	api.registerGenerations(protected)
 	api.registerTaskMonitor(protected)
 	api.registerHunters(protected)
+	api.registerOverview(protected)
 	protected.Handle("GET /v1/system/capabilities", api.requireRole(identity.RoleViewer, api.capabilities))
 	protected.Handle("GET /v1/profiles", api.requireRole(identity.RoleViewer, api.listProfiles))
 	protected.Handle("POST /v1/profiles", api.requireRole(identity.RoleEditor, api.createProfile))

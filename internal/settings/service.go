@@ -87,6 +87,10 @@ func (s *Service) ListConnections(ctx context.Context, workspaceID string) ([]LL
 	return result, nil
 }
 
+func (s *Service) CountConnections(ctx context.Context, workspaceID string) (int, error) {
+	return s.repository.CountConnections(ctx, workspaceID)
+}
+
 func (s *Service) CreateConnection(ctx context.Context, workspaceID string, input LLMConnectionInput) (LLMConnection, error) {
 	connection, err := prepareConnection(input)
 	if err != nil {

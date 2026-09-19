@@ -30,6 +30,21 @@ func (r *TemplateRepository) List(_ context.Context, workspaceID string) ([]resu
 	sort.Slice(items, func(i, j int) bool { return items[i].CreatedAt.After(items[j].CreatedAt) })
 	return items, nil
 }
+func (r *TemplateRepository) Count(_ context.Context, workspaceID string) (resumetemplate.Counts, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var counts resumetemplate.Counts
+	for _, item := range r.items {
+		if item.WorkspaceID != workspaceID {
+			continue
+		}
+		counts.Custom++
+		if item.State == "ready" {
+			counts.Ready++
+		}
+	}
+	return counts, nil
+}
 func (r *TemplateRepository) Get(_ context.Context, workspaceID, templateID string) (resumetemplate.Template, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

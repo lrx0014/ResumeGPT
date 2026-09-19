@@ -83,6 +83,11 @@ type ExtractPayload struct {
 	EntryFile  string `json:"entryFile,omitempty"`
 }
 
+type Counts struct {
+	Ready  int `json:"ready"`
+	Custom int `json:"custom"`
+}
+
 type Repository interface {
 	List(context.Context, string) ([]Template, error)
 	Get(context.Context, string, string) (Template, error)
@@ -93,4 +98,5 @@ type Repository interface {
 	Delete(context.Context, string, string) error
 	StoreExtraction(context.Context, workqueue.Job, string, string, string) (bool, error)
 	RecordFailure(context.Context, workqueue.Job, string, string, string) error
+	Count(context.Context, string) (Counts, error)
 }

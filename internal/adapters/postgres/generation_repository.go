@@ -61,6 +61,19 @@ func (r *GenerationRepository) List(ctx context.Context, workspaceID string) ([]
 	})
 	return items, err
 }
+func (r *GenerationRepository) Count(ctx context.Context, workspaceID string) (generation.Counts, error) {
+	var counts generation.Counts
+	err := withWorkspaceTx(ctx, r.pool, workspaceID, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx, `
+            SELECT COUNT(*) FILTER (WHERE state='ready'), COUNT(*) FILTER (WHERE state IN ('running','queued'))
+            FROM generation_runs WHERE workspace_id=$1`, workspaceID).Scan(&counts.Ready, &counts.Active)
+		if err != nil {
+			return fmt.Errorf("count generation runs: %w", err)
+		}
+		return nil
+	})
+	return counts, err
+}
 func (r *GenerationRepository) Get(ctx context.Context, workspaceID, id string) (generation.Run, error) {
 	var item generation.Run
 	err := withWorkspaceTx(ctx, r.pool, workspaceID, func(tx pgx.Tx) error {

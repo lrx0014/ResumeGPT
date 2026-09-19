@@ -262,3 +262,10 @@ export interface GenerationStep {
   id: string; workspaceId: string; generationId: string; kind: GenerationStepKind; sequence: number
   content?: string; feedback?: string; artifactObjectId?: string; repairCount: number; createdAt: string
 }
+export interface WorkspaceOverview {
+  profiles: { total: number; withContent: number }
+  jobs: { total: number; ready: number; pending: number; attention: number }
+  templates: { ready: number; custom: number }
+  llmConnections: { total: number }
+  generations: { ready: number; active: number }
+}

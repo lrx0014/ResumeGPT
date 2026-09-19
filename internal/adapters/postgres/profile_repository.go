@@ -44,6 +44,21 @@ func (r *ProfileRepository) List(ctx context.Context, workspaceID string) ([]pro
 	return items, err
 }
 
+func (r *ProfileRepository) Count(ctx context.Context, workspaceID string) (profile.Counts, error) {
+	var counts profile.Counts
+	err := withWorkspaceTx(ctx, r.pool, workspaceID, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx, `
+			SELECT COUNT(*), COUNT(*) FILTER (WHERE LENGTH(BTRIM(content)) > 0)
+			FROM profiles
+			WHERE workspace_id = $1`, workspaceID).Scan(&counts.Total, &counts.WithContent)
+		if err != nil {
+			return fmt.Errorf("count profiles: %w", err)
+		}
+		return nil
+	})
+	return counts, err
+}
+
 func (r *ProfileRepository) Get(ctx context.Context, workspaceID, profileID string) (profile.Profile, error) {
 	var item profile.Profile
 	err := withWorkspaceTx(ctx, r.pool, workspaceID, func(tx pgx.Tx) error {

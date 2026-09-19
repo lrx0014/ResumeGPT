@@ -18,6 +18,7 @@ type Repository interface {
 	ListAgentDefaults(context.Context, string) ([]AgentDefault, error)
 	SaveAgentDefaults(context.Context, string, []AgentDefault) ([]AgentDefault, error)
 	ListConnections(context.Context, string) ([]StoredConnection, error)
+	CountConnections(context.Context, string) (int, error)
 	GetConnection(context.Context, string, string) (StoredConnection, error)
 	CreateConnection(context.Context, StoredConnection) (StoredConnection, error)
 	UpdateConnection(context.Context, StoredConnection) (StoredConnection, error)

@@ -35,6 +35,22 @@ func (r *ProfileRepository) List(_ context.Context, workspaceID string) ([]profi
 	return result, nil
 }
 
+func (r *ProfileRepository) Count(_ context.Context, workspaceID string) (profile.Counts, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var counts profile.Counts
+	for _, item := range r.items {
+		if item.WorkspaceID != workspaceID {
+			continue
+		}
+		counts.Total++
+		if len(item.Content) > 0 {
+			counts.WithContent++
+		}
+	}
+	return counts, nil
+}
+
 func (r *ProfileRepository) Get(_ context.Context, workspaceID, profileID string) (profile.Profile, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

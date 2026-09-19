@@ -114,6 +114,18 @@ func (r *SettingsRepository) ListConnections(ctx context.Context, workspaceID st
 	return result, err
 }
 
+func (r *SettingsRepository) CountConnections(ctx context.Context, workspaceID string) (int, error) {
+	var total int
+	err := withWorkspaceTx(ctx, r.pool, workspaceID, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx, `SELECT COUNT(*) FROM llm_connections WHERE workspace_id=$1`, workspaceID).Scan(&total)
+		if err != nil {
+			return fmt.Errorf("count llm connections: %w", err)
+		}
+		return nil
+	})
+	return total, err
+}
+
 func (r *SettingsRepository) GetConnection(ctx context.Context, workspaceID, connectionID string) (settings.StoredConnection, error) {
 	var result settings.StoredConnection
 	err := withWorkspaceTx(ctx, r.pool, workspaceID, func(tx pgx.Tx) error {

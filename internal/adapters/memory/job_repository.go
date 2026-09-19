@@ -111,6 +111,27 @@ func (r *JobRepository) List(_ context.Context, workspaceID string) ([]job.Job, 
 	return result, nil
 }
 
+func (r *JobRepository) Count(_ context.Context, workspaceID string) (job.Counts, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var counts job.Counts
+	for _, item := range r.items {
+		if item.WorkspaceID != workspaceID {
+			continue
+		}
+		counts.Total++
+		switch {
+		case item.ImportState == "manual" || item.ImportState == "ready":
+			counts.Ready++
+		case item.ImportState == "queued" || item.ImportState == "fetching":
+			counts.Pending++
+		case item.ImportState == "needs_user_action" || item.ImportState == "failed":
+			counts.Attention++
+		}
+	}
+	return counts, nil
+}
+
 func (r *JobRepository) Get(_ context.Context, workspaceID, jobID string) (job.Job, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

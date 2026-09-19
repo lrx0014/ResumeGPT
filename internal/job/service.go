@@ -41,6 +41,10 @@ func (s *Service) List(ctx context.Context, workspaceID string) ([]Job, error) {
 	return s.repository.List(ctx, workspaceID)
 }
 
+func (s *Service) Count(ctx context.Context, workspaceID string) (Counts, error) {
+	return s.repository.Count(ctx, workspaceID)
+}
+
 func (s *Service) Get(ctx context.Context, workspaceID, jobID string) (Job, error) {
 	return s.repository.Get(ctx, workspaceID, jobID)
 }

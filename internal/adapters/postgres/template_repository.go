@@ -45,6 +45,20 @@ func (r *TemplateRepository) List(ctx context.Context, workspaceID string) ([]re
 	return items, err
 }
 
+func (r *TemplateRepository) Count(ctx context.Context, workspaceID string) (resumetemplate.Counts, error) {
+	var counts resumetemplate.Counts
+	err := withWorkspaceTx(ctx, r.pool, workspaceID, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx, `
+            SELECT COUNT(*) FILTER (WHERE state='ready'), COUNT(*)
+            FROM templates WHERE workspace_id=$1`, workspaceID).Scan(&counts.Ready, &counts.Custom)
+		if err != nil {
+			return fmt.Errorf("count templates: %w", err)
+		}
+		return nil
+	})
+	return counts, err
+}
+
 func (r *TemplateRepository) Get(ctx context.Context, workspaceID, templateID string) (resumetemplate.Template, error) {
 	var item resumetemplate.Template
 	err := withWorkspaceTx(ctx, r.pool, workspaceID, func(tx pgx.Tx) error {

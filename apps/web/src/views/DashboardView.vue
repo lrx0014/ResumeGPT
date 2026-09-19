@@ -7,33 +7,25 @@ const { t } = useI18n()
 import PageHeader from '../components/PageHeader.vue'
 import { api } from '../lib/api'
 import { jobStatusLabel } from '../lib/jobStatus'
-import type { GenerationRun, Job, LLMConnection, Profile, Template } from '../lib/types'
+import type { Job, WorkspaceOverview } from '../lib/types'
 
-const profiles = ref<Profile[]>([])
+const emptyOverview: WorkspaceOverview = { profiles: { total: 0, withContent: 0 }, jobs: { total: 0, ready: 0, pending: 0, attention: 0 }, templates: { ready: 0, custom: 0 }, llmConnections: { total: 0 }, generations: { ready: 0, active: 0 } }
+
+const overview = ref<WorkspaceOverview>(emptyOverview)
 const opportunities = ref<Job[]>([])
-const templates = ref<Template[]>([])
-const connections = ref<LLMConnection[]>([])
-const generations = ref<GenerationRun[]>([])
 const capabilities = ref<Record<string, boolean>>({})
 const loading = ref(true)
 const error = ref('')
 
-const preparedProfiles = computed(() => profiles.value.filter(item => item.hasContent).length)
-const readyOpportunities = computed(() => opportunities.value.filter(item => ['manual', 'ready'].includes(item.importState)).length)
-const pendingOpportunities = computed(() => opportunities.value.filter(item => ['queued', 'fetching'].includes(item.importState)).length)
-const attentionOpportunities = computed(() => opportunities.value.filter(item => ['needs_user_action', 'failed'].includes(item.importState)).length)
-const readyTemplates = computed(() => templates.value.filter(item => item.state === 'ready').length)
-const customTemplates = computed(() => templates.value.filter(item => !item.builtIn).length)
 const recentOpportunities = computed(() => [...opportunities.value].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)).slice(0, 3))
-const prerequisitesReady = computed(() => preparedProfiles.value > 0 && readyOpportunities.value > 0 && readyTemplates.value > 0 && connections.value.length > 0)
-const readyGenerations = computed(() => generations.value.filter(item => item.state === 'ready').length)
+const prerequisitesReady = computed(() => overview.value.profiles.withContent > 0 && overview.value.jobs.ready > 0 && overview.value.templates.ready > 0 && overview.value.llmConnections.total > 0)
 
 const setupSteps = computed(() => [
-  { number: '01', title: t('overview.setup.steps.profile.title'), description: preparedProfiles.value ? t('overview.setup.steps.profile.detail', { count: preparedProfiles.value }, preparedProfiles.value) : t('overview.setup.steps.profile.empty'), to: '/profiles', complete: preparedProfiles.value > 0 },
-  { number: '02', title: t('overview.setup.steps.opportunity.title'), description: readyOpportunities.value ? t('overview.setup.steps.opportunity.detail', { count: readyOpportunities.value }, readyOpportunities.value) : t('overview.setup.steps.opportunity.empty'), to: '/jobs', complete: readyOpportunities.value > 0 },
-  { number: '03', title: t('overview.setup.steps.template.title'), description: readyTemplates.value ? t('overview.setup.steps.template.detail', { count: readyTemplates.value }, readyTemplates.value) : t('overview.setup.steps.template.empty'), to: '/templates', complete: readyTemplates.value > 0 },
-  { number: '04', title: t('overview.setup.steps.provider.title'), description: connections.value.length ? t('overview.setup.steps.provider.detail', { count: connections.value.length }, connections.value.length) : t('overview.setup.steps.provider.empty'), to: '/settings', complete: connections.value.length > 0 },
-  { number: '05', title: t('overview.setup.steps.generate.title'), description: readyGenerations.value ? t('overview.setup.steps.generate.detail', { count: readyGenerations.value }, readyGenerations.value) : capabilities.value.generation ? t('overview.setup.steps.generate.readyCapability') : t('overview.setup.steps.generate.pendingCapability'), to: '/generate', complete: readyGenerations.value > 0, planned: !capabilities.value.generation },
+  { number: '01', title: t('overview.setup.steps.profile.title'), description: overview.value.profiles.withContent ? t('overview.setup.steps.profile.detail', { count: overview.value.profiles.withContent }, overview.value.profiles.withContent) : t('overview.setup.steps.profile.empty'), to: '/profiles', complete: overview.value.profiles.withContent > 0 },
+  { number: '02', title: t('overview.setup.steps.opportunity.title'), description: overview.value.jobs.ready ? t('overview.setup.steps.opportunity.detail', { count: overview.value.jobs.ready }, overview.value.jobs.ready) : t('overview.setup.steps.opportunity.empty'), to: '/jobs', complete: overview.value.jobs.ready > 0 },
+  { number: '03', title: t('overview.setup.steps.template.title'), description: overview.value.templates.ready ? t('overview.setup.steps.template.detail', { count: overview.value.templates.ready }, overview.value.templates.ready) : t('overview.setup.steps.template.empty'), to: '/templates', complete: overview.value.templates.ready > 0 },
+  { number: '04', title: t('overview.setup.steps.provider.title'), description: overview.value.llmConnections.total ? t('overview.setup.steps.provider.detail', { count: overview.value.llmConnections.total }, overview.value.llmConnections.total) : t('overview.setup.steps.provider.empty'), to: '/settings', complete: overview.value.llmConnections.total > 0 },
+  { number: '05', title: t('overview.setup.steps.generate.title'), description: overview.value.generations.ready ? t('overview.setup.steps.generate.detail', { count: overview.value.generations.ready }, overview.value.generations.ready) : capabilities.value.generation ? t('overview.setup.steps.generate.readyCapability') : t('overview.setup.steps.generate.pendingCapability'), to: '/generate', complete: overview.value.generations.ready > 0, planned: !capabilities.value.generation },
 ])
 
 const firstIncomplete = computed(() => setupSteps.value.find(step => !step.complete && !step.planned))
@@ -43,27 +35,24 @@ const primaryAction = computed(() => firstIncomplete.value
 
 function metricDetail(kind: 'profiles' | 'opportunities' | 'templates' | 'connections') {
   if (loading.value) return t('overview.metrics.loading')
-  if (kind === 'profiles') return preparedProfiles.value ? t('overview.metrics.profilesDetail', { count: preparedProfiles.value }, preparedProfiles.value) : t('overview.metrics.profilesEmpty')
+  if (kind === 'profiles') return overview.value.profiles.withContent ? t('overview.metrics.profilesDetail', { count: overview.value.profiles.withContent }, overview.value.profiles.withContent) : t('overview.metrics.profilesEmpty')
   if (kind === 'opportunities') {
-    if (attentionOpportunities.value) return t('overview.metrics.opportunitiesAttention', { count: attentionOpportunities.value }, attentionOpportunities.value)
-    if (pendingOpportunities.value) return t('overview.metrics.opportunitiesPending', { count: pendingOpportunities.value }, pendingOpportunities.value)
-    return opportunities.value.length ? t('overview.metrics.opportunitiesReady', { count: readyOpportunities.value }, readyOpportunities.value) : t('overview.metrics.opportunitiesEmpty')
+    if (overview.value.jobs.attention) return t('overview.metrics.opportunitiesAttention', { count: overview.value.jobs.attention }, overview.value.jobs.attention)
+    if (overview.value.jobs.pending) return t('overview.metrics.opportunitiesPending', { count: overview.value.jobs.pending }, overview.value.jobs.pending)
+    return overview.value.jobs.total ? t('overview.metrics.opportunitiesReady', { count: overview.value.jobs.ready }, overview.value.jobs.ready) : t('overview.metrics.opportunitiesEmpty')
   }
-  if (kind === 'templates') return customTemplates.value ? t('overview.metrics.templatesCustom', { count: customTemplates.value }, customTemplates.value) : t('overview.metrics.templatesEmpty')
-  return connections.value.length ? t('overview.metrics.providersSupported') : t('overview.metrics.providersRequired')
+  if (kind === 'templates') return overview.value.templates.custom ? t('overview.metrics.templatesCustom', { count: overview.value.templates.custom }, overview.value.templates.custom) : t('overview.metrics.templatesEmpty')
+  return overview.value.llmConnections.total ? t('overview.metrics.providersSupported') : t('overview.metrics.providersRequired')
 }
 
 async function load() {
   loading.value = true
   const results = await Promise.allSettled([
-    api.listProfiles(), api.listJobs(), api.listTemplates(), api.listLLMConnections(), api.capabilities(), api.listGenerations(),
+    api.overview(), api.listJobs(), api.capabilities(),
   ])
-  if (results[0].status === 'fulfilled') profiles.value = results[0].value.items
+  if (results[0].status === 'fulfilled') overview.value = results[0].value
   if (results[1].status === 'fulfilled') opportunities.value = results[1].value.items
-  if (results[2].status === 'fulfilled') templates.value = results[2].value.items
-  if (results[3].status === 'fulfilled') connections.value = results[3].value.items
-  if (results[4].status === 'fulfilled') capabilities.value = results[4].value.features
-  if (results[5].status === 'fulfilled') generations.value = results[5].value.items
+  if (results[2].status === 'fulfilled') capabilities.value = results[2].value.features
   if (results.some(result => result.status === 'rejected')) error.value = t('overview.errors.partialLoad')
   loading.value = false
 }
@@ -90,11 +79,11 @@ onMounted(load)
     <p v-if="error" class="notice error" role="alert">{{ error }}</p>
 
     <section class="metric-grid overview-metrics" :aria-label="t('overview.metrics.ariaLabel')">
-      <RouterLink class="metric-card" to="/profiles"><span>{{ t('overview.metrics.profiles') }}</span><strong>{{ loading ? '—' : profiles.length }}</strong><small>{{ metricDetail('profiles') }}</small></RouterLink>
-      <RouterLink class="metric-card" to="/jobs"><span>{{ t('overview.metrics.jobOpportunities') }}</span><strong>{{ loading ? '—' : opportunities.length }}</strong><small>{{ metricDetail('opportunities') }}</small></RouterLink>
-      <RouterLink class="metric-card" to="/templates"><span>{{ t('overview.metrics.readyTemplates') }}</span><strong>{{ loading ? '—' : readyTemplates }}</strong><small>{{ metricDetail('templates') }}</small></RouterLink>
-      <RouterLink class="metric-card" to="/settings"><span>{{ t('overview.metrics.llmProviders') }}</span><strong>{{ loading ? '—' : connections.length }}</strong><small>{{ metricDetail('connections') }}</small></RouterLink>
-      <RouterLink class="metric-card" to="/generate"><span>{{ t('overview.metrics.generatedPdfs') }}</span><strong>{{ loading ? '—' : readyGenerations }}</strong><small>{{ generations.some(item => item.state === 'running' || item.state === 'queued') ? t('overview.metrics.generationInProgress') : t('overview.metrics.generationReviewed') }}</small></RouterLink>
+      <RouterLink class="metric-card" to="/profiles"><span>{{ t('overview.metrics.profiles') }}</span><strong>{{ loading ? '—' : overview.profiles.total }}</strong><small>{{ metricDetail('profiles') }}</small></RouterLink>
+      <RouterLink class="metric-card" to="/jobs"><span>{{ t('overview.metrics.jobOpportunities') }}</span><strong>{{ loading ? '—' : overview.jobs.total }}</strong><small>{{ metricDetail('opportunities') }}</small></RouterLink>
+      <RouterLink class="metric-card" to="/templates"><span>{{ t('overview.metrics.readyTemplates') }}</span><strong>{{ loading ? '—' : overview.templates.ready }}</strong><small>{{ metricDetail('templates') }}</small></RouterLink>
+      <RouterLink class="metric-card" to="/settings"><span>{{ t('overview.metrics.llmProviders') }}</span><strong>{{ loading ? '—' : overview.llmConnections.total }}</strong><small>{{ metricDetail('connections') }}</small></RouterLink>
+      <RouterLink class="metric-card" to="/generate"><span>{{ t('overview.metrics.generatedPdfs') }}</span><strong>{{ loading ? '—' : overview.generations.ready }}</strong><small>{{ overview.generations.active > 0 ? t('overview.metrics.generationInProgress') : t('overview.metrics.generationReviewed') }}</small></RouterLink>
     </section>
 
     <div class="dashboard-grid">

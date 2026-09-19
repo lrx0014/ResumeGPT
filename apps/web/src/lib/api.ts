@@ -1,4 +1,4 @@
-import type { AgentDefault, APIError, BackgroundTask, BackgroundTaskPage, Job, JobHunter, JobHunterInput, JobHunterReviewItem, JobImportInput, JobInput, ListResponse, Profile, DocumentUpload, SignedURL, StagedDocumentUpload, SettingsPreferences, LLMConnection, LLMConnectionInput, LLMConnectionTest, StagedTemplate, Template, TemplateKind, GenerationInput, GenerationRun, GenerationStep } from './types'
+import type { AgentDefault, APIError, BackgroundTask, BackgroundTaskPage, Job, JobHunter, JobHunterInput, JobHunterReviewItem, JobImportInput, JobInput, ListResponse, Profile, DocumentUpload, SignedURL, StagedDocumentUpload, SettingsPreferences, LLMConnection, LLMConnectionInput, LLMConnectionTest, StagedTemplate, Template, TemplateKind, GenerationInput, GenerationRun, GenerationStep, WorkspaceOverview } from './types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
 
@@ -21,6 +21,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   capabilities: () => request<{ features: Record<string, boolean> }>('/v1/system/capabilities'),
+  overview: () => request<WorkspaceOverview>('/v1/overview'),
   listTasks: (input: { search?: string; state?: string; kind?: string; page?: number; pageSize?: number }) => {
     const query = new URLSearchParams()
     if (input.search) query.set('search', input.search)

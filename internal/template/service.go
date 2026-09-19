@@ -56,6 +56,18 @@ func (s *Service) List(ctx context.Context, workspaceID string) ([]Template, err
 	return append([]Template{defaultResume(workspaceID, false)}, items...), nil
 }
 
+// Count reports how many templates are ready to use and how many are custom
+// (non-built-in). Ready includes the always-present built-in Rezume template,
+// which List prepends synthetically rather than storing in the repository.
+func (s *Service) Count(ctx context.Context, workspaceID string) (Counts, error) {
+	counts, err := s.repository.Count(ctx, workspaceID)
+	if err != nil {
+		return Counts{}, err
+	}
+	counts.Ready++
+	return counts, nil
+}
+
 func (s *Service) Get(ctx context.Context, workspaceID, templateID string) (Template, error) {
 	if templateID == DefaultResumeID {
 		return defaultResume(workspaceID, true), nil
