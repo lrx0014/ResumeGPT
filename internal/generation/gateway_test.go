@@ -178,6 +178,86 @@ func TestHTTPGatewayRetriesWithoutStopWhenProviderRejectsThem(t *testing.T) {
 	}
 }
 
+func TestHTTPGatewayRetriesWithHigherBudgetAfterTruncatedEmptyResponse(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if attempts == 1 {
+			if body["max_tokens"] != float64(512) {
+				t.Fatalf("first attempt max_tokens = %v, want 512", body["max_tokens"])
+			}
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"content":""},"finish_reason":"length"}]}`))
+			return
+		}
+		if body["max_tokens"] != float64(1024) {
+			t.Fatalf("retry max_tokens = %v, want 1024", body["max_tokens"])
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"approved"},"finish_reason":"stop"}]}`))
+	}))
+	defer server.Close()
+
+	result, err := NewHTTPGateway().Complete(context.Background(), settings.RuntimeConnection{Connection: settings.LLMConnection{Provider: "openai_compatible", BaseURL: server.URL}}, "verbose-model", "system", "review", nil, 512, nil)
+	if err != nil || result != "approved" {
+		t.Fatalf("complete: %q %v", result, err)
+	}
+	if attempts != 2 {
+		t.Fatalf("attempts = %d, want 2", attempts)
+	}
+}
+
+func TestHTTPGatewayDoesNotRetryEmptyResponseWithoutLengthFinishReason(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		attempts++
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":""},"finish_reason":"stop"}]}`))
+	}))
+	defer server.Close()
+
+	_, err := NewHTTPGateway().Complete(context.Background(), settings.RuntimeConnection{Connection: settings.LLMConnection{Provider: "openai_compatible", BaseURL: server.URL}}, "model", "system", "review", nil, 512, nil)
+	if !errors.Is(err, ErrLLM) || errors.Is(err, errTruncatedResponse) {
+		t.Fatalf("error = %v, want plain ErrLLM without truncation retry", err)
+	}
+	if attempts != 1 {
+		t.Fatalf("attempts = %d, want 1 (no retry without finish_reason=length)", attempts)
+	}
+}
+
+func TestHTTPGatewayOllamaRetriesWithHigherBudgetAfterTruncatedEmptyResponse(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		options := body["options"].(map[string]any)
+		if attempts == 1 {
+			if options["num_predict"] != float64(512) {
+				t.Fatalf("first attempt num_predict = %v, want 512", options["num_predict"])
+			}
+			_, _ = w.Write([]byte(`{"message":{"content":""},"done":true,"done_reason":"length"}`))
+			return
+		}
+		if options["num_predict"] != float64(1024) {
+			t.Fatalf("retry num_predict = %v, want 1024", options["num_predict"])
+		}
+		_, _ = w.Write([]byte(`{"message":{"content":"approved"},"done":true,"done_reason":"stop"}`))
+	}))
+	defer server.Close()
+
+	result, err := NewHTTPGateway().Complete(context.Background(), settings.RuntimeConnection{Connection: settings.LLMConnection{Provider: "ollama", BaseURL: server.URL}}, "local", "system", "review", nil, 512, nil)
+	if err != nil || result != "approved" {
+		t.Fatalf("complete: %q %v", result, err)
+	}
+	if attempts != 2 {
+		t.Fatalf("attempts = %d, want 2", attempts)
+	}
+}
+
 func TestHTTPGatewayOllamaRequest(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/chat" {

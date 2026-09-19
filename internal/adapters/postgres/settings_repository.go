@@ -52,7 +52,7 @@ func (r *SettingsRepository) SavePreferences(ctx context.Context, value settings
 func (r *SettingsRepository) ListAgentDefaults(ctx context.Context, workspaceID string) ([]settings.AgentDefault, error) {
 	result := make([]settings.AgentDefault, 0)
 	err := withWorkspaceTx(ctx, r.pool, workspaceID, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT agent,connection_id,model,updated_at
+		rows, err := tx.Query(ctx, `SELECT agent,connection_id,model,COALESCE(max_tokens,0),updated_at
 			FROM agent_llm_defaults WHERE workspace_id=$1 ORDER BY agent`, workspaceID)
 		if err != nil {
 			return err
@@ -60,7 +60,7 @@ func (r *SettingsRepository) ListAgentDefaults(ctx context.Context, workspaceID 
 		defer rows.Close()
 		for rows.Next() {
 			var value settings.AgentDefault
-			if err := rows.Scan(&value.Agent, &value.ConnectionID, &value.Model, &value.UpdatedAt); err != nil {
+			if err := rows.Scan(&value.Agent, &value.ConnectionID, &value.Model, &value.MaxTokens, &value.UpdatedAt); err != nil {
 				return err
 			}
 			result = append(result, value)
@@ -76,8 +76,8 @@ func (r *SettingsRepository) SaveAgentDefaults(ctx context.Context, workspaceID 
 			return err
 		}
 		for _, value := range values {
-			if _, err := tx.Exec(ctx, `INSERT INTO agent_llm_defaults (workspace_id,agent,connection_id,model,updated_at)
-				VALUES ($1,$2,$3,$4,$5)`, workspaceID, value.Agent, value.ConnectionID, value.Model, value.UpdatedAt); err != nil {
+			if _, err := tx.Exec(ctx, `INSERT INTO agent_llm_defaults (workspace_id,agent,connection_id,model,max_tokens,updated_at)
+				VALUES ($1,$2,$3,$4,NULLIF($5,0),$6)`, workspaceID, value.Agent, value.ConnectionID, value.Model, value.MaxTokens, value.UpdatedAt); err != nil {
 				if isSettingsConstraintError(err) {
 					return settings.ErrInvalid
 				}

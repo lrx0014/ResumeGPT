@@ -17,6 +17,9 @@ var (
 type ModelChoice struct {
 	ConnectionID string `json:"connectionId"`
 	Model        string `json:"model"`
+	// MaxTokens is the max-output-token budget for this role's LLM calls.
+	// 0 means "use the role's built-in default" (settings.EffectiveMaxTokens).
+	MaxTokens int `json:"maxTokens,omitempty"`
 }
 
 type CreateInput struct {

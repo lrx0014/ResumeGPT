@@ -28,6 +28,7 @@ export default {
     agents: {
       eyebrow: 'Agent 路由', title: '默认模型', description: '为每个 Agent 选择应自动使用的提供商和模型。这些默认值会预填新的工作流，仍可针对单次任务单独覆盖。',
       chooseEachTime: '每次手动选择', modelLabel: '模型', selectModelOption: '选择模型', loadingModelsPlaceholder: '正在加载模型…', modelNamePlaceholder: '输入模型名称',
+      maxTokensLabel: '最大输出 Token 数', maxTokensHelp: '该 Agent 每次调用可生成的最大 Token 数。已预填合理的默认值;如果输出被截断,可适当调高。',
       capabilityTips: '模型能力提示', saveButton: '保存 Agent 默认设置', savedToast: 'Agent 默认设置已保存。',
       validation: { missingField: '请为 {name} 同时选择提供商和模型，或将两者都清空。' },
       definitions: {
@@ -84,6 +85,7 @@ export default {
       aiModeHelp: '职位导入 Agent 将从头开始分析每个可公开访问的 HTTPS 页面。', standardModeHelp: '面向公开 LinkedIn 和 Indeed 职位页面的快速导入。',
       setupNoticeBefore: '请先在', setupNoticeLink: '设置中添加 LLM 提供商', setupNoticeAfter: '，然后再使用 AI 辅助导入。',
       providerLabel: 'LLM 提供商', selectProvider: '选择提供商', modelLabel: '模型', selectModel: '选择模型', loadingModels: '正在加载模型…', enterModelName: '输入模型名称',
+      maxTokensLabel: '最大输出 Token 数',
       urlsLabel: '职位机会 URL', urlsPlaceholderAi: '粘贴最多 50 个公开的 HTTPS 职位页面 URL，每行一个。单个 URL 也可以。', urlsPlaceholderStandard: '粘贴最多 50 个 LinkedIn 或 Indeed 链接，每行一个。单个 URL 也可以。',
       queuing: '正在排队…', submit: '导入职位机会',
     },
@@ -127,6 +129,7 @@ export default {
       additionalPromptLabel: '附加提示', additionalPromptPlaceholder: '例如：优先考虑产品公司，排除猎头公司。',
       profileLabel: '关联 Profile', optional: '可选', noProfileReference: '不关联 Profile', maxResultsLabel: '每次运行的职位数量', maxResultsHint: '每次计划运行最多发现 10 个新职位机会。',
       scheduleLabel: '运行计划', providerLabel: 'LLM 提供商', selectProvider: '选择提供商', modelLabel: '模型', selectModel: '选择模型', loadingModels: '正在加载模型…', enterModelName: '输入模型名称',
+      maxTokensLabel: '最大输出 Token 数',
       enableAutomaticRuns: '启用自动运行', noticeBefore: '请先在', noticeLinkText: '设置中添加 LLM 提供商', noticeAfter: '，然后再创建职位猎手。', saveChanges: '保存修改', createAndSchedule: '创建并安排计划',
     },
     schedule: { every6h: '每 6 小时', every12h: '每 12 小时', daily: '每天', weekly: '每周', minutes: '{minutes} 分钟' },

@@ -28,6 +28,7 @@ export default {
     agents: {
       eyebrow: 'Agentルーティング', title: 'デフォルトモデル', description: '各Agentが自動的に使用するプロバイダーとモデルを選択します。これらの既定値は新しいワークフローに自動入力され、個々のタスクごとに上書きすることもできます。',
       chooseEachTime: '毎回選択する', modelLabel: 'モデル', selectModelOption: 'モデルを選択', loadingModelsPlaceholder: 'モデルを読み込み中…', modelNamePlaceholder: 'モデル名を入力',
+      maxTokensLabel: '最大出力トークン数', maxTokensHelp: 'このAgentが1回の呼び出しで生成できる最大トークン数です。妥当な初期値が入力済みです。出力が途中で切れる場合は増やしてください。',
       capabilityTips: 'モデル選定のヒント', saveButton: 'Agentのデフォルト設定を保存', savedToast: 'Agentのデフォルト設定を保存しました。',
       validation: { missingField: '{name}のプロバイダーとモデルの両方を選択するか、両方の項目を空にしてください。' },
       definitions: {
@@ -84,6 +85,7 @@ export default {
       aiModeHelp: 'Job Import Agentが、アクセス可能な各公開HTTPSページを最初から解析します。', standardModeHelp: '公開されているLinkedInおよびIndeedの求人ページを高速にインポートします。',
       setupNoticeBefore: '', setupNoticeLink: '設定でLLMプロバイダー', setupNoticeAfter: 'を追加してから、AIアシストインポートを使用してください。',
       providerLabel: 'LLMプロバイダー', selectProvider: 'プロバイダーを選択', modelLabel: 'モデル', selectModel: 'モデルを選択', loadingModels: 'モデルを読み込み中…', enterModelName: 'モデル名を入力',
+      maxTokensLabel: '最大出力トークン数',
       urlsLabel: '求人情報のURL', urlsPlaceholderAi: '公開されているHTTPS求人ページのURLを1行に1件、最大50件まで貼り付けてください。1件だけでも構いません。', urlsPlaceholderStandard: 'LinkedInまたはIndeedのURLを1行に1件、最大50件まで貼り付けてください。1件だけでも構いません。',
       queuing: 'キューに追加中…', submit: '求人情報をインポート',
     },
@@ -127,6 +129,7 @@ export default {
       additionalPromptLabel: '追加の指示', additionalPromptPlaceholder: '例: 事業会社を優先し、人材紹介会社は除外する。',
       profileLabel: '参照プロフィール', optional: '任意', noProfileReference: '参照プロフィールなし', maxResultsLabel: '1回あたりの求人件数', maxResultsHint: 'スケジュール実行ごとに最大10件の新着求人を取得します。',
       scheduleLabel: 'スケジュール', providerLabel: 'LLMプロバイダー', selectProvider: 'プロバイダーを選択', modelLabel: 'モデル', selectModel: 'モデルを選択', loadingModels: 'モデルを読み込み中…', enterModelName: 'モデル名を入力',
+      maxTokensLabel: '最大出力トークン数',
       enableAutomaticRuns: '自動実行を有効にする', noticeBefore: '', noticeLinkText: '設定でLLMプロバイダー', noticeAfter: 'を追加してから、ジョブハンターを作成してください。', saveChanges: '変更を保存', createAndSchedule: '作成してスケジュール設定',
     },
     schedule: { every6h: '6時間ごと', every12h: '12時間ごと', daily: '毎日', weekly: '毎週', minutes: '{minutes}分ごと' },

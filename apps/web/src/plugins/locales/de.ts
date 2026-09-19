@@ -28,6 +28,7 @@ export default {
     agents: {
       eyebrow: 'Agenten-Routing', title: 'Standardmodelle', description: 'Wählen Sie den Anbieter und das Modell, das jeder Agent automatisch verwenden soll. Diese Standardwerte füllen neue Workflows vor und können für eine einzelne Aufgabe weiterhin überschrieben werden.',
       chooseEachTime: 'Jedes Mal auswählen', modelLabel: 'Modell', selectModelOption: 'Modell auswählen', loadingModelsPlaceholder: 'Modelle werden geladen…', modelNamePlaceholder: 'Modellnamen eingeben',
+      maxTokensLabel: 'Max. Ausgabe-Token', maxTokensHelp: 'Maximale Anzahl an Token, die dieser Agent pro Aufruf erzeugen darf. Mit einem sinnvollen Standardwert vorbelegt; bei abgeschnittener Ausgabe erhöhen.',
       capabilityTips: 'Hinweise zu Modellfähigkeiten', saveButton: 'Agenten-Standardwerte speichern', savedToast: 'Agenten-Standardwerte gespeichert.',
       validation: { missingField: 'Wählen Sie sowohl einen Anbieter als auch ein Modell für {name}, oder leeren Sie beide Felder.' },
       definitions: {
@@ -84,6 +85,7 @@ export default {
       aiModeHelp: 'Der Job-Import-Agent analysiert jede öffentlich zugängliche HTTPS-Seite von Grund auf.', standardModeHelp: 'Schneller Import für öffentliche LinkedIn- und Indeed-Stellenseiten.',
       setupNoticeBefore: 'Fügen Sie einen ', setupNoticeLink: 'LLM-Anbieter in den Einstellungen', setupNoticeAfter: ' hinzu, bevor Sie den KI-unterstützten Import verwenden.',
       providerLabel: 'LLM-Anbieter', selectProvider: 'Anbieter auswählen', modelLabel: 'Modell', selectModel: 'Modell auswählen', loadingModels: 'Modelle werden geladen…', enterModelName: 'Modellnamen eingeben',
+      maxTokensLabel: 'Max. Ausgabe-Token',
       urlsLabel: 'Stellenangebot-URLs', urlsPlaceholderAi: 'Fügen Sie bis zu 50 öffentliche HTTPS-Stellenseiten-URLs ein, eine pro Zeile. Eine einzelne URL funktioniert auch.', urlsPlaceholderStandard: 'Fügen Sie bis zu 50 LinkedIn- oder Indeed-URLs ein, eine pro Zeile. Eine einzelne URL funktioniert auch.',
       queuing: 'Wird eingereiht…', submit: 'Stellenangebote importieren',
     },
@@ -127,6 +129,7 @@ export default {
       additionalPromptLabel: 'Zusätzlicher Hinweis', additionalPromptPlaceholder: 'Zum Beispiel: Produktunternehmen bevorzugen und Personalvermittlungen ausschließen.',
       profileLabel: 'Profilbezug', optional: 'Optional', noProfileReference: 'Kein Profilbezug', maxResultsLabel: 'Stellen pro Lauf', maxResultsHint: 'Bis zu 10 neue Stellenangebote pro geplantem Lauf.',
       scheduleLabel: 'Zeitplan', providerLabel: 'LLM-Anbieter', selectProvider: 'Anbieter auswählen', modelLabel: 'Modell', selectModel: 'Modell auswählen', loadingModels: 'Modelle werden geladen…', enterModelName: 'Modellnamen eingeben',
+      maxTokensLabel: 'Max. Ausgabe-Token',
       enableAutomaticRuns: 'Automatische Läufe aktivieren', noticeBefore: 'Fügen Sie einen ', noticeLinkText: 'LLM-Anbieter in den Einstellungen', noticeAfter: ' hinzu, bevor Sie einen Job Hunter erstellen.', saveChanges: 'Änderungen speichern', createAndSchedule: 'Erstellen und planen',
     },
     schedule: { every6h: 'Alle 6 Stunden', every12h: 'Alle 12 Stunden', daily: 'Täglich', weekly: 'Wöchentlich', minutes: '{minutes} Minuten' },

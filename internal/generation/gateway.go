@@ -20,6 +20,12 @@ var (
 	ErrVisionUnsupported = errors.New("LLM model does not support image input")
 )
 
+// errTruncatedResponse marks an empty completion that the provider itself
+// reported as cut short by the token budget (finish_reason/done_reason
+// "length"), rather than some other empty-response cause. Complete uses it
+// to decide whether a single larger-budget retry is likely to help.
+var errTruncatedResponse = errors.New("provider truncated the response before producing any visible content: the max output tokens budget for this Agent is too low for this model")
+
 type Gateway interface {
 	Complete(context.Context, settings.RuntimeConnection, string, string, string, []string, int, []string) (string, error)
 }
@@ -33,7 +39,7 @@ func NewHTTPGateway() *HTTPGateway {
 func (g *HTTPGateway) Complete(ctx context.Context, runtime settings.RuntimeConnection, model, systemPrompt, userPrompt string, images []string, maxTokens int, stopWords []string) (string, error) {
 	base, err := url.Parse(strings.TrimRight(runtime.Connection.BaseURL, "/"))
 	if err != nil {
-		return "", ErrLLM
+		return "", fmt.Errorf("%w: invalid provider base URL: %v", ErrLLM, err)
 	}
 	var endpoint string
 	var body map[string]any
@@ -81,6 +87,16 @@ func (g *HTTPGateway) Complete(ctx context.Context, runtime settings.RuntimeConn
 		removeStopWords(runtime.Connection.Provider, body)
 		content, err = g.execute(ctx, runtime, endpoint, body, images)
 	}
+	if err != nil && errors.Is(err, errTruncatedResponse) {
+		// The model spent its entire token budget (often on hidden
+		// reasoning) before writing any visible content. Retrying with the
+		// same budget would just truncate again, so double it once, capped
+		// at the platform ceiling, instead of failing the whole agent run.
+		if increased := raisedMaxTokens(maxTokens); increased > maxTokens {
+			raiseMaxTokens(runtime.Connection.Provider, body, increased)
+			content, err = g.execute(ctx, runtime, endpoint, body, images)
+		}
+	}
 	return content, err
 }
 
@@ -88,7 +104,7 @@ func (g *HTTPGateway) execute(ctx context.Context, runtime settings.RuntimeConne
 	encoded, _ := json.Marshal(body)
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(encoded))
 	if err != nil {
-		return "", ErrLLM
+		return "", fmt.Errorf("%w: could not build request: %v", ErrLLM, err)
 	}
 	request.Header.Set("Content-Type", "application/json")
 	if runtime.APIToken != "" {
@@ -112,14 +128,16 @@ func (g *HTTPGateway) execute(ctx context.Context, runtime settings.RuntimeConne
 	}
 	if runtime.Connection.Provider == "ollama" {
 		var result strings.Builder
+		var doneReason string
 		decoder := json.NewDecoder(io.LimitReader(response.Body, 4*1024*1024))
 		for {
 			var chunk struct {
 				Message struct {
 					Content string `json:"content"`
 				} `json:"message"`
-				Error string `json:"error"`
-				Done  bool   `json:"done"`
+				Error      string `json:"error"`
+				Done       bool   `json:"done"`
+				DoneReason string `json:"done_reason"`
 			}
 			err := decoder.Decode(&chunk)
 			if errors.Is(err, io.EOF) {
@@ -136,29 +154,70 @@ func (g *HTTPGateway) execute(ctx context.Context, runtime settings.RuntimeConne
 			}
 			result.WriteString(chunk.Message.Content)
 			if chunk.Done {
+				doneReason = chunk.DoneReason
 				break
 			}
 		}
 		if strings.TrimSpace(result.String()) == "" {
-			return "", ErrLLM
+			if doneReason == "length" {
+				return "", fmt.Errorf("%w: %w", ErrLLM, errTruncatedResponse)
+			}
+			return "", fmt.Errorf("%w: provider returned an empty response", ErrLLM)
 		}
 		return result.String(), nil
 	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, 4*1024*1024))
 	if err != nil {
-		return "", ErrLLM
+		return "", fmt.Errorf("%w: could not read response body: %v", ErrLLM, err)
 	}
 	var result struct {
 		Choices []struct {
 			Message struct {
 				Content string `json:"content"`
 			} `json:"message"`
+			FinishReason string `json:"finish_reason"`
 		} `json:"choices"`
 	}
-	if json.Unmarshal(data, &result) != nil || len(result.Choices) == 0 || strings.TrimSpace(result.Choices[0].Message.Content) == "" {
-		return "", ErrLLM
+	switch {
+	case json.Unmarshal(data, &result) != nil:
+		return "", fmt.Errorf("%w: provider returned a response that could not be parsed", ErrLLM)
+	case len(result.Choices) == 0:
+		return "", fmt.Errorf("%w: provider returned no choices", ErrLLM)
+	case strings.TrimSpace(result.Choices[0].Message.Content) == "":
+		if result.Choices[0].FinishReason == "length" {
+			return "", fmt.Errorf("%w: %w", ErrLLM, errTruncatedResponse)
+		}
+		return "", fmt.Errorf("%w: provider returned an empty response", ErrLLM)
 	}
 	return result.Choices[0].Message.Content, nil
+}
+
+// raisedMaxTokens doubles maxTokens as a one-time escalation after a
+// truncated-empty response, capped at the platform ceiling. It returns
+// maxTokens unchanged (so the caller skips the retry) once already at or
+// above that ceiling.
+func raisedMaxTokens(maxTokens int) int {
+	increased := maxTokens * 2
+	if increased > settings.MaxTokensCeiling {
+		increased = settings.MaxTokensCeiling
+	}
+	return increased
+}
+
+// raiseMaxTokens overwrites the per-provider max-output-tokens field already
+// present in body (set by Complete) with a larger value for the retry.
+func raiseMaxTokens(provider string, body map[string]any, maxTokens int) {
+	if provider == "ollama" {
+		if options, ok := body["options"].(map[string]any); ok {
+			options["num_predict"] = maxTokens
+		}
+		return
+	}
+	if provider == "openai" {
+		body["max_completion_tokens"] = maxTokens
+	} else {
+		body["max_tokens"] = maxTokens
+	}
 }
 
 // stopWordsUnsupported reports whether err looks like a provider rejecting

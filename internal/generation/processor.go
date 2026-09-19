@@ -22,12 +22,7 @@ import (
 	resumetemplate "github.com/lrx0014/ResumeGPT/internal/template"
 )
 
-const (
-	maxRepairs        = 2
-	writerMaxTokens   = 4096
-	rendererMaxTokens = 6144
-	reviewerMaxTokens = 512
-)
+const maxRepairs = 2
 
 type RuntimeResolver interface {
 	RuntimeConnection(context.Context, string, string) (settings.RuntimeConnection, error)

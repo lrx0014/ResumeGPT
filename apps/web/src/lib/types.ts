@@ -41,6 +41,7 @@ export interface JobImportInput {
   aiAssisted: boolean
   connectionId?: string
   model?: string
+  maxTokens?: number
 }
 
 export interface JobHunter {
@@ -57,6 +58,7 @@ export interface JobHunter {
   profileId?: string
   connectionId: string
   model: string
+  maxTokens?: number
   maxResults: number
   intervalMinutes: 360 | 720 | 1440 | 10080
   enabled: boolean
@@ -81,7 +83,7 @@ export interface JobHunterReviewItem {
   updatedAt: string
 }
 
-export type JobHunterInput = Pick<JobHunter, 'name' | 'roleQuery' | 'location' | 'workMode' | 'employmentType' | 'experienceYears' | 'keywords' | 'additionalPrompt' | 'profileId' | 'connectionId' | 'model' | 'maxResults' | 'intervalMinutes' | 'enabled'>
+export type JobHunterInput = Pick<JobHunter, 'name' | 'roleQuery' | 'location' | 'workMode' | 'employmentType' | 'experienceYears' | 'keywords' | 'additionalPrompt' | 'profileId' | 'connectionId' | 'model' | 'maxTokens' | 'maxResults' | 'intervalMinutes' | 'enabled'>
 
 export interface ListResponse<T> {
   items: T[]
@@ -176,6 +178,7 @@ export interface AgentDefault {
   agent: AgentKind
   connectionId: string
   model: string
+  maxTokens?: number
   updatedAt?: string
 }
 
@@ -248,7 +251,7 @@ export interface StagedTemplate {
   target: SignedURL
 }
 
-export interface GenerationModelChoice { connectionId: string; model: string }
+export interface GenerationModelChoice { connectionId: string; model: string; maxTokens?: number }
 export type GenerationState = 'queued' | 'running' | 'ready' | 'failed'
 export interface GenerationRun {
   id: string; workspaceId: string; profileId: string; opportunityId: string; templateId: string

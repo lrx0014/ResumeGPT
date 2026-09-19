@@ -60,7 +60,7 @@ func (s *Service) SaveAgentDefaults(ctx context.Context, workspaceID string, inp
 		item.Agent = strings.TrimSpace(item.Agent)
 		item.ConnectionID = strings.TrimSpace(item.ConnectionID)
 		item.Model = strings.TrimSpace(item.Model)
-		if !validAgents[item.Agent] || seen[item.Agent] || !validSettingText(item.ConnectionID, 200, true) || !validSettingText(item.Model, 200, true) {
+		if !validAgents[item.Agent] || seen[item.Agent] || !validSettingText(item.ConnectionID, 200, true) || !validSettingText(item.Model, 200, true) || item.MaxTokens < 0 || item.MaxTokens > MaxTokensCeiling {
 			return nil, ErrInvalid
 		}
 		if _, err := s.repository.GetConnection(ctx, workspaceID, item.ConnectionID); err != nil {
@@ -70,7 +70,7 @@ func (s *Service) SaveAgentDefaults(ctx context.Context, workspaceID string, inp
 			return nil, err
 		}
 		seen[item.Agent] = true
-		values = append(values, AgentDefault{Agent: item.Agent, ConnectionID: item.ConnectionID, Model: item.Model, UpdatedAt: now})
+		values = append(values, AgentDefault{Agent: item.Agent, ConnectionID: item.ConnectionID, Model: item.Model, MaxTokens: item.MaxTokens, UpdatedAt: now})
 	}
 	return s.repository.SaveAgentDefaults(ctx, workspaceID, values)
 }

@@ -21,7 +21,7 @@ func (r *HunterRepository) List(ctx context.Context, workspaceID string) ([]hunt
 	items := make([]hunter.Hunter, 0)
 	err := withWorkspaceTx(ctx, r.pool, workspaceID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT id,workspace_id,name,role_query,location,work_mode,employment_type,
-			experience_years,keywords,additional_prompt,COALESCE(profile_id,''),connection_id,model,max_results,interval_minutes,enabled,next_run_at,
+			experience_years,keywords,additional_prompt,COALESCE(profile_id,''),connection_id,model,COALESCE(max_tokens,0),max_results,interval_minutes,enabled,next_run_at,
 			last_run_at,last_state,last_error,last_found_count,
 			(SELECT count(*) FROM job_hunter_review_items review WHERE review.workspace_id=job_hunters.workspace_id AND review.hunter_id=job_hunters.id),
 			created_at,updated_at
@@ -46,7 +46,7 @@ func (r *HunterRepository) Get(ctx context.Context, workspaceID, hunterID string
 	var value hunter.Hunter
 	err := withWorkspaceTx(ctx, r.pool, workspaceID, func(tx pgx.Tx) error {
 		err := tx.QueryRow(ctx, `SELECT id,workspace_id,name,role_query,location,work_mode,employment_type,
-			experience_years,keywords,additional_prompt,COALESCE(profile_id,''),connection_id,model,max_results,interval_minutes,enabled,next_run_at,
+			experience_years,keywords,additional_prompt,COALESCE(profile_id,''),connection_id,model,COALESCE(max_tokens,0),max_results,interval_minutes,enabled,next_run_at,
 			last_run_at,last_state,last_error,last_found_count,
 			(SELECT count(*) FROM job_hunter_review_items review WHERE review.workspace_id=job_hunters.workspace_id AND review.hunter_id=job_hunters.id),
 			created_at,updated_at
@@ -63,11 +63,11 @@ func (r *HunterRepository) Create(ctx context.Context, value hunter.Hunter) (hun
 	err := withWorkspaceTx(ctx, r.pool, value.WorkspaceID, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `INSERT INTO job_hunters
 			(id,workspace_id,name,role_query,location,work_mode,employment_type,experience_years,keywords,
-			additional_prompt,profile_id,connection_id,model,max_results,interval_minutes,enabled,next_run_at,last_state,created_at,updated_at)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NULLIF($11,''),$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
+			additional_prompt,profile_id,connection_id,model,max_tokens,max_results,interval_minutes,enabled,next_run_at,last_state,created_at,updated_at)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NULLIF($11,''),$12,$13,NULLIF($14,0),$15,$16,$17,$18,$19,$20,$21)`,
 			value.ID, value.WorkspaceID, value.Name, value.RoleQuery, value.Location, value.WorkMode,
 			value.EmploymentType, value.ExperienceYears, value.Keywords, value.AdditionalPrompt, value.ProfileID, value.ConnectionID,
-			value.Model, value.MaxResults, value.IntervalMinutes, value.Enabled, value.NextRunAt, value.LastState, value.CreatedAt, value.UpdatedAt)
+			value.Model, value.MaxTokens, value.MaxResults, value.IntervalMinutes, value.Enabled, value.NextRunAt, value.LastState, value.CreatedAt, value.UpdatedAt)
 		if err != nil {
 			return fmt.Errorf("insert job hunter: %w", err)
 		}
@@ -83,11 +83,11 @@ func (r *HunterRepository) Update(ctx context.Context, value hunter.Hunter) (hun
 	err := withWorkspaceTx(ctx, r.pool, value.WorkspaceID, func(tx pgx.Tx) error {
 		err := tx.QueryRow(ctx, `UPDATE job_hunters SET name=$3,role_query=$4,location=$5,work_mode=$6,
 			employment_type=$7,experience_years=$8,keywords=$9,additional_prompt=$10,profile_id=NULLIF($11,''),connection_id=$12,
-			model=$13,max_results=$14,interval_minutes=$15,enabled=$16,next_run_at=$17,updated_at=$18
+			model=$13,max_tokens=NULLIF($14,0),max_results=$15,interval_minutes=$16,enabled=$17,next_run_at=$18,updated_at=$19
 			WHERE workspace_id=$1 AND id=$2 RETURNING last_run_at,last_state,last_error,last_found_count,created_at`,
 			value.WorkspaceID, value.ID, value.Name, value.RoleQuery, value.Location, value.WorkMode,
 			value.EmploymentType, value.ExperienceYears, value.Keywords, value.AdditionalPrompt, value.ProfileID, value.ConnectionID,
-			value.Model, value.MaxResults, value.IntervalMinutes, value.Enabled, value.NextRunAt, value.UpdatedAt).Scan(
+			value.Model, value.MaxTokens, value.MaxResults, value.IntervalMinutes, value.Enabled, value.NextRunAt, value.UpdatedAt).Scan(
 			&value.LastRunAt, &value.LastState, &value.LastError, &value.LastFoundCount, &value.CreatedAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return hunter.ErrNotFound
@@ -272,6 +272,6 @@ func (r *HunterRepository) DismissReviewItem(ctx context.Context, workspaceID, h
 func hunterFields(value *hunter.Hunter) []any {
 	return []any{&value.ID, &value.WorkspaceID, &value.Name, &value.RoleQuery, &value.Location, &value.WorkMode,
 		&value.EmploymentType, &value.ExperienceYears, &value.Keywords, &value.AdditionalPrompt, &value.ProfileID, &value.ConnectionID,
-		&value.Model, &value.MaxResults, &value.IntervalMinutes, &value.Enabled, &value.NextRunAt, &value.LastRunAt, &value.LastState,
+		&value.Model, &value.MaxTokens, &value.MaxResults, &value.IntervalMinutes, &value.Enabled, &value.NextRunAt, &value.LastRunAt, &value.LastState,
 		&value.LastError, &value.LastFoundCount, &value.ReviewCount, &value.CreatedAt, &value.UpdatedAt}
 }

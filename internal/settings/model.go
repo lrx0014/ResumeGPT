@@ -59,10 +59,37 @@ const (
 	AgentJobHunter        = "job_hunter"
 )
 
+// MaxTokensCeiling bounds how large a MaxTokens override may be, keeping a
+// misconfigured value from producing runaway request costs.
+const MaxTokensCeiling = 32768
+
+// DefaultAgentMaxTokens are the built-in max-output-token budgets used when
+// an AgentDefault row has no MaxTokens override (0). Callers should resolve
+// an effective budget via EffectiveMaxTokens rather than reading this map
+// directly.
+var DefaultAgentMaxTokens = map[string]int{
+	AgentWriter:           4096,
+	AgentTemplateApplier:  12288,
+	AgentDocumentDesigner: 12288,
+	AgentVisualReviewer:   1536,
+	AgentJobImport:        6000,
+	AgentJobHunter:        5000,
+}
+
+// EffectiveMaxTokens returns configured if it's a positive override, else
+// the built-in default for agent (0 if agent is unrecognized).
+func EffectiveMaxTokens(agent string, configured int) int {
+	if configured > 0 {
+		return configured
+	}
+	return DefaultAgentMaxTokens[agent]
+}
+
 type AgentDefault struct {
 	Agent        string    `json:"agent"`
 	ConnectionID string    `json:"connectionId"`
 	Model        string    `json:"model"`
+	MaxTokens    int       `json:"maxTokens"`
 	UpdatedAt    time.Time `json:"updatedAt"`
 }
 
@@ -70,6 +97,7 @@ type AgentDefaultInput struct {
 	Agent        string `json:"agent"`
 	ConnectionID string `json:"connectionId"`
 	Model        string `json:"model"`
+	MaxTokens    int    `json:"maxTokens"`
 }
 
 type AgentDefaultsInput struct {
