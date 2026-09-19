@@ -138,6 +138,61 @@ func TestProcessorCompletesPDFWhenReviewerDoesNotSupportImages(t *testing.T) {
 	}
 }
 
+// TestProcessorSkipsVisualQAWhenReviewerSelfReportsNoImage covers the case
+// where the provider returns a normal 200 response (no gateway-level
+// ErrVisionUnsupported), but the reviewer model itself reports it never
+// received a usable image — the escape hatch described in
+// prompts.VisualReviewerSystem. This must be treated the same as a
+// provider-level vision rejection, not as a genuine failed review.
+func TestProcessorSkipsVisualQAWhenReviewerSelfReportsNoImage(t *testing.T) {
+	p, _ := json.Marshal(profile.Profile{Content: "Built reliable Go services."})
+	j, _ := json.Marshal(job.Job{Title: "Backend Engineer", Company: "Example", Description: "Build Go systems."})
+	tpl, _ := json.Marshal(resumetemplate.Template{BuiltIn: true, Format: "latex", Kind: "resume", Content: "\\documentclass{article}\\begin{document}Sample\\end{document}"})
+	repository := &processorRepository{run: Run{ID: "gen_self_reported_no_vision", WorkspaceID: "ws_test", Writer: ModelChoice{ConnectionID: "writer", Model: "model"}, Renderer: ModelChoice{ConnectionID: "renderer", Model: "model"}, Reviewer: ModelChoice{ConnectionID: "reviewer", Model: "text-model"}, DocumentType: "resume", PageTarget: "one_page", ProfileSnapshot: p, OpportunitySnapshot: j, TemplateSnapshot: tpl}}
+	gateway := &processorGateway{responses: []string{
+		"# Draft",
+		"\\documentclass{article}\\begin{document}Draft\\end{document}",
+		`{"approved":false,"visionUnsupported":true,"feedback":"no usable image was received"}`,
+	}}
+	blobs := &processorBlobs{}
+	processor := Processor{Repository: repository, Settings: processorSettings{}, Blobs: blobs, Documents: processorDocuments{}, Gateway: gateway, WorkerID: "worker", Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	payload, _ := json.Marshal(Payload{RunID: "gen_self_reported_no_vision"})
+	processor.handle(context.Background(), workqueue.Job{ID: "task", WorkspaceID: "ws_test", Payload: payload, LeaseOwner: "worker", Attempt: 1, MaxAttempts: 3})
+	if !repository.completed || repository.objectID == "" || !bytes.Equal(blobs.stored, []byte("%PDF-result")) {
+		t.Fatalf("PDF was not completed: %#v", repository)
+	}
+	if !strings.HasPrefix(repository.review, "Visual QA skipped:") {
+		t.Fatalf("review = %q, want visual QA warning", repository.review)
+	}
+}
+
+// TestProcessorSkipsVisualQAWhenReviewerParaphrasesNoImage covers a reviewer
+// model that doesn't follow the exact {"visionUnsupported":true} escape
+// hatch and instead paraphrases the same complaint in free text — this must
+// still be recognized via reviewerReportsNoImage, not treated as a genuine
+// rejection that triggers repair attempts.
+func TestProcessorSkipsVisualQAWhenReviewerParaphrasesNoImage(t *testing.T) {
+	p, _ := json.Marshal(profile.Profile{Content: "Built reliable Go services."})
+	j, _ := json.Marshal(job.Job{Title: "Backend Engineer", Company: "Example", Description: "Build Go systems."})
+	tpl, _ := json.Marshal(resumetemplate.Template{BuiltIn: true, Format: "latex", Kind: "resume", Content: "\\documentclass{article}\\begin{document}Sample\\end{document}"})
+	repository := &processorRepository{run: Run{ID: "gen_paraphrased_no_vision", WorkspaceID: "ws_test", Writer: ModelChoice{ConnectionID: "writer", Model: "model"}, Renderer: ModelChoice{ConnectionID: "renderer", Model: "model"}, Reviewer: ModelChoice{ConnectionID: "reviewer", Model: "text-model"}, DocumentType: "resume", PageTarget: "one_page", ProfileSnapshot: p, OpportunitySnapshot: j, TemplateSnapshot: tpl}}
+	gateway := &processorGateway{responses: []string{
+		"# Draft",
+		"\\documentclass{article}\\begin{document}Draft\\end{document}",
+		`{"approved":false,"feedback":"Cannot inspect the resume: no rasterized page images or supported PDF input were available for visual review."}`,
+	}}
+	blobs := &processorBlobs{}
+	processor := Processor{Repository: repository, Settings: processorSettings{}, Blobs: blobs, Documents: processorDocuments{}, Gateway: gateway, WorkerID: "worker", Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	payload, _ := json.Marshal(Payload{RunID: "gen_paraphrased_no_vision"})
+	processor.handle(context.Background(), workqueue.Job{ID: "task", WorkspaceID: "ws_test", Payload: payload, LeaseOwner: "worker", Attempt: 1, MaxAttempts: 3})
+	if !repository.completed || repository.objectID == "" || !bytes.Equal(blobs.stored, []byte("%PDF-result")) {
+		t.Fatalf("PDF was not completed: %#v", repository)
+	}
+	if !strings.HasPrefix(repository.review, "Visual QA skipped:") {
+		t.Fatalf("review = %q, want visual QA warning", repository.review)
+	}
+}
+
 func TestProcessorUsesSafeTemplateFallbackForIncompleteModelOutput(t *testing.T) {
 	p, _ := json.Marshal(profile.Profile{Content: "Built reliable Go services."})
 	j, _ := json.Marshal(job.Job{Title: "Backend Engineer", Company: "Example", Description: "Build Go systems."})
@@ -282,5 +337,53 @@ func TestProcessorUsesDocumentDesignerWithoutTemplate(t *testing.T) {
 	processor.handle(context.Background(), workqueue.Job{ID: "task", WorkspaceID: "ws_test", Payload: payload, LeaseOwner: "worker", Attempt: 1, MaxAttempts: 3})
 	if !repository.completed || gateway.calls != 3 || !strings.HasPrefix(string(blobs.stored), "%PDF-") {
 		t.Fatalf("template-free generation failed: completed=%v calls=%d artifact=%q", repository.completed, gateway.calls, blobs.stored)
+	}
+}
+
+func TestParseReviewDetectsVisionUnsupported(t *testing.T) {
+	cases := []struct {
+		name                  string
+		response              string
+		wantApproved          bool
+		wantVisionUnsupported bool
+	}{
+		{
+			name:                  "normal approval",
+			response:              `{"approved":true,"feedback":"Layout is balanced."}`,
+			wantApproved:          true,
+			wantVisionUnsupported: false,
+		},
+		{
+			name:                  "genuine rejection mentioning image is not misclassified",
+			response:              `{"approved":false,"feedback":"The profile image overlaps the header text and clips the name."}`,
+			wantApproved:          false,
+			wantVisionUnsupported: false,
+		},
+		{
+			name:                  "explicit structured signal",
+			response:              `{"approved":false,"visionUnsupported":true,"feedback":"no usable image was received"}`,
+			wantApproved:          false,
+			wantVisionUnsupported: true,
+		},
+		{
+			name:                  "free-text paraphrase without the structured field",
+			response:              `{"approved":false,"feedback":"Cannot inspect the resume: no rasterized page images or supported PDF input were available for visual review."}`,
+			wantApproved:          false,
+			wantVisionUnsupported: true,
+		},
+		{
+			name:                  "another common phrasing",
+			response:              `{"approved":false,"feedback":"No inspectable page image was supplied; the provided image is unsupported, so composition could not be verified."}`,
+			wantApproved:          false,
+			wantVisionUnsupported: true,
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			approved, _, visionUnsupported := parseReview(testCase.response)
+			if approved != testCase.wantApproved || visionUnsupported != testCase.wantVisionUnsupported {
+				t.Fatalf("parseReview(%q) = (%v, _, %v), want (%v, _, %v)", testCase.response, approved, visionUnsupported, testCase.wantApproved, testCase.wantVisionUnsupported)
+			}
+		})
 	}
 }

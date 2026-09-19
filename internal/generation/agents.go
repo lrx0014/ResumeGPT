@@ -47,7 +47,7 @@ func (t GenerationAgentTeam) run(ctx context.Context, workspaceID string, choice
 func (t GenerationAgentTeam) Write(ctx context.Context, workspaceID string, run Run, profileValue profile.Profile, opportunity job.Job) (string, error) {
 	contextValue := writerPrompt(run, profileValue, opportunity)
 	contextTool := &staticContextTool{name: "read_generation_context", description: "Read the immutable Profile, Opportunity, and generation requirements for this run.", content: contextValue}
-	return t.run(ctx, workspaceID, run.Writer, prompts.WriterSystem, contextValue, []tools.Tool{contextTool}, nil, writerMaxTokens, nil)
+	return t.run(ctx, workspaceID, run.Writer, prompts.WriterSystem(run.DocumentType), contextValue, []tools.Tool{contextTool}, nil, writerMaxTokens, nil)
 }
 
 type TemplateApplyResult struct {
@@ -217,7 +217,16 @@ func (t GenerationAgentTeam) Review(ctx context.Context, workspaceID string, run
 	if err != nil {
 		return pageTool.pages, false, "", "", err
 	}
-	approved, feedback := parseReview(response)
+	approved, feedback, visionUnsupported := parseReview(response)
+	if visionUnsupported {
+		// The provider returned a normal 200 response, but the model itself
+		// reported it never received a usable image (e.g. a non-multimodal
+		// model that silently ignores image content instead of the provider
+		// rejecting the request outright). Route through the same fallback
+		// as a provider-level rejection rather than treating a blind guess
+		// as a real review verdict.
+		return pageTool.pages, false, feedback, response, ErrVisionUnsupported
+	}
 	return pageTool.pages, approved, feedback, response, nil
 }
 

@@ -144,11 +144,11 @@ var _ tools.Tool = (*renderPDFTool)(nil)
 
 func (*renderPDFTool) Name() string { return "render_pdf" }
 func (*renderPDFTool) Description() string {
-	return "Compile a complete LaTeX entry source into a sandboxed PDF with network access and shell escape disabled."
+	return "Compile a complete LaTeX entry source into a sandboxed PDF with network access and shell escape disabled. The input must be the raw LaTeX document itself, starting with \\documentclass — never wrap it in JSON or any other object."
 }
 func (t *renderPDFTool) Call(ctx context.Context, source string) (string, error) {
 	t.source = cleanModelSource(source)
-	if !strings.Contains(t.source, "\\begin{document}") || !strings.Contains(t.source, "\\end{document}") {
+	if !looksLikeCompleteLatexDocument(t.source) {
 		t.pdf = nil
 		t.lastErr = errors.New("candidate source is not a complete LaTeX document")
 		t.failures = append(t.failures, TemplateValidationFailure{Source: t.source, Error: t.lastErr})
@@ -171,6 +171,20 @@ func (t *renderPDFTool) Call(ctx context.Context, source string) (string, error)
 
 func (t *renderPDFTool) succeeded() bool {
 	return len(t.pdf) > 0 && t.lastErr == nil
+}
+
+// looksLikeCompleteLatexDocument requires the source to actually start with
+// \documentclass, not merely contain "\begin{document}"/"\end{document}"
+// somewhere in its text — the same class of check as
+// looksLikeCompleteHTMLDocument, guarding against a model wrapping its LaTeX
+// in a JSON object such as {"latex": "\documentclass{...}...\end{document}"}
+// that would otherwise pass a naive substring check.
+func looksLikeCompleteLatexDocument(source string) bool {
+	trimmed := strings.TrimSpace(source)
+	if !strings.HasPrefix(trimmed, "\\documentclass") {
+		return false
+	}
+	return strings.Contains(trimmed, "\\begin{document}") && strings.Contains(trimmed, "\\end{document}")
 }
 func (t *renderPDFTool) render(ctx context.Context, source string) ([]byte, error) {
 	avatarName, avatar, err := t.loadAvatar(ctx)

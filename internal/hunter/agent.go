@@ -18,6 +18,11 @@ import (
 	"github.com/tmc/langchaingo/tools"
 )
 
+// maxHunterSearches caps how many search_web calls a single hunt may make,
+// both as a hard stop in the agent loop and as the number surfaced to the
+// model in its system prompt so it can plan within its actual budget.
+const maxHunterSearches = 4
+
 type RuntimeResolver interface {
 	RuntimeConnection(context.Context, string, string) (settings.RuntimeConnection, error)
 }
@@ -63,7 +68,7 @@ func (a *JobHunterAgent) Hunt(ctx context.Context, value Hunter) ([]string, erro
 	}
 	defaultQuery := strings.Join(strings.Fields(value.RoleQuery+" "+value.Location+" "+value.WorkMode+" "+value.EmploymentType+" "+value.Keywords+" jobs careers"), " ")
 	defaultQuery += " (site:indeed.com/viewjob OR site:linkedin.com/jobs/view)"
-	systemPrompt := prompts.JobHunterSystem(value.MaxResults)
+	systemPrompt := prompts.JobHunterSystem(value.MaxResults, maxHunterSearches)
 	model := &hunterAgentModel{gateway: a.gateway, runtime: runtime, model: value.Model, systemPrompt: systemPrompt,
 		maxTokens: 5000, search: searchTool, finish: finish, defaultQuery: defaultQuery}
 	agentTools := []tools.Tool{searchTool, finish}
@@ -108,7 +113,7 @@ func (m *hunterAgentModel) GenerateContent(ctx context.Context, messages []llms.
 	if m.finish.succeeded {
 		return &llms.ContentResponse{Choices: []*llms.ContentChoice{{Content: "Final Answer: Candidate job pages were submitted."}}}, nil
 	}
-	if m.search.calls >= 4 {
+	if m.search.calls >= maxHunterSearches {
 		encoded, _ := json.Marshal(map[string]any{"urls": m.search.candidateURLs(m.finish.limit)})
 		if _, err := m.finish.Call(ctx, string(encoded)); err != nil {
 			return nil, err
@@ -153,10 +158,10 @@ type webSearchTool struct {
 
 func (*webSearchTool) Name() string { return "search_web" }
 func (*webSearchTool) Description() string {
-	return `Search the public web for recent job posting pages. Input must be JSON such as {"query":"backend engineer Berlin jobs"}. Returns titles, direct URLs, and snippets. At most four searches are allowed.`
+	return fmt.Sprintf(`Search the public web for recent job posting pages. Input must be JSON such as {"query":"backend engineer Berlin jobs"}. Returns titles, direct URLs, and snippets. At most %d searches are allowed. %s`, maxHunterSearches, prompts.UntrustedWebDataNote)
 }
 func (t *webSearchTool) Call(ctx context.Context, input string) (string, error) {
-	if t.calls >= 4 {
+	if t.calls >= maxHunterSearches {
 		return `{"status":"limit_reached","results":[]}`, nil
 	}
 	var value struct {

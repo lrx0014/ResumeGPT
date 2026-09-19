@@ -308,16 +308,51 @@ func revisionPrompt(run Run, draft, source, instruction string) string {
 func reviewerPrompt(run Run, pageCount int) string {
 	return prompts.ReviewerTask(run.DocumentType, run.PageTarget, pageCount)
 }
-func parseReview(value string) (bool, string) {
+
+// parseReview parses the Visual Reviewer's JSON response. visionUnsupported
+// reports the model's own self-declared "I was not given a usable image"
+// signal (see prompts.VisualReviewerSystem) — distinct from a provider-level
+// rejection, which surfaces as ErrVisionUnsupported from the HTTP gateway
+// instead. Both end up handled the same way by the caller.
+//
+// Models don't reliably follow the exact {"visionUnsupported":true} escape
+// hatch the prompt asks for — some paraphrase the same complaint in their
+// own words instead (e.g. "no rasterized page images ... were available for
+// visual review"). reviewerReportsNoImage catches that free-text case too,
+// the same way gateway.go's visionUnsupported() pattern-matches a provider's
+// own error text rather than relying on a fixed error code.
+func parseReview(value string) (approved bool, feedback string, visionUnsupported bool) {
 	clean := cleanModelSource(value)
 	var result struct {
-		Approved bool   `json:"approved"`
-		Feedback string `json:"feedback"`
+		Approved          bool   `json:"approved"`
+		Feedback          string `json:"feedback"`
+		VisionUnsupported bool   `json:"visionUnsupported"`
 	}
 	if json.Unmarshal([]byte(clean), &result) == nil {
-		return result.Approved, strings.TrimSpace(result.Feedback)
+		feedback = strings.TrimSpace(result.Feedback)
+		return result.Approved, feedback, result.VisionUnsupported || reviewerReportsNoImage(feedback)
 	}
-	return false, limit(clean, 4000)
+	return false, limit(clean, 4000), false
+}
+
+func reviewerReportsNoImage(feedback string) bool {
+	value := strings.ToLower(feedback)
+	if !strings.Contains(value, "image") && !strings.Contains(value, "pdf") {
+		return false
+	}
+	patterns := []string{
+		"no image", "no page image", "no rasterized", "no inspectable",
+		"not available for visual review", "no usable image", "no visual content",
+		"cannot inspect", "unable to inspect", "cannot see", "unable to see", "unable to view",
+		"was not provided", "were not available", "not supplied", "no supported pdf",
+		"did not receive", "no image data", "missing image",
+	}
+	for _, pattern := range patterns {
+		if strings.Contains(value, pattern) {
+			return true
+		}
+	}
+	return false
 }
 func expectedPages(target string) int {
 	if target == "one_page" {
